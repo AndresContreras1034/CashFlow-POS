@@ -1,0 +1,102 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "INSERT INTO product_variants\n             (product_id, attributes, sku, barcode, price, cost, stock, stock_min, allow_negative)\n         VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)\n         RETURNING *",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "id",
+        "type_info": "Int4"
+      },
+      {
+        "ordinal": 1,
+        "name": "product_id",
+        "type_info": "Int4"
+      },
+      {
+        "ordinal": 2,
+        "name": "attributes",
+        "type_info": "Jsonb"
+      },
+      {
+        "ordinal": 3,
+        "name": "sku",
+        "type_info": "Varchar"
+      },
+      {
+        "ordinal": 4,
+        "name": "barcode",
+        "type_info": "Varchar"
+      },
+      {
+        "ordinal": 5,
+        "name": "price",
+        "type_info": "Int8"
+      },
+      {
+        "ordinal": 6,
+        "name": "cost",
+        "type_info": "Int8"
+      },
+      {
+        "ordinal": 7,
+        "name": "stock",
+        "type_info": "Int4"
+      },
+      {
+        "ordinal": 8,
+        "name": "stock_min",
+        "type_info": "Int4"
+      },
+      {
+        "ordinal": 9,
+        "name": "allow_negative",
+        "type_info": "Bool"
+      },
+      {
+        "ordinal": 10,
+        "name": "is_active",
+        "type_info": "Bool"
+      },
+      {
+        "ordinal": 11,
+        "name": "created_at",
+        "type_info": "Timestamptz"
+      },
+      {
+        "ordinal": 12,
+        "name": "updated_at",
+        "type_info": "Timestamptz"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Int4",
+        "Jsonb",
+        "Varchar",
+        "Varchar",
+        "Int8",
+        "Int8",
+        "Int4",
+        "Int4",
+        "Bool"
+      ]
+    },
+    "nullable": [
+      false,
+      false,
+      false,
+      true,
+      true,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false
+    ]
+  },
+  "hash": "ec7ac10911567889d546c61ef1d9834d29d4c759a683ad024ae6b1e6fb0c7780"
+}

@@ -1,0 +1,24 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "SELECT COUNT(*) FROM products p\n         WHERE p.is_active = $1\n           AND ($2::INT  IS NULL OR p.category_id = $2)\n           AND ($3::TEXT IS NULL OR p.name ILIKE $3 OR p.brand ILIKE $3)",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "count",
+        "type_info": "Int8"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Bool",
+        "Int4",
+        "Text"
+      ]
+    },
+    "nullable": [
+      null
+    ]
+  },
+  "hash": "ebf40e362140b096b3b37d0bf1e4c2d2aa6a58b217e9071382c861da69f7ff62"
+}

@@ -1,0 +1,102 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "UPDATE product_variants\n         SET attributes     = COALESCE($1, attributes),\n             sku            = COALESCE($2, sku),\n             barcode        = COALESCE($3, barcode),\n             price          = COALESCE($4, price),\n             cost           = COALESCE($5, cost),\n             stock_min      = COALESCE($6, stock_min),\n             allow_negative = COALESCE($7, allow_negative),\n             is_active      = COALESCE($8, is_active)\n         WHERE id = $9\n         RETURNING *",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "id",
+        "type_info": "Int4"
+      },
+      {
+        "ordinal": 1,
+        "name": "product_id",
+        "type_info": "Int4"
+      },
+      {
+        "ordinal": 2,
+        "name": "attributes",
+        "type_info": "Jsonb"
+      },
+      {
+        "ordinal": 3,
+        "name": "sku",
+        "type_info": "Varchar"
+      },
+      {
+        "ordinal": 4,
+        "name": "barcode",
+        "type_info": "Varchar"
+      },
+      {
+        "ordinal": 5,
+        "name": "price",
+        "type_info": "Int8"
+      },
+      {
+        "ordinal": 6,
+        "name": "cost",
+        "type_info": "Int8"
+      },
+      {
+        "ordinal": 7,
+        "name": "stock",
+        "type_info": "Int4"
+      },
+      {
+        "ordinal": 8,
+        "name": "stock_min",
+        "type_info": "Int4"
+      },
+      {
+        "ordinal": 9,
+        "name": "allow_negative",
+        "type_info": "Bool"
+      },
+      {
+        "ordinal": 10,
+        "name": "is_active",
+        "type_info": "Bool"
+      },
+      {
+        "ordinal": 11,
+        "name": "created_at",
+        "type_info": "Timestamptz"
+      },
+      {
+        "ordinal": 12,
+        "name": "updated_at",
+        "type_info": "Timestamptz"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Jsonb",
+        "Varchar",
+        "Varchar",
+        "Int8",
+        "Int8",
+        "Int4",
+        "Bool",
+        "Bool",
+        "Int4"
+      ]
+    },
+    "nullable": [
+      false,
+      false,
+      false,
+      true,
+      true,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false
+    ]
+  },
+  "hash": "a2e528da612d305ed6ebaf2204fcb9913723a55af17085d4004a30ab542d850f"
+}

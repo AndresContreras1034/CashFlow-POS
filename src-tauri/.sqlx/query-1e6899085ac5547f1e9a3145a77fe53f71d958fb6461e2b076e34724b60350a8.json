@@ -1,0 +1,28 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "SELECT stock, allow_negative FROM product_variants WHERE id = $1 FOR UPDATE",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "stock",
+        "type_info": "Int4"
+      },
+      {
+        "ordinal": 1,
+        "name": "allow_negative",
+        "type_info": "Bool"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Int4"
+      ]
+    },
+    "nullable": [
+      false,
+      false
+    ]
+  },
+  "hash": "1e6899085ac5547f1e9a3145a77fe53f71d958fb6461e2b076e34724b60350a8"
+}
