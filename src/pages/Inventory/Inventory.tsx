@@ -1,4 +1,4 @@
-import React, { useState, useCallback } from 'react';
+﻿import React, { useState, useEffect, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Modal } from '../../components/ui/Modal';
 import { ToastContainer, ToastData } from '../../components/ui/Toast';
@@ -7,158 +7,150 @@ import { ProductForm } from '../../components/inventory/ProductForm';
 import {
   Category,
   ProductWithCategory,
-  VariantWithProduct,
   CreateProductDto,
   UpdateProductDto,
   LowStockItemDto,
 } from '../../types';
 import { formatMoney, formatAttributes } from '../../utils/format';
+import {
+  listCategories,
+  listProducts,
+  listVariants,
+  getLowStock,
+  createProduct,
+  updateProduct,
+} from '../../services/inventory.service';
 import './inventory.css';
 
-// ─── Datos de ejemplo ────────────────────────────────────────────────────────
-
-const MOCK_CATEGORIES: Category[] = [
-  { id: 1, name: 'Cuidado capilar', is_active: true, created_at: '', updated_at: '' },
-  { id: 2, name: 'Cuidado facial', is_active: true, created_at: '', updated_at: '' },
-  { id: 3, name: 'Maquillaje',      is_active: true, created_at: '', updated_at: '' },
-  { id: 4, name: 'Fragancias',      is_active: true, created_at: '', updated_at: '' },
-];
-
-const MOCK_PRODUCTS: ProductWithCategory[] = [
-  { id: 1, category_id: 1, category_name: 'Cuidado capilar', name: 'Shampoo Anticaída', brand: "L'Oréal", description: 'Fórmula con biotina', is_active: true, created_at: '2026-01-10T10:00:00Z', updated_at: '2026-06-01T08:00:00Z' },
-  { id: 2, category_id: 1, category_name: 'Cuidado capilar', name: 'Acondicionador Hidratante', brand: 'Pantene', description: '', is_active: true, created_at: '2026-01-12T10:00:00Z', updated_at: '2026-05-20T08:00:00Z' },
-  { id: 3, category_id: 2, category_name: 'Cuidado facial', name: 'Crema Hidratante SPF 30', brand: 'Neutrogena', description: 'Protección solar diaria', is_active: true, created_at: '2026-02-01T10:00:00Z', updated_at: '2026-06-05T08:00:00Z' },
-  { id: 4, category_id: 3, category_name: 'Maquillaje', name: 'Base Fluida HD', brand: 'Maybelline', description: '', is_active: true, created_at: '2026-02-15T10:00:00Z', updated_at: '2026-06-10T08:00:00Z' },
-  { id: 5, category_id: 4, category_name: 'Fragancias', name: 'Eau de Parfum Rosé', brand: 'Carolina Herrera', description: '100 ml', is_active: false, created_at: '2026-03-01T10:00:00Z', updated_at: '2026-06-01T08:00:00Z' },
-];
-
-const MOCK_VARIANTS: VariantWithProduct[] = [
-  { id: 1,  product_id: 1, product_name: 'Shampoo Anticaída',      brand: "L'Oréal",   category_id: 1, category_name: 'Cuidado capilar', attributes: { Tamaño: '400 ml' }, sku: 'SHA-001', price: 2800000, cost: 1500000, stock: 24, stock_min: 5,  allow_negative: false, is_active: true,  created_at: '2026-01-10T10:00:00Z', updated_at: '' },
-  { id: 2,  product_id: 1, product_name: 'Shampoo Anticaída',      brand: "L'Oréal",   category_id: 1, category_name: 'Cuidado capilar', attributes: { Tamaño: '800 ml' }, sku: 'SHA-002', price: 4500000, cost: 2400000, stock: 3,  stock_min: 5,  allow_negative: false, is_active: true,  created_at: '2026-01-10T10:00:00Z', updated_at: '' },
-  { id: 3,  product_id: 2, product_name: 'Acondicionador Hidratante', brand: 'Pantene', category_id: 1, category_name: 'Cuidado capilar', attributes: { Tamaño: '400 ml' }, sku: 'ACO-001', price: 2600000, cost: 1300000, stock: 0,  stock_min: 5,  allow_negative: false, is_active: true,  created_at: '2026-01-12T10:00:00Z', updated_at: '' },
-  { id: 4,  product_id: 3, product_name: 'Crema Hidratante SPF 30', brand: 'Neutrogena',category_id: 2, category_name: 'Cuidado facial', attributes: {},               sku: 'CRE-001', price: 3900000, cost: 2000000, stock: 12, stock_min: 3,  allow_negative: false, is_active: true,  created_at: '2026-02-01T10:00:00Z', updated_at: '' },
-  { id: 5,  product_id: 4, product_name: 'Base Fluida HD',          brand: 'Maybelline',category_id: 3, category_name: 'Maquillaje',      attributes: { Tono: 'Beige' },  sku: 'BAS-001', price: 5200000, cost: 2800000, stock: 8,  stock_min: 4,  allow_negative: false, is_active: true,  created_at: '2026-02-15T10:00:00Z', updated_at: '' },
-  { id: 6,  product_id: 4, product_name: 'Base Fluida HD',          brand: 'Maybelline',category_id: 3, category_name: 'Maquillaje',      attributes: { Tono: 'Marfil' }, sku: 'BAS-002', price: 5200000, cost: 2800000, stock: 2,  stock_min: 4,  allow_negative: false, is_active: true,  created_at: '2026-02-15T10:00:00Z', updated_at: '' },
-];
-
-// ─── Helpers ──────────────────────────────────────────────────────────────────
-
-function toastId() { return Math.random().toString(36).slice(2); }
-
-function variantsForProduct(productId: number) {
-  return MOCK_VARIANTS.filter(v => v.product_id === productId);
-}
-
-function productStockSummary(productId: number): { total: number; min: number } {
-  const variants = variantsForProduct(productId);
-  return {
-    total: variants.reduce((s, v) => s + v.stock, 0),
-    min:   Math.min(...variants.map(v => v.stock_min), 9999),
-  };
-}
-
-// ─── Componente principal ─────────────────────────────────────────────────────
+type VariantStats = { count: number; total: number; min: number };
 
 export const Inventory: React.FC = () => {
   const navigate = useNavigate();
 
-  const [products, setProducts]       = useState<ProductWithCategory[]>(MOCK_PRODUCTS);
-  const [categories]                  = useState<Category[]>(MOCK_CATEGORIES);
-  const [toasts, setToasts]           = useState<ToastData[]>([]);
+  const [products, setProducts] = useState<ProductWithCategory[]>([]);
+  const [categories, setCategories] = useState<Category[]>([]);
+  const [variantStats, setVariantStats] = useState<Record<number, VariantStats>>({});
+  const [lowStock, setLowStock] = useState<LowStockItemDto[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [toasts, setToasts] = useState<ToastData[]>([]);
 
-  // Filtros
-  const [search, setSearch]           = useState('');
-  const [filterCat, setFilterCat]     = useState<number | ''>('');
+  const [search, setSearch] = useState('');
+  const [filterCat, setFilterCat] = useState<number | ''>('');
   const [filterActive, setFilterActive] = useState<'all' | 'active' | 'inactive'>('active');
 
-  // Modales
-  const [showCreate, setShowCreate]   = useState(false);
+  const [showCreate, setShowCreate] = useState(false);
   const [editProduct, setEditProduct] = useState<ProductWithCategory | null>(null);
-  const [saving, setSaving]           = useState(false);
+  const [saving, setSaving] = useState(false);
 
-  // Panel de stock bajo
-  const lowStock: LowStockItemDto[] = MOCK_VARIANTS
-    .filter(v => v.stock <= v.stock_min)
-    .map(v => ({
-      variant_id:   v.id,
-      product_name: v.product_name,
-      attributes:   v.attributes,
-      barcode:      v.sku,
-      stock:        v.stock,
-      stock_min:    v.stock_min,
-      stock_status: v.stock <= 0 ? 'out_of_stock' : 'low',
-    }));
-
-  // Filtrado
-  const filtered = products.filter(p => {
-    const matchSearch = !search ||
-      p.name.toLowerCase().includes(search.toLowerCase()) ||
-      (p.brand ?? '').toLowerCase().includes(search.toLowerCase());
-    const matchCat    = filterCat === '' || p.category_id === filterCat;
-    const matchActive = filterActive === 'all' ||
-      (filterActive === 'active' ? p.is_active : !p.is_active);
-    return matchSearch && matchCat && matchActive;
-  });
-
-  // Toast helpers
   const addToast = useCallback((message: string, type: ToastData['type']) => {
-    setToasts(t => [...t, { id: toastId(), message, type }]);
+    setToasts(t => [...t, { id: Math.random().toString(36).slice(2), message, type }]);
   }, []);
+
   const dismissToast = useCallback((id: string) => {
     setToasts(t => t.filter(x => x.id !== id));
   }, []);
 
-  // Crear producto
+  const refreshVariantStats = useCallback(async (productList: ProductWithCategory[]) => {
+    try {
+      const entries = await Promise.all(productList.map(async product => {
+        const variants = await listVariants(product.id);
+        const total = variants.reduce((sum, variant) => sum + variant.stock, 0);
+        const min = variants.length ? Math.min(...variants.map(v => v.stock_min)) : 0;
+        return [product.id, { count: variants.length, total, min }] as const;
+      }));
+      setVariantStats(Object.fromEntries(entries));
+    } catch (error) {
+      addToast('No se pudo obtener el inventario de variantes', 'error');
+    }
+  }, [addToast]);
+
+  useEffect(() => {
+    const load = async () => {
+      try {
+        setLoading(true);
+        const [categoriesRes, productsRes, lowStockRes] = await Promise.all([
+          listCategories(),
+          listProducts({}),
+          getLowStock(),
+        ]);
+
+        setCategories(categoriesRes);
+        setProducts(productsRes.data);
+        setLowStock(lowStockRes);
+        await refreshVariantStats(productsRes.data);
+      } catch (error) {
+        addToast('Error cargando datos del inventario', 'error');
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    load();
+  }, [refreshVariantStats, addToast]);
+
   const handleCreate = async (dto: CreateProductDto | UpdateProductDto) => {
     setSaving(true);
-    await new Promise(r => setTimeout(r, 600));
-    const newProduct: ProductWithCategory = {
-      id:            products.length + 10,
-      category_id:   (dto as CreateProductDto).category_id,
-      category_name: categories.find(c => c.id === (dto as CreateProductDto).category_id)?.name ?? '',
-      name:          (dto as CreateProductDto).name,
-      description:   dto.description,
-      brand:         dto.brand,
-      image_url:     dto.image_url,
-      is_active:     true,
-      created_at:    new Date().toISOString(),
-      updated_at:    new Date().toISOString(),
-    };
-    setProducts(prev => [newProduct, ...prev]);
-    setSaving(false);
-    setShowCreate(false);
-    addToast('Producto creado correctamente', 'success');
+    try {
+      const result = await createProduct(dto as CreateProductDto);
+      const categoryName = categories.find(c => c.id === result.category_id)?.name ?? '';
+      const newProduct: ProductWithCategory = { ...result, category_name: categoryName };
+      setProducts(prev => [newProduct, ...prev]);
+      await refreshVariantStats([newProduct, ...products]);
+      setShowCreate(false);
+      addToast('Producto creado correctamente', 'success');
+    } catch (error) {
+      addToast('No se pudo crear el producto', 'error');
+    } finally {
+      setSaving(false);
+    }
   };
 
-  // Editar producto
   const handleEdit = async (dto: CreateProductDto | UpdateProductDto) => {
     if (!editProduct) return;
     setSaving(true);
-    await new Promise(r => setTimeout(r, 600));
-    setProducts(prev => prev.map(p =>
-      p.id === editProduct.id
-        ? { ...p, ...dto, category_name: categories.find(c => c.id === (dto as UpdateProductDto).category_id)?.name ?? p.category_name, updated_at: new Date().toISOString() }
-        : p
-    ));
-    setSaving(false);
-    setEditProduct(null);
-    addToast('Producto actualizado', 'success');
+    try {
+      const result = await updateProduct(editProduct.id, dto as UpdateProductDto);
+      const categoryName = categories.find(c => c.id === result.category_id)?.name ?? editProduct.category_name;
+      const updatedProduct: ProductWithCategory = { ...editProduct, ...result, category_name: categoryName };
+      setProducts(prev => prev.map(p => p.id === updatedProduct.id ? updatedProduct : p));
+      setEditProduct(null);
+      addToast('Producto actualizado', 'success');
+    } catch (error) {
+      addToast('No se pudo actualizar el producto', 'error');
+    } finally {
+      setSaving(false);
+    }
   };
+
+  const filtered = products.filter(p => {
+    const matchSearch = !search || p.name.toLowerCase().includes(search.toLowerCase()) || (p.brand ?? '').toLowerCase().includes(search.toLowerCase());
+    const matchCat = filterCat === '' || p.category_id === filterCat;
+    const matchActive = filterActive === 'all' || (filterActive === 'active' ? p.is_active : !p.is_active);
+    return matchSearch && matchCat && matchActive;
+  });
+
+  const totalVariantCount = Object.values(variantStats).reduce((sum, stats) => sum + stats.count, 0);
+
+  if (loading) {
+    return (
+      <div className="inv-page">
+        <div className="inv-loading">Cargando inventario...</div>
+      </div>
+    );
+  }
 
   return (
     <div className="inv-page">
-      {/* ── Cabecera ── */}
       <div className="inv-header">
         <div>
           <h1 className="inv-title">Inventario</h1>
-          <p className="inv-subtitle">{products.filter(p => p.is_active).length} productos activos · {MOCK_VARIANTS.length} variantes</p>
+          <p className="inv-subtitle">{products.filter(p => p.is_active).length} productos activos · {totalVariantCount} variantes</p>
         </div>
         <button className="btn btn-primary" onClick={() => setShowCreate(true)}>
           + Nuevo producto
         </button>
       </div>
 
-      {/* ── Alerta stock bajo ── */}
       {lowStock.length > 0 && (
         <div className="inv-low-stock-banner">
           <span className="low-stock-icon">⚠</span>
@@ -174,7 +166,6 @@ export const Inventory: React.FC = () => {
         </div>
       )}
 
-      {/* ── Filtros ── */}
       <div className="inv-filters">
         <div className="search-wrap">
           <span className="search-icon">⌕</span>
@@ -209,7 +200,6 @@ export const Inventory: React.FC = () => {
         </div>
       </div>
 
-      {/* ── Tabla ── */}
       {filtered.length === 0 ? (
         <div className="inv-empty">
           <span style={{ fontSize: 36, opacity: 0.25 }}>📦</span>
@@ -231,16 +221,11 @@ export const Inventory: React.FC = () => {
                 <th className="col-right">Stock total</th>
                 <th className="col-right">Precio desde</th>
                 <th>Estado</th>
-                <th />
-              </tr>
+                <th /></tr>
             </thead>
             <tbody>
               {filtered.map(product => {
-                const variants    = variantsForProduct(product.id);
-                const { total }   = productStockSummary(product.id);
-                const minStockMin = variants.length ? Math.min(...variants.map(v => v.stock_min)) : 5;
-                const minPrice    = variants.length ? Math.min(...variants.map(v => v.price)) : 0;
-
+                const stats = variantStats[product.id];
                 return (
                   <tr
                     key={product.id}
@@ -262,16 +247,16 @@ export const Inventory: React.FC = () => {
                     </td>
                     <td><span className="cat-chip">{product.category_name}</span></td>
                     <td>
-                      <span className="variant-count">{variants.length}</span>
+                      <span className="variant-count">{stats ? stats.count : '—'}</span>
                     </td>
                     <td className="col-right">
-                      {variants.length > 0
-                        ? <StockBadge stock={total} stockMin={minStockMin * variants.length} />
+                      {stats && stats.count > 0
+                        ? <StockBadge stock={stats.total} stockMin={stats.min * stats.count} />
                         : <span style={{ color: 'var(--text-muted)' }}>—</span>
                       }
                     </td>
                     <td className="col-right tabular">
-                      {minPrice > 0 ? formatMoney(minPrice) : '—'}
+                      {stats && stats.count > 0 ? formatMoney(Math.min(...Array(stats.count).fill(stats.total))) : '—'}
                     </td>
                     <td>
                       <span className={`status-dot ${product.is_active ? 'status-dot--active' : 'status-dot--inactive'}`}>
@@ -293,7 +278,6 @@ export const Inventory: React.FC = () => {
         </div>
       )}
 
-      {/* ── Modal crear ── */}
       {showCreate && (
         <Modal title="Nuevo producto" onClose={() => setShowCreate(false)}>
           <ProductForm
@@ -305,7 +289,6 @@ export const Inventory: React.FC = () => {
         </Modal>
       )}
 
-      {/* ── Modal editar ── */}
       {editProduct && (
         <Modal title="Editar producto" onClose={() => setEditProduct(null)}>
           <ProductForm
