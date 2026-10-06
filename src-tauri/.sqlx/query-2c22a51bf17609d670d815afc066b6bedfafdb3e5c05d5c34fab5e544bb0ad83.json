@@ -1,0 +1,104 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "SELECT\n               v.id AS variant_id,\n               p.id AS product_id,\n               p.name AS product_name,\n               p.brand,\n               c.name AS category_name,\n               p.description,\n               v.sku,\n               v.barcode,\n               v.price,\n               v.cost,\n               v.stock,\n               v.stock_min,\n               v.attributes,\n               v.allow_negative,\n               (v.is_active AND p.is_active) AS \"is_active!\"\n           FROM product_variants v\n           JOIN products p ON p.id = v.product_id\n           JOIN categories c ON c.id = p.category_id\n           ORDER BY c.name, p.name, v.id",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "variant_id",
+        "type_info": "Int4"
+      },
+      {
+        "ordinal": 1,
+        "name": "product_id",
+        "type_info": "Int4"
+      },
+      {
+        "ordinal": 2,
+        "name": "product_name",
+        "type_info": "Varchar"
+      },
+      {
+        "ordinal": 3,
+        "name": "brand",
+        "type_info": "Varchar"
+      },
+      {
+        "ordinal": 4,
+        "name": "category_name",
+        "type_info": "Varchar"
+      },
+      {
+        "ordinal": 5,
+        "name": "description",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 6,
+        "name": "sku",
+        "type_info": "Varchar"
+      },
+      {
+        "ordinal": 7,
+        "name": "barcode",
+        "type_info": "Varchar"
+      },
+      {
+        "ordinal": 8,
+        "name": "price",
+        "type_info": "Int8"
+      },
+      {
+        "ordinal": 9,
+        "name": "cost",
+        "type_info": "Int8"
+      },
+      {
+        "ordinal": 10,
+        "name": "stock",
+        "type_info": "Int4"
+      },
+      {
+        "ordinal": 11,
+        "name": "stock_min",
+        "type_info": "Int4"
+      },
+      {
+        "ordinal": 12,
+        "name": "attributes",
+        "type_info": "Jsonb"
+      },
+      {
+        "ordinal": 13,
+        "name": "allow_negative",
+        "type_info": "Bool"
+      },
+      {
+        "ordinal": 14,
+        "name": "is_active!",
+        "type_info": "Bool"
+      }
+    ],
+    "parameters": {
+      "Left": []
+    },
+    "nullable": [
+      false,
+      false,
+      false,
+      true,
+      false,
+      true,
+      true,
+      true,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      null
+    ]
+  },
+  "hash": "2c22a51bf17609d670d815afc066b6bedfafdb3e5c05d5c34fab5e544bb0ad83"
+}

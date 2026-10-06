@@ -9,6 +9,27 @@ export const formatMoney = (cents: number): string => {
   }).format(pesos);
 };
 
+export type MarginResult =
+  | { kind: 'ok'; percent: number }
+  | { kind: 'no_cost' }
+  | { kind: 'no_price' };
+
+/** Margen sobre precio: (price - cost) / price × 100. Importes en centavos. */
+export function calcMargin(price: number, cost: number): MarginResult {
+  if (price <= 0) return { kind: 'no_price' };
+  if (cost <= 0) return { kind: 'no_cost' };
+  const percent = Math.round(((price - cost) / price) * 1000) / 10;
+  return { kind: 'ok', percent };
+}
+
+export function formatMargin(margin: MarginResult): string {
+  switch (margin.kind) {
+    case 'ok': return `${margin.percent}%`;
+    case 'no_cost': return 'Sin costo';
+    case 'no_price': return 'Sin precio';
+  }
+}
+
 /** Fecha ISO → "12 jun 2026, 8:42 p. m." */
 export const formatDate = (iso: string): string => {
   return new Intl.DateTimeFormat('es-CO', {

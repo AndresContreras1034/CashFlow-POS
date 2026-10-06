@@ -1,0 +1,14 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "UPDATE stocktakes SET status = 'cancelled', cancelled_at = NOW()\n         WHERE id = $1 AND status = 'counting'",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Int4"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "88cb6ca4e1b9e96daad8923372664de67732ed2e2d89c941753978db8265eb9f"
+}

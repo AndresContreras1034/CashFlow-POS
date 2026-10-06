@@ -1,44 +1,49 @@
 @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap');
 
 :root {
-  --bg-base:        #0F1117;
-  --bg-surface:     #1A1D27;
-  --bg-elevated:    #222637;
-  --bg-hover:       #2A2D3E;
+  --bg-base:        #F4F4F2;
+  --bg-surface:     #FFFFFF;
+  --bg-elevated:    #FFFFFF;
+  --bg-hover:       #F2F4F7;
+  --sidebar-bg:     #1F2933;
 
-  --border:         #2A2D3E;
-  --border-subtle:  #1F2235;
+  --border:         #D0D5DD;
+  --border-subtle:  #EAECF0;
 
-  --text-primary:   #E8EAF0;
-  --text-secondary: #8B90A7;
-  --text-muted:     #555A72;
+  --text-primary:   #1F2933;
+  --text-secondary: #667085;
+  --text-muted:     #667085;
 
-  --accent:         #6C63FF;
-  --accent-hover:   #7B74FF;
-  --accent-dim:     rgba(108, 99, 255, 0.15);
+  --accent:         #334155;
+  --accent-hover:   #1E293B;
+  --accent-dim:     rgba(51, 65, 85, 0.10);
 
-  --stock-ok:       #00C896;
-  --stock-ok-dim:   rgba(0, 200, 150, 0.12);
-  --stock-low:      #F59E0B;
-  --stock-low-dim:  rgba(245, 158, 11, 0.12);
-  --stock-out:      #FF4D6D;
-  --stock-out-dim:  rgba(255, 77, 109, 0.12);
+  --stock-ok:       #3F7D58;
+  --stock-ok-dim:   rgba(63, 125, 88, 0.12);
+  --stock-low:      #B7791F;
+  --stock-low-dim:  rgba(183, 121, 31, 0.12);
+  --stock-out:      #B54747;
+  --stock-out-dim:  rgba(181, 71, 71, 0.12);
 
-  --success:        #00C896;
-  --warning:        #F59E0B;
-  --danger:         #FF4D6D;
-  --info:           #38BDF8;
+  --success:        #3F7D58;
+  --success-dim:    rgba(63, 125, 88, 0.10);
+  --warning:        #B7791F;
+  --warning-dim:    rgba(183, 121, 31, 0.10);
+  --danger:         #B54747;
+  --danger-dim:     rgba(181, 71, 71, 0.10);
+  --info:           #475569;
+  --overlay-bg:     rgba(31, 41, 51, 0.48);
 
   --font-sans:      'Inter', system-ui, sans-serif;
   --font-mono:      'JetBrains Mono', 'Fira Code', monospace;
 
   --radius-sm:      4px;
-  --radius:         8px;
-  --radius-lg:      12px;
+  --radius:         6px;
+  --radius-lg:      6px;
 
-  --shadow-sm:      0 1px 3px rgba(0,0,0,0.4);
-  --shadow:         0 4px 16px rgba(0,0,0,0.5);
-  --shadow-lg:      0 8px 32px rgba(0,0,0,0.6);
+  --shadow-sm:      none;
+  --shadow:         none;
+  --shadow-lg:      none;
 
   --sidebar-width:  220px;
   --transition:     150ms ease;

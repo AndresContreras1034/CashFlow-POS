@@ -1,0 +1,44 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "SELECT\n               COALESCE(\n                   SUM(GREATEST(v.stock, 0)::BIGINT * v.cost)\n                       FILTER (WHERE v.cost > 0), 0\n               )::BIGINT AS \"value_at_cost!\",\n               COALESCE(\n                   SUM(GREATEST(v.stock, 0)::BIGINT * v.price)\n                       FILTER (WHERE v.cost > 0), 0\n               )::BIGINT AS \"potential_sale_value!\",\n               COUNT(*) FILTER (WHERE v.cost = 0 AND v.stock > 0)\n                   AS \"variants_without_cost!\",\n               COUNT(*) FILTER (WHERE v.stock < 0)\n                   AS \"negative_stock_variants!\",\n               COUNT(*) FILTER (WHERE v.cost > 0)\n                   AS \"variants_valued!\"\n           FROM product_variants v\n           JOIN products p ON p.id = v.product_id\n           WHERE v.is_active = TRUE\n             AND p.is_active = TRUE",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "value_at_cost!",
+        "type_info": "Int8"
+      },
+      {
+        "ordinal": 1,
+        "name": "potential_sale_value!",
+        "type_info": "Int8"
+      },
+      {
+        "ordinal": 2,
+        "name": "variants_without_cost!",
+        "type_info": "Int8"
+      },
+      {
+        "ordinal": 3,
+        "name": "negative_stock_variants!",
+        "type_info": "Int8"
+      },
+      {
+        "ordinal": 4,
+        "name": "variants_valued!",
+        "type_info": "Int8"
+      }
+    ],
+    "parameters": {
+      "Left": []
+    },
+    "nullable": [
+      null,
+      null,
+      null,
+      null,
+      null
+    ]
+  },
+  "hash": "a93a8a6161a70fd38d096c1ba497fb6e8018dbdc5ae5a48e8c74a3a549699aa9"
+}

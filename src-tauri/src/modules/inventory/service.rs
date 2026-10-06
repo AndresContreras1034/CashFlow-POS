@@ -2,13 +2,14 @@ use sqlx::PgPool;
 
 use crate::modules::inventory::{
     dto::{
-        CreateCategoryDto, CreateProductDto, CreateVariantDto, KardexFilterDto,
-        LowStockItemDto, PaginatedResponse, ProductFilterDto, StockAdjustmentDto,
-        StockEntryDto, StockOutDto, UpdateCategoryDto, UpdateProductDto, UpdateVariantDto,
+        CreateCategoryDto, CreateProductDto, CreateVariantDto, InventoryValueDto, KardexFilterDto,
+        LowStockItemDto, PaginatedResponse, ProductFilterDto, ProductStockStatsDto,
+        StockAdjustmentDto, StockEntryDto, StockOutDto, UpdateCategoryDto, UpdateProductDto,
+        UpdateVariantDto,
     },
     models::{
-        Category, InventoryMovement, MovementType, MovementWithDetails, Product,
-        ProductVariant, ProductWithCategory, StockStatus, VariantWithProduct,
+        Category, MovementReason, MovementType, MovementWithDetails, Product, ProductVariant,
+        ProductWithCategory, VariantWithProduct,
     },
     repository,
 };
@@ -32,23 +33,20 @@ pub async fn get_category(pool: &PgPool, id: i32) -> Result<Category, AppError> 
         .ok_or_else(|| AppError::not_found("Categoría no encontrada"))
 }
 
-pub async fn create_category(
-    pool: &PgPool,
-    dto: CreateCategoryDto,
-) -> Result<Category, AppError> {
+pub async fn create_category(pool: &PgPool, dto: CreateCategoryDto) -> Result<Category, AppError> {
     if dto.name.trim().is_empty() {
-        return Err(AppError::validation("El nombre de la categoría es obligatorio"));
+        return Err(AppError::validation(
+            "El nombre de la categoría es obligatorio",
+        ));
     }
 
-    repository::create_category(pool, dto)
-        .await
-        .map_err(|e| {
-            if e.to_string().contains("unique") {
-                AppError::validation("Ya existe una categoría con ese nombre")
-            } else {
-                AppError::from(e)
-            }
-        })
+    repository::create_category(pool, dto).await.map_err(|e| {
+        if e.to_string().contains("unique") {
+            AppError::validation("Ya existe una categoría con ese nombre")
+        } else {
+            AppError::from(e)
+        }
+    })
 }
 
 pub async fn update_category(
@@ -70,8 +68,8 @@ pub async fn list_products(
     pool: &PgPool,
     filter: ProductFilterDto,
 ) -> Result<PaginatedResponse<ProductWithCategory>, AppError> {
-    let page      = filter.page.unwrap_or(1).max(1);
-    let page_size = filter.page_size.unwrap_or(20);
+    let page = filter.page.unwrap_or(1).max(1);
+    let page_size = filter.page_size.unwrap_or(20).clamp(1, 100);
 
     let (data, total) = repository::get_products(pool, &filter)
         .await
@@ -87,12 +85,11 @@ pub async fn get_product(pool: &PgPool, id: i32) -> Result<ProductWithCategory, 
         .ok_or_else(|| AppError::not_found("Producto no encontrado"))
 }
 
-pub async fn create_product(
-    pool: &PgPool,
-    dto: CreateProductDto,
-) -> Result<Product, AppError> {
+pub async fn create_product(pool: &PgPool, dto: CreateProductDto) -> Result<Product, AppError> {
     if dto.name.trim().is_empty() {
-        return Err(AppError::validation("El nombre del producto es obligatorio"));
+        return Err(AppError::validation(
+            "El nombre del producto es obligatorio",
+        ));
     }
 
     // Verificar que la categoría existe
@@ -113,7 +110,9 @@ pub async fn update_product(
 ) -> Result<Product, AppError> {
     if let Some(ref name) = dto.name {
         if name.trim().is_empty() {
-            return Err(AppError::validation("El nombre del producto no puede estar vacío"));
+            return Err(AppError::validation(
+                "El nombre del producto no puede estar vacío",
+            ));
         }
     }
 
@@ -129,11 +128,11 @@ pub async fn deactivate_product(pool: &PgPool, id: i32) -> Result<Product, AppEr
         id,
         UpdateProductDto {
             category_id: None,
-            name:        None,
+            name: None,
             description: None,
-            brand:       None,
-            image_url:   None,
-            is_active:   Some(false),
+            brand: None,
+            image_url: None,
+            is_active: Some(false),
         },
     )
     .await
@@ -160,20 +159,22 @@ pub async fn get_variant(pool: &PgPool, id: i32) -> Result<ProductVariant, AppEr
 }
 
 /// Busca por código de barras — punto de entrada del módulo de ventas
-pub async fn find_by_barcode(
-    pool: &PgPool,
-    barcode: &str,
-) -> Result<VariantWithProduct, AppError> {
+pub async fn find_by_barcode(pool: &PgPool, barcode: &str) -> Result<VariantWithProduct, AppError> {
     if barcode.trim().is_empty() {
-        return Err(AppError::validation("El código de barras no puede estar vacío"));
+        return Err(AppError::validation(
+            "El código de barras no puede estar vacío",
+        ));
     }
 
     repository::get_variant_by_barcode(pool, barcode)
         .await
         .map_err(AppError::from)?
-        .ok_or_else(|| AppError::not_found(
-            &format!("Producto no encontrado para el código: {}", barcode)
-        ))
+        .ok_or_else(|| {
+            AppError::not_found(&format!(
+                "Producto no encontrado para el código: {}",
+                barcode
+            ))
+        })
 }
 
 /// Búsqueda por texto — para el buscador en ventas
@@ -182,7 +183,9 @@ pub async fn search_variants(
     query: &str,
 ) -> Result<Vec<VariantWithProduct>, AppError> {
     if query.trim().len() < 2 {
-        return Err(AppError::validation("La búsqueda debe tener al menos 2 caracteres"));
+        return Err(AppError::validation(
+            "La búsqueda debe tener al menos 2 caracteres",
+        ));
     }
 
     repository::search_variants(pool, query)
@@ -197,6 +200,14 @@ pub async fn create_variant(
     if dto.price < 0 {
         return Err(AppError::validation("El precio no puede ser negativo"));
     }
+    if dto.stock.unwrap_or(0) < 0 {
+        return Err(AppError::validation(
+            "El stock inicial no puede ser negativo",
+        ));
+    }
+    if dto.cost.unwrap_or(0) < 0 {
+        return Err(AppError::validation("El costo no puede ser negativo"));
+    }
 
     // Verificar que el producto existe
     repository::get_product_by_id(pool, dto.product_id)
@@ -206,6 +217,7 @@ pub async fn create_variant(
 
     repository::create_variant(pool, dto).await.map_err(|e| {
         let msg = e.to_string();
+
         if msg.contains("uq_product_attributes") {
             AppError::validation("Ya existe una variante con esos atributos para este producto")
         } else if msg.contains("product_variants_barcode_key") {
@@ -293,6 +305,8 @@ pub async fn register_manual_out(
         return Err(AppError::validation("La cantidad debe ser mayor a cero"));
     }
 
+    validate_reason(dto.reason, &dto.notes)?;
+
     let variant = get_variant(pool, dto.variant_id).await?;
 
     // Validación anticipada antes de ir a la DB
@@ -303,9 +317,25 @@ pub async fn register_manual_out(
         )));
     }
 
-    repository::apply_stock_out(pool, dto, MovementType::ManualOut)
+    // ========================================================
+    // TRANSACCIÓN
+    // ========================================================
+    //
+    // apply_stock_out ahora recibe &mut PgConnection y NO
+    // crea/committea su propia transacción.
+    //
+    // Por eso este servicio debe abrirla.
+    //
+
+    let mut tx = pool.begin().await.map_err(AppError::from)?;
+
+    let updated_variant = repository::apply_stock_out(&mut tx, dto, MovementType::ManualOut)
         .await
-        .map_err(AppError::from)
+        .map_err(AppError::from)?;
+
+    tx.commit().await.map_err(AppError::from)?;
+
+    Ok(updated_variant)
 }
 
 pub async fn adjust_stock(
@@ -316,11 +346,53 @@ pub async fn adjust_stock(
         return Err(AppError::validation("El stock real no puede ser negativo"));
     }
 
-    get_variant(pool, dto.variant_id).await?;
+    let variant = get_variant(pool, dto.variant_id).await?;
 
-    repository::apply_stock_adjustment(pool, dto)
+    if dto.actual_stock == variant.stock {
+        return Ok(variant);
+    }
+
+    validate_reason(dto.reason, &dto.notes)?;
+
+    if dto.actual_stock > variant.stock
+        && !matches!(
+            dto.reason,
+            Some(MovementReason::CountCorrection | MovementReason::Other)
+        )
+    {
+        return Err(AppError::validation(
+            "El conteo es mayor al stock actual: usa «Corrección de conteo» u «Otro»",
+        ));
+    }
+
+    let mut tx = pool.begin().await.map_err(AppError::from)?;
+    let updated = repository::apply_stock_adjustment(&mut tx, dto)
         .await
-        .map_err(AppError::from)
+        .map_err(AppError::from)?;
+    tx.commit().await.map_err(AppError::from)?;
+    Ok(updated)
+}
+
+fn validate_reason(reason: Option<MovementReason>, notes: &Option<String>) -> Result<(), AppError> {
+    match reason {
+        None => Err(AppError::validation(
+            "Debes indicar el motivo del movimiento",
+        )),
+        Some(MovementReason::Other) => {
+            let has_notes = notes
+                .as_deref()
+                .map(|note| !note.trim().is_empty())
+                .unwrap_or(false);
+            if has_notes {
+                Ok(())
+            } else {
+                Err(AppError::validation(
+                    "Si el motivo es «Otro», escribe una nota que lo explique",
+                ))
+            }
+        }
+        Some(_) => Ok(()),
+    }
 }
 
 // ============================================================
@@ -331,8 +403,8 @@ pub async fn get_kardex(
     pool: &PgPool,
     filter: KardexFilterDto,
 ) -> Result<PaginatedResponse<MovementWithDetails>, AppError> {
-    let page      = filter.page.unwrap_or(1).max(1);
-    let page_size = filter.page_size.unwrap_or(50);
+    let page = filter.page.unwrap_or(1).max(1);
+    let page_size = filter.page_size.unwrap_or(50).clamp(1, 200);
 
     let (data, total) = repository::get_kardex(pool, &filter)
         .await
@@ -346,39 +418,64 @@ pub async fn get_kardex(
 // ============================================================
 
 pub async fn get_low_stock(pool: &PgPool) -> Result<Vec<LowStockItemDto>, AppError> {
-    let variants = repository::get_low_stock_variants(pool)
+    repository::get_low_stock_items(pool)
         .await
-        .map_err(AppError::from)?;
+        .map_err(AppError::from)
+}
 
-    // Necesitamos el nombre del producto — hacemos query separado por ahora
-    // (se puede optimizar con join en el repo si el volumen lo requiere)
-    let mut result = Vec::new();
-    for v in variants {
-        let product = repository::get_product_by_id(pool, v.product_id)
-            .await
-            .map_err(AppError::from)?;
+pub async fn get_inventory_value(pool: &PgPool) -> Result<InventoryValueDto, AppError> {
+    repository::get_inventory_value(pool)
+        .await
+        .map_err(AppError::from)
+}
 
-        let product_name = product
-            .map(|p| p.name)
-            .unwrap_or_else(|| "Producto eliminado".to_string());
-
-        let stock_status = match v.stock_status() {
-            StockStatus::OutOfStock => "out_of_stock",
-            StockStatus::Low        => "low",
-            StockStatus::Ok         => "ok",
-        }
-        .to_string();
-
-        result.push(LowStockItemDto {
-            variant_id: v.id,
-            product_name,
-            attributes: v.attributes,
-            barcode: v.barcode,
-            stock: v.stock,
-            stock_min: v.stock_min,
-            stock_status,
-        });
+pub async fn get_product_stock_stats(
+    pool: &PgPool,
+    product_ids: Vec<i32>,
+) -> Result<Vec<ProductStockStatsDto>, AppError> {
+    if product_ids.is_empty() {
+        return Ok(Vec::new());
     }
 
-    Ok(result)
+    repository::get_product_stock_stats(pool, &product_ids)
+        .await
+        .map_err(AppError::from)
+}
+
+pub async fn generate_internal_barcode(pool: &PgPool) -> Result<String, AppError> {
+    for _ in 0..5 {
+        let sequence = repository::next_barcode_seq(pool)
+            .await
+            .map_err(AppError::from)?;
+        let barcode = super::barcode::internal_ean13(sequence)
+            .ok_or_else(|| AppError::validation("Se agotó la secuencia de códigos internos"))?;
+        if !repository::barcode_exists(pool, &barcode)
+            .await
+            .map_err(AppError::from)?
+        {
+            return Ok(barcode);
+        }
+    }
+    Err(AppError::validation(
+        "No se pudo generar un código único, intenta de nuevo",
+    ))
+}
+
+pub async fn print_variant_labels(
+    pool: &PgPool,
+    variant_id: i32,
+    copies: u32,
+) -> Result<(), AppError> {
+    let data = repository::get_label_data(pool, variant_id)
+        .await
+        .map_err(AppError::from)?
+        .ok_or_else(|| AppError::not_found("Variante no encontrada"))?;
+
+    let bytes =
+        super::label::build_labels(&data, copies).map_err(|error| AppError::validation(&error))?;
+
+    tokio::task::spawn_blocking(move || crate::modules::billing::printer::print_raw(&bytes))
+        .await
+        .map_err(|error| AppError::internal(&format!("Falló la impresión: {}", error)))?
+        .map_err(|error| AppError::internal(&error))
 }

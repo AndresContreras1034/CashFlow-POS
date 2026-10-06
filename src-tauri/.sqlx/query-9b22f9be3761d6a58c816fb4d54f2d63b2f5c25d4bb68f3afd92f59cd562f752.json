@@ -1,0 +1,23 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "SELECT COUNT(*)\n           FROM cash_movements\n           WHERE ($1::INT  IS NULL OR session_id = $1)\n             AND ($2::TEXT IS NULL OR movement_type::TEXT = $2)",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "count",
+        "type_info": "Int8"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Int4",
+        "Text"
+      ]
+    },
+    "nullable": [
+      null
+    ]
+  },
+  "hash": "9b22f9be3761d6a58c816fb4d54f2d63b2f5c25d4bb68f3afd92f59cd562f752"
+}

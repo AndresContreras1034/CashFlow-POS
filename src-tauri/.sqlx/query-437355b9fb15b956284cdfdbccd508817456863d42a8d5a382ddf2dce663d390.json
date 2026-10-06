@@ -1,0 +1,154 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "SELECT\n               m.id, m.variant_id,\n               m.movement_type AS \"movement_type: MovementType\",\n               m.quantity, m.stock_before, m.stock_after,\n               m.unit_cost, m.sale_id, m.purchase_id,\n               m.reason AS \"reason?: MovementReason\",\n               m.notes, m.created_by, m.created_at,\n               p.name  AS product_name,\n               v.attributes, v.sku, v.barcode\n           FROM inventory_movements m\n           JOIN product_variants v ON v.id = m.variant_id\n           JOIN products         p ON p.id = v.product_id\n           WHERE ($1::INT  IS NULL OR m.variant_id = $1)\n             AND ($2::INT  IS NULL OR v.product_id = $2)\n             AND ($3::TEXT IS NULL OR m.movement_type::TEXT = $3)\n             AND ($4::DATE IS NULL OR m.created_at::DATE >= $4::DATE)\n             AND ($5::DATE IS NULL OR m.created_at::DATE <= $5::DATE)\n           ORDER BY m.created_at DESC\n           LIMIT $6 OFFSET $7",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "id",
+        "type_info": "Int4"
+      },
+      {
+        "ordinal": 1,
+        "name": "variant_id",
+        "type_info": "Int4"
+      },
+      {
+        "ordinal": 2,
+        "name": "movement_type: MovementType",
+        "type_info": {
+          "Custom": {
+            "name": "movement_type",
+            "kind": {
+              "Enum": [
+                "purchase",
+                "sale",
+                "sale_return",
+                "manual_in",
+                "manual_out",
+                "adjustment",
+                "initial_stock"
+              ]
+            }
+          }
+        }
+      },
+      {
+        "ordinal": 3,
+        "name": "quantity",
+        "type_info": "Int4"
+      },
+      {
+        "ordinal": 4,
+        "name": "stock_before",
+        "type_info": "Int4"
+      },
+      {
+        "ordinal": 5,
+        "name": "stock_after",
+        "type_info": "Int4"
+      },
+      {
+        "ordinal": 6,
+        "name": "unit_cost",
+        "type_info": "Int8"
+      },
+      {
+        "ordinal": 7,
+        "name": "sale_id",
+        "type_info": "Int4"
+      },
+      {
+        "ordinal": 8,
+        "name": "purchase_id",
+        "type_info": "Int4"
+      },
+      {
+        "ordinal": 9,
+        "name": "reason?: MovementReason",
+        "type_info": {
+          "Custom": {
+            "name": "movement_reason",
+            "kind": {
+              "Enum": [
+                "damaged",
+                "lost",
+                "expired",
+                "theft",
+                "internal_use",
+                "count_correction",
+                "other"
+              ]
+            }
+          }
+        }
+      },
+      {
+        "ordinal": 10,
+        "name": "notes",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 11,
+        "name": "created_by",
+        "type_info": "Varchar"
+      },
+      {
+        "ordinal": 12,
+        "name": "created_at",
+        "type_info": "Timestamptz"
+      },
+      {
+        "ordinal": 13,
+        "name": "product_name",
+        "type_info": "Varchar"
+      },
+      {
+        "ordinal": 14,
+        "name": "attributes",
+        "type_info": "Jsonb"
+      },
+      {
+        "ordinal": 15,
+        "name": "sku",
+        "type_info": "Varchar"
+      },
+      {
+        "ordinal": 16,
+        "name": "barcode",
+        "type_info": "Varchar"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Int4",
+        "Int4",
+        "Text",
+        "Date",
+        "Date",
+        "Int8",
+        "Int8"
+      ]
+    },
+    "nullable": [
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      true,
+      true,
+      true,
+      true,
+      false,
+      false,
+      false,
+      false,
+      true,
+      true
+    ]
+  },
+  "hash": "437355b9fb15b956284cdfdbccd508817456863d42a8d5a382ddf2dce663d390"
+}

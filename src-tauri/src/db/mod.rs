@@ -1,2 +1,2 @@
-pub mod connection; 
-pub use connection::{DbPool, init_db}; 
+pub mod connection;
+pub use connection::{init_db, DbPool};

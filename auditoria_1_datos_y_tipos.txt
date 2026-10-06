@@ -1,0 +1,1414 @@
+
+===== src-tauri\migrations\001_categories.sql =====
+-- ============================================================
+-- MIGRACIÓN 001: Categorías
+-- ============================================================
+
+CREATE TABLE IF NOT EXISTS categories (
+    id          SERIAL PRIMARY KEY,
+    name        VARCHAR(100) NOT NULL UNIQUE,
+    description TEXT,
+    is_active   BOOLEAN NOT NULL DEFAULT TRUE,
+    created_at  TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    updated_at  TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+
+-- Categorías base para una tienda de detalles
+INSERT INTO categories (name, description) VALUES
+    ('Perfumes y Fragancias', 'Colonias, perfumes y desodorantes'),
+    ('Joyería y Accesorios',  'Aretes, collares, pulseras, anillos'),
+    ('Juguetes',              'Juguetes para niños de todas las edades'),
+    ('Ropa',                  'Prendas de vestir para adultos y niños'),
+    ('Detalles y Regalos',    'Artículos de regalo y decoración'),
+    ('Bisutería',             'Accesorios de moda a bajo costo'),
+    ('Cosméticos',            'Maquillaje y cuidado personal'),
+    ('Sin categoría',         'Productos sin categoría asignada')
+ON CONFLICT (name) DO NOTHING;
+===== src-tauri\migrations\002_products.sql =====
+-- ============================================================
+-- MIGRACIÓN 002: Productos y Variantes
+-- ============================================================
+
+-- ------------------------------------------------------------
+-- Tabla padre: información general del producto
+-- ------------------------------------------------------------
+CREATE TABLE IF NOT EXISTS products (
+    id           SERIAL PRIMARY KEY,
+    category_id  INT NOT NULL REFERENCES categories(id) ON DELETE RESTRICT,
+    name         VARCHAR(200) NOT NULL,
+    description  TEXT,
+    brand        VARCHAR(100),
+    image_url    TEXT,
+    is_active    BOOLEAN NOT NULL DEFAULT TRUE,
+    created_at   TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    updated_at   TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+
+CREATE INDEX idx_products_category  ON products(category_id);
+CREATE INDEX idx_products_is_active ON products(is_active);
+CREATE INDEX idx_products_name      ON products USING gin(to_tsvector('spanish', name));
+
+-- ------------------------------------------------------------
+-- Tabla de variantes: cada combinación única de un producto
+-- Ejemplos:
+--   Perfume "Acqua di Gio" → variante 50ml, variante 100ml
+--   Camiseta "Básica"      → variante Talla S, variante Talla M
+--   Juguete "Carro"        → variante Rojo, variante Azul
+-- ------------------------------------------------------------
+CREATE TABLE IF NOT EXISTS product_variants (
+    id             SERIAL PRIMARY KEY,
+    product_id     INT NOT NULL REFERENCES products(id) ON DELETE CASCADE,
+
+    -- Atributos de la variante (ej: "100ml", "Talla M", "Color Rojo")
+    -- Se almacenan como pares clave-valor en JSONB para máxima flexibilidad
+    -- Ejemplo: {"talla": "M", "color": "Rojo"} | {"volumen": "100ml"} | {"presentacion": "Unidad"}
+    attributes     JSONB NOT NULL DEFAULT '{}',
+
+    -- Identificación
+    sku            VARCHAR(100) UNIQUE,              -- código interno opcional
+    barcode        VARCHAR(100) UNIQUE,              -- código de barras del empaque
+
+    -- Precio en centavos para evitar errores de punto flotante
+    -- Ejemplo: $45.000 COP → 4500000
+    price          BIGINT NOT NULL CHECK (price >= 0),
+    cost           BIGINT NOT NULL DEFAULT 0 CHECK (cost >= 0),  -- precio de compra
+
+    -- Stock
+    stock          INT NOT NULL DEFAULT 0,
+    stock_min      INT NOT NULL DEFAULT 0,           -- alerta de bajo stock
+    allow_negative BOOLEAN NOT NULL DEFAULT FALSE,   -- ¿vender sin stock?
+
+    is_active      BOOLEAN NOT NULL DEFAULT TRUE,
+    created_at     TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    updated_at     TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+
+    -- No permitir dos variantes idénticas para el mismo producto
+    CONSTRAINT uq_product_attributes UNIQUE (product_id, attributes)
+);
+
+CREATE INDEX idx_variants_product    ON product_variants(product_id);
+CREATE INDEX idx_variants_barcode    ON product_variants(barcode);
+CREATE INDEX idx_variants_sku        ON product_variants(sku);
+CREATE INDEX idx_variants_is_active  ON product_variants(is_active);
+CREATE INDEX idx_variants_stock_low  ON product_variants(stock) WHERE stock > 0;
+CREATE INDEX idx_variants_attributes ON product_variants USING gin(attributes);
+===== src-tauri\migrations\003_inventory_movements.sql =====
+-- ============================================================
+-- MIGRACIÓN 003: Movimientos de Inventario (Kardex)
+-- ============================================================
+
+-- Tipos de movimiento posibles
+CREATE TYPE movement_type AS ENUM (
+    'purchase',         -- entrada por compra a proveedor
+    'sale',             -- salida por venta (lo inserta el módulo de ventas)
+    'sale_return',      -- entrada por devolución de venta
+    'manual_in',        -- entrada manual (encontró unidades extra)
+    'manual_out',       -- salida manual (daño, pérdida, vencimiento)
+    'adjustment',       -- ajuste por conteo físico
+    'initial_stock'     -- carga inicial de inventario
+);
+
+CREATE TABLE IF NOT EXISTS inventory_movements (
+    id              SERIAL PRIMARY KEY,
+    variant_id      INT NOT NULL REFERENCES product_variants(id) ON DELETE RESTRICT,
+
+    movement_type   movement_type NOT NULL,
+
+    -- Cantidad: siempre positiva. El tipo define si suma o resta.
+    quantity        INT NOT NULL CHECK (quantity > 0),
+
+    -- Stock antes y después del movimiento (para auditoría / Kardex)
+    stock_before    INT NOT NULL,
+    stock_after     INT NOT NULL,
+
+    -- Costo unitario en el momento del movimiento (para valorización)
+    unit_cost       BIGINT NOT NULL DEFAULT 0,
+
+    -- Referencias opcionales
+    sale_id         INT,        -- FK a sales cuando esté disponible
+    purchase_id     INT,        -- FK a purchases cuando esté disponible
+
+    notes           TEXT,
+    created_by      VARCHAR(100) NOT NULL DEFAULT 'system',
+    created_at      TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+
+CREATE INDEX idx_movements_variant   ON inventory_movements(variant_id);
+CREATE INDEX idx_movements_type      ON inventory_movements(movement_type);
+CREATE INDEX idx_movements_date      ON inventory_movements(created_at DESC);
+CREATE INDEX idx_movements_sale      ON inventory_movements(sale_id) WHERE sale_id IS NOT NULL;
+
+-- ------------------------------------------------------------
+-- Función que actualiza updated_at automáticamente
+-- (aplica a products y product_variants)
+-- ------------------------------------------------------------
+CREATE OR REPLACE FUNCTION update_updated_at()
+RETURNS TRIGGER AS $$
+BEGIN
+    NEW.updated_at = NOW();
+    RETURN NEW;
+END;
+$$ LANGUAGE plpgsql;
+
+CREATE TRIGGER trg_products_updated_at
+    BEFORE UPDATE ON products
+    FOR EACH ROW EXECUTE FUNCTION update_updated_at();
+
+CREATE TRIGGER trg_variants_updated_at
+    BEFORE UPDATE ON product_variants
+    FOR EACH ROW EXECUTE FUNCTION update_updated_at();
+
+CREATE TRIGGER trg_categories_updated_at
+    BEFORE UPDATE ON categories
+    FOR EACH ROW EXECUTE FUNCTION update_updated_at();
+===== src-tauri\migrations\006_sales.sql =====
+-- ============================================================
+-- MIGRACIÓN 006: Ventas (venta + ítems + pagos mixtos)
+-- ============================================================
+
+CREATE TYPE payment_method AS ENUM ('cash', 'card', 'transfer');
+CREATE TYPE sale_status    AS ENUM ('completed', 'cancelled', 'refunded');
+
+CREATE TABLE sales (
+    id           SERIAL PRIMARY KEY,
+
+    -- FK futura cuando exista modules::customers (mismo criterio que
+    -- inventory_movements.sale_id quedó reservado antes de que sales existiera).
+    customer_id  INT,
+
+    subtotal     BIGINT NOT NULL CHECK (subtotal >= 0),
+    tax          BIGINT NOT NULL DEFAULT 0 CHECK (tax >= 0),
+    discount     BIGINT NOT NULL DEFAULT 0 CHECK (discount >= 0),
+    total        BIGINT NOT NULL CHECK (total >= 0),
+
+    status       sale_status NOT NULL DEFAULT 'completed',
+    notes        TEXT,
+    created_by   VARCHAR(100) NOT NULL DEFAULT 'system',
+    created_at   TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+
+CREATE TABLE sale_items (
+    id          SERIAL PRIMARY KEY,
+    sale_id     INT NOT NULL REFERENCES sales(id) ON DELETE RESTRICT,
+    variant_id  INT NOT NULL REFERENCES product_variants(id) ON DELETE RESTRICT,
+
+    quantity    INT NOT NULL CHECK (quantity > 0),
+    unit_price  BIGINT NOT NULL CHECK (unit_price >= 0),
+    discount    BIGINT NOT NULL DEFAULT 0 CHECK (discount >= 0),
+    tax         BIGINT NOT NULL DEFAULT 0 CHECK (tax >= 0),
+    subtotal    BIGINT NOT NULL CHECK (subtotal >= 0)
+);
+
+CREATE TABLE sale_payments (
+    id       SERIAL PRIMARY KEY,
+    sale_id  INT NOT NULL REFERENCES sales(id) ON DELETE RESTRICT,
+    method   payment_method NOT NULL,
+    amount   BIGINT NOT NULL CHECK (amount > 0)
+);
+
+CREATE INDEX idx_sale_items_sale      ON sale_items (sale_id);
+CREATE INDEX idx_sale_items_variant   ON sale_items (variant_id);
+CREATE INDEX idx_sale_payments_sale   ON sale_payments (sale_id);
+CREATE INDEX idx_sales_status         ON sales (status);
+CREATE INDEX idx_sales_created_at     ON sales (created_at);
+
+-- Ahora que sales existe, cerramos las FKs que quedaron reservadas
+-- como columnas sueltas en migraciones anteriores.
+ALTER TABLE inventory_movements
+    ADD CONSTRAINT fk_inventory_movements_sale
+    FOREIGN KEY (sale_id) REFERENCES sales(id);
+
+ALTER TABLE cash_movements
+    ADD CONSTRAINT fk_cash_movements_sale
+    FOREIGN KEY (sale_id) REFERENCES sales(id);
+===== src-tauri\migrations\007_movement_reason.sql =====
+CREATE TYPE movement_reason AS ENUM (
+    'damaged',
+    'lost',
+    'expired',
+    'theft',
+    'internal_use',
+    'count_correction',
+    'other'
+);
+
+ALTER TABLE inventory_movements
+    ADD COLUMN reason movement_reason;
+
+===== src-tauri\migrations\008_barcode_sequence.sql =====
+CREATE SEQUENCE IF NOT EXISTS internal_barcode_seq START 1;
+
+===== src-tauri\migrations\009_stocktake.sql =====
+CREATE TYPE stocktake_status AS ENUM ('counting', 'applied', 'cancelled');
+
+CREATE TABLE IF NOT EXISTS stocktakes (
+    id           SERIAL PRIMARY KEY,
+    category_id  INT REFERENCES categories(id) ON DELETE RESTRICT,
+    status       stocktake_status NOT NULL DEFAULT 'counting',
+    notes        TEXT,
+    created_by   VARCHAR(100) NOT NULL DEFAULT 'system',
+    created_at   TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    applied_at   TIMESTAMPTZ,
+    cancelled_at TIMESTAMPTZ
+);
+
+CREATE UNIQUE INDEX one_open_stocktake
+    ON stocktakes ((status))
+    WHERE status = 'counting';
+
+CREATE TABLE IF NOT EXISTS stocktake_lines (
+    id             SERIAL PRIMARY KEY,
+    stocktake_id   INT NOT NULL REFERENCES stocktakes(id) ON DELETE CASCADE,
+    variant_id     INT NOT NULL REFERENCES product_variants(id) ON DELETE RESTRICT,
+    expected_stock INT NOT NULL,
+    counted_stock  INT CHECK (counted_stock >= 0),
+    counted_at     TIMESTAMPTZ,
+    UNIQUE (stocktake_id, variant_id)
+);
+
+CREATE INDEX idx_stocktake_lines_session ON stocktake_lines(stocktake_id);
+
+===== LISTA DE MIGRACIONES =====
+001_categories.sql
+002_products.sql
+003_inventory_movements.sql
+004_settings.sql
+005_cash.sql
+006_sales.sql
+007_movement_reason.sql
+008_barcode_sequence.sql
+009_stocktake.sql
+
+===== src-tauri\src\modules\inventory\models.rs =====
+use chrono::{DateTime, Utc};
+use serde::{Deserialize, Serialize};
+use serde_json::Value as JsonValue;
+use sqlx::FromRow;
+
+// ============================================================
+// CATEGORÍAS
+// ============================================================
+
+#[derive(Debug, Clone, Serialize, Deserialize, FromRow)]
+pub struct Category {
+    pub id: i32,
+    pub name: String,
+    pub description: Option<String>,
+    pub is_active: bool,
+    pub created_at: DateTime<Utc>,
+    pub updated_at: DateTime<Utc>,
+}
+
+// ============================================================
+// PRODUCTOS
+// ============================================================
+
+#[derive(Debug, Clone, Serialize, Deserialize, FromRow)]
+pub struct Product {
+    pub id: i32,
+    pub category_id: i32,
+    pub name: String,
+    pub description: Option<String>,
+    pub brand: Option<String>,
+    pub image_url: Option<String>,
+    pub is_active: bool,
+    pub created_at: DateTime<Utc>,
+    pub updated_at: DateTime<Utc>,
+}
+
+/// Producto con su categoría incluida (para listados)
+#[derive(Debug, Clone, Serialize, Deserialize, FromRow)]
+pub struct ProductWithCategory {
+    pub id: i32,
+    pub category_id: i32,
+    pub category_name: String,
+    pub name: String,
+    pub description: Option<String>,
+    pub brand: Option<String>,
+    pub image_url: Option<String>,
+    pub is_active: bool,
+    pub created_at: DateTime<Utc>,
+    pub updated_at: DateTime<Utc>,
+}
+
+// ============================================================
+// VARIANTES
+// ============================================================
+
+#[derive(Debug, Clone, Serialize, Deserialize, FromRow)]
+pub struct ProductVariant {
+    pub id: i32,
+    pub product_id: i32,
+    pub attributes: JsonValue, // {"volumen": "100ml"} | {"talla": "M", "color": "Rojo"}
+    pub sku: Option<String>,
+    pub barcode: Option<String>,
+    pub price: i64, // centavos
+    pub cost: i64,  // centavos
+    pub stock: i32,
+    pub stock_min: i32,
+    pub allow_negative: bool,
+    pub is_active: bool,
+    pub created_at: DateTime<Utc>,
+    pub updated_at: DateTime<Utc>,
+}
+
+/// Variante con info del producto padre (para búsqueda por barcode en ventas)
+#[derive(Debug, Clone, Serialize, Deserialize, FromRow)]
+pub struct VariantWithProduct {
+    // Variante
+    pub id: i32,
+    pub product_id: i32,
+    pub attributes: JsonValue,
+    pub sku: Option<String>,
+    pub barcode: Option<String>,
+    pub price: i64,
+    pub cost: i64,
+    pub stock: i32,
+    pub stock_min: i32,
+    pub allow_negative: bool,
+    pub is_active: bool,
+    // Producto padre
+    pub product_name: String,
+    pub brand: Option<String>,
+    pub image_url: Option<String>,
+    pub category_id: i32,
+    pub category_name: String,
+}
+
+/// Stock status para alertas
+#[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq)]
+#[serde(rename_all = "snake_case")]
+pub enum StockStatus {
+    Ok,         // stock > stock_min
+    Low,        // 0 < stock <= stock_min
+    OutOfStock, // stock == 0
+}
+
+impl StockStatus {
+    pub fn as_str(&self) -> &'static str {
+        match self {
+            StockStatus::Ok => "ok",
+            StockStatus::Low => "low",
+            StockStatus::OutOfStock => "out_of_stock",
+        }
+    }
+}
+
+impl ProductVariant {
+    pub fn stock_status(&self) -> StockStatus {
+        if self.stock <= 0 {
+            StockStatus::OutOfStock
+        } else if self.stock <= self.stock_min {
+            StockStatus::Low
+        } else {
+            StockStatus::Ok
+        }
+    }
+
+    /// Precio formateado en pesos (centavos → pesos)
+    pub fn price_display(&self) -> f64 {
+        self.price as f64 / 100.0
+    }
+}
+
+// ============================================================
+// MOVIMIENTOS DE INVENTARIO (KARDEX)
+// ============================================================
+
+#[derive(Debug, Clone, Serialize, Deserialize, sqlx::Type, PartialEq)]
+#[sqlx(type_name = "movement_type", rename_all = "snake_case")]
+#[serde(rename_all = "snake_case")]
+pub enum MovementType {
+    Purchase,
+    Sale,
+    SaleReturn,
+    ManualIn,
+    ManualOut,
+    Adjustment,
+    InitialStock,
+}
+
+#[derive(Debug, Clone, Copy, Serialize, Deserialize, sqlx::Type, PartialEq, Eq)]
+#[sqlx(type_name = "movement_reason", rename_all = "snake_case")]
+#[serde(rename_all = "snake_case")]
+pub enum MovementReason {
+    Damaged,
+    Lost,
+    Expired,
+    Theft,
+    InternalUse,
+    CountCorrection,
+    Other,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, FromRow)]
+pub struct InventoryMovement {
+    pub id: i32,
+    pub variant_id: i32,
+    pub movement_type: MovementType,
+    pub quantity: i32,
+    pub stock_before: i32,
+    pub stock_after: i32,
+    pub unit_cost: i64,
+    pub sale_id: Option<i32>,
+    pub purchase_id: Option<i32>,
+    pub reason: Option<MovementReason>,
+    pub notes: Option<String>,
+    pub created_by: String,
+    pub created_at: DateTime<Utc>,
+}
+
+/// Movimiento con info de la variante y producto (para el Kardex visual)
+#[derive(Debug, Clone, Serialize, Deserialize, FromRow)]
+pub struct MovementWithDetails {
+    pub id: i32,
+    pub variant_id: i32,
+    pub movement_type: MovementType,
+    pub quantity: i32,
+    pub stock_before: i32,
+    pub stock_after: i32,
+    pub unit_cost: i64,
+    pub sale_id: Option<i32>,
+    pub purchase_id: Option<i32>,
+    pub reason: Option<MovementReason>,
+    pub notes: Option<String>,
+    pub created_by: String,
+    pub created_at: DateTime<Utc>,
+    // Info variante/producto
+    pub product_name: String,
+    pub attributes: JsonValue,
+    pub sku: Option<String>,
+    pub barcode: Option<String>,
+}
+
+===== src-tauri\src\modules\inventory\dto.rs =====
+use chrono::NaiveDate;
+use serde::{Deserialize, Serialize};
+use serde_json::Value as JsonValue;
+
+use crate::modules::inventory::models::{MovementReason, StockStatus};
+
+// ============================================================
+// CATEGORÍAS
+// ============================================================
+
+#[derive(Debug, Deserialize)]
+pub struct CreateCategoryDto {
+    pub name: String,
+    pub description: Option<String>,
+}
+
+#[derive(Debug, Deserialize)]
+pub struct UpdateCategoryDto {
+    pub name: Option<String>,
+    pub description: Option<String>,
+    pub is_active: Option<bool>,
+}
+
+// ============================================================
+// PRODUCTOS
+// ============================================================
+
+#[derive(Debug, Deserialize)]
+pub struct CreateProductDto {
+    pub category_id: i32,
+    pub name: String,
+    pub description: Option<String>,
+    pub brand: Option<String>,
+    pub image_url: Option<String>,
+}
+
+#[derive(Debug, Deserialize)]
+pub struct UpdateProductDto {
+    pub category_id: Option<i32>,
+    pub name: Option<String>,
+    pub description: Option<String>,
+    pub brand: Option<String>,
+    pub image_url: Option<String>,
+    pub is_active: Option<bool>,
+}
+
+// ============================================================
+// VARIANTES
+// ============================================================
+
+#[derive(Debug, Deserialize)]
+pub struct CreateVariantDto {
+    pub product_id: i32,
+    pub attributes: JsonValue,
+    pub sku: Option<String>,
+    pub barcode: Option<String>,
+    pub price: i64,
+    pub cost: Option<i64>,
+    pub stock: Option<i32>,
+    pub stock_min: Option<i32>,
+    pub allow_negative: Option<bool>,
+}
+
+#[derive(Debug, Deserialize)]
+pub struct UpdateVariantDto {
+    pub attributes: Option<JsonValue>,
+    pub sku: Option<String>,
+    pub barcode: Option<String>,
+    pub price: Option<i64>,
+    pub cost: Option<i64>,
+    pub stock_min: Option<i32>,
+    pub allow_negative: Option<bool>,
+    pub is_active: Option<bool>,
+}
+
+// ============================================================
+// MOVIMIENTOS DE INVENTARIO
+// ============================================================
+
+#[derive(Debug, Deserialize)]
+pub struct StockEntryDto {
+    pub variant_id: i32,
+    pub quantity: i32,
+    pub unit_cost: Option<i64>,
+    pub notes: Option<String>,
+    pub created_by: Option<String>,
+}
+
+#[derive(Debug, Deserialize)]
+pub struct StockOutDto {
+    pub variant_id: i32,
+    pub quantity: i32,
+    pub reason: Option<MovementReason>,
+    pub notes: Option<String>,
+    pub created_by: Option<String>,
+    pub sale_id: Option<i32>,
+}
+
+#[derive(Debug, Deserialize)]
+pub struct StockAdjustmentDto {
+    pub variant_id: i32,
+    pub actual_stock: i32,
+    pub reason: Option<MovementReason>,
+    pub notes: Option<String>,
+    pub created_by: Option<String>,
+}
+
+// ============================================================
+// FILTROS / BÚSQUEDA
+// ============================================================
+
+#[derive(Debug, Clone, Copy, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum ProductSortBy {
+    Name,
+    Brand,
+    Category,
+    CreatedAt,
+}
+
+impl ProductSortBy {
+    pub fn as_str(&self) -> &'static str {
+        match self {
+            ProductSortBy::Name => "name",
+            ProductSortBy::Brand => "brand",
+            ProductSortBy::Category => "category",
+            ProductSortBy::CreatedAt => "created_at",
+        }
+    }
+}
+
+#[derive(Debug, Clone, Copy, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum SortDir {
+    Asc,
+    Desc,
+}
+
+impl SortDir {
+    pub fn as_str(&self) -> &'static str {
+        match self {
+            SortDir::Asc => "asc",
+            SortDir::Desc => "desc",
+        }
+    }
+}
+
+#[derive(Debug, Deserialize)]
+pub struct ProductFilterDto {
+    pub category_id: Option<i32>,
+    pub search: Option<String>,
+    pub is_active: Option<bool>,
+    pub variant_is_active: Option<bool>,
+    pub stock_status: Option<StockStatus>,
+    pub sort_by: Option<ProductSortBy>,
+    pub sort_dir: Option<SortDir>,
+    pub page: Option<i64>,
+    pub page_size: Option<i64>,
+}
+
+#[derive(Debug, Deserialize)]
+pub struct KardexFilterDto {
+    pub variant_id: Option<i32>,
+    pub product_id: Option<i32>,
+    pub movement_type: Option<String>,
+    pub date_from: Option<NaiveDate>,
+    pub date_to: Option<NaiveDate>,
+    pub page: Option<i64>,
+    pub page_size: Option<i64>,
+}
+
+// ============================================================
+// RESPUESTAS PAGINADAS
+// ============================================================
+
+#[derive(Debug, Serialize)]
+pub struct PaginatedResponse<T: Serialize> {
+    pub data: Vec<T>,
+    pub total: i64,
+    pub page: i64,
+    pub page_size: i64,
+    pub total_pages: i64,
+}
+
+impl<T: Serialize> PaginatedResponse<T> {
+    pub fn new(data: Vec<T>, total: i64, page: i64, page_size: i64) -> Self {
+        let total_pages = (total + page_size - 1) / page_size;
+
+        Self {
+            data,
+            total,
+            page,
+            page_size,
+            total_pages,
+        }
+    }
+}
+
+// ============================================================
+// ALERTAS DE STOCK
+// ============================================================
+
+#[derive(Debug, Serialize)]
+pub struct LowStockItemDto {
+    pub variant_id: i32,
+    pub product_name: String,
+    pub attributes: JsonValue,
+    pub barcode: Option<String>,
+    pub stock: i32,
+    pub stock_min: i32,
+    pub stock_status: String,
+}
+
+/// Valoración del inventario activo. Todos los importes están en centavos.
+#[derive(Debug, Serialize)]
+pub struct InventoryValueDto {
+    pub value_at_cost: i64,
+    pub potential_sale_value: i64,
+    pub variants_without_cost: i64,
+    pub negative_stock_variants: i64,
+    pub variants_valued: i64,
+}
+
+#[derive(Debug, Serialize)]
+pub struct ProductStockStatsDto {
+    pub product_id: i32,
+    pub variant_count: i64,
+    pub total_stock: i64,
+    pub min_stock_min: i32,
+}
+
+/// Datos mínimos para imprimir la etiqueta de una variante. Precio en centavos.
+#[derive(Debug)]
+pub struct LabelData {
+    pub product_name: String,
+    pub attributes: JsonValue,
+    pub barcode: Option<String>,
+    pub price: i64,
+}
+
+/// Fila de variante para exportar a Excel. Importes en centavos.
+#[derive(Debug)]
+pub struct ExportVariantRow {
+    pub variant_id: i32,
+    pub product_id: i32,
+    pub product_name: String,
+    pub brand: Option<String>,
+    pub category_name: String,
+    pub description: Option<String>,
+    pub sku: Option<String>,
+    pub barcode: Option<String>,
+    pub price: i64,
+    pub cost: i64,
+    pub stock: i32,
+    pub stock_min: i32,
+    pub attributes: JsonValue,
+    pub allow_negative: bool,
+    /// Variante activa y producto activo.
+    pub is_active: bool,
+}
+
+#[derive(Debug, Serialize)]
+pub struct ExportSummaryDto {
+    pub active_rows: usize,
+    pub inactive_rows: usize,
+    pub low_stock_rows: usize,
+}
+
+// ============================================================
+// IMPORTACIÓN MASIVA (EXCEL)
+// ============================================================
+
+#[derive(Debug, Serialize, Clone)]
+pub struct ImportRowResult {
+    pub row_number: usize,
+    pub product_name: String,
+    pub sku: Option<String>,
+    pub status: String, // "new_product" | "existing_product" | "skipped_duplicate_sku" | "error"
+    pub message: Option<String>,
+}
+
+#[derive(Debug, Serialize)]
+pub struct ImportSummaryDto {
+    pub new_categories: i32,
+    pub new_products: i32,
+    pub new_variants: i32,
+    pub skipped: i32,
+    pub errors: i32,
+    pub rows: Vec<ImportRowResult>,
+    pub can_execute: bool,
+}
+
+===== src-tauri\src\modules\stocktake\models.rs =====
+use chrono::{DateTime, Utc};
+use serde::{Deserialize, Serialize};
+
+#[derive(Debug, Clone, Copy, Serialize, Deserialize, sqlx::Type, PartialEq, Eq)]
+#[sqlx(type_name = "stocktake_status", rename_all = "snake_case")]
+#[serde(rename_all = "snake_case")]
+pub enum StocktakeStatus {
+    Counting,
+    Applied,
+    Cancelled,
+}
+
+#[derive(Debug, Clone, Serialize)]
+pub struct Stocktake {
+    pub id: i32,
+    pub category_id: Option<i32>,
+    pub category_name: Option<String>,
+    pub status: StocktakeStatus,
+    pub notes: Option<String>,
+    pub created_by: String,
+    pub created_at: DateTime<Utc>,
+    pub applied_at: Option<DateTime<Utc>>,
+    pub cancelled_at: Option<DateTime<Utc>>,
+    pub total_lines: i64,
+    pub counted_lines: i64,
+}
+
+===== src-tauri\src\modules\stocktake\dto.rs =====
+use serde::{Deserialize, Serialize};
+use serde_json::Value as JsonValue;
+
+use super::models::Stocktake;
+
+#[derive(Debug, Deserialize)]
+pub struct CreateStocktakeDto {
+    pub category_id: Option<i32>,
+    pub notes: Option<String>,
+    pub created_by: Option<String>,
+}
+
+#[derive(Debug, Deserialize)]
+pub struct StocktakeLineFilterDto {
+    pub search: Option<String>,
+    pub only_pending: Option<bool>,
+    pub page: Option<i64>,
+    pub page_size: Option<i64>,
+}
+
+/// Conteo a ciegas: no incluye el stock esperado ni el actual.
+#[derive(Debug, Serialize)]
+pub struct StocktakeCountLineDto {
+    pub variant_id: i32,
+    pub product_name: String,
+    pub attributes: JsonValue,
+    pub sku: Option<String>,
+    pub barcode: Option<String>,
+    pub counted_stock: Option<i32>,
+}
+
+/// Línea de revisión: solo variantes contadas que requieren ajuste.
+#[derive(Debug, Serialize)]
+pub struct StocktakeReviewLineDto {
+    pub variant_id: i32,
+    pub product_name: String,
+    pub attributes: JsonValue,
+    pub sku: Option<String>,
+    pub barcode: Option<String>,
+    pub expected_stock: i32,
+    pub current_stock: i32,
+    pub counted_stock: i32,
+    pub difference: i64,
+    pub moved_during_count: bool,
+}
+
+#[derive(Debug, Serialize)]
+pub struct StocktakeSummaryDto {
+    pub uncounted: i64,
+    pub matching: i64,
+    pub with_difference: i64,
+    pub surplus_units: i64,
+    pub shortage_units: i64,
+    pub moved_during_count: i64,
+}
+
+#[derive(Debug, Serialize)]
+pub struct StocktakeReviewDto {
+    pub stocktake: Stocktake,
+    pub summary: StocktakeSummaryDto,
+    pub lines: Vec<StocktakeReviewLineDto>,
+}
+
+#[derive(Debug, Serialize)]
+pub struct StocktakeApplyResultDto {
+    pub adjusted: usize,
+    pub unchanged: usize,
+    pub uncounted: usize,
+}
+
+===== src\types\index.ts =====
+// ============================================================
+// CATEGORÍAS
+// ============================================================
+
+export interface Category {
+  id: number;
+  name: string;
+  description?: string;
+  is_active: boolean;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface CreateCategoryDto {
+  name: string;
+  description?: string;
+}
+
+export interface UpdateCategoryDto {
+  name?: string;
+  description?: string;
+  is_active?: boolean;
+}
+
+// ============================================================
+// PRODUCTOS
+// ============================================================
+
+export interface Product {
+  id: number;
+  category_id: number;
+  name: string;
+  description?: string;
+  brand?: string;
+  image_url?: string;
+  is_active: boolean;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface ProductWithCategory extends Product {
+  category_name: string;
+}
+
+export interface CreateProductDto {
+  category_id: number;
+  name: string;
+  description?: string;
+  brand?: string;
+  image_url?: string;
+}
+
+export interface UpdateProductDto {
+  category_id?: number;
+  name?: string;
+  description?: string;
+  brand?: string;
+  image_url?: string;
+  is_active?: boolean;
+}
+
+// ============================================================
+// VARIANTES
+// ============================================================
+
+export type StockStatus = 'ok' | 'low' | 'out_of_stock';
+
+export interface ProductVariant {
+  id: number;
+  product_id: number;
+  attributes: Record<string, string>;
+  sku?: string;
+  barcode?: string;
+  price: number; // centavos
+  cost: number;  // centavos
+  stock: number;
+  stock_min: number;
+  allow_negative: boolean;
+  is_active: boolean;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface VariantWithProduct extends ProductVariant {
+  product_name: string;
+  brand?: string;
+  image_url?: string;
+  category_id: number;
+  category_name: string;
+}
+
+export interface CreateVariantDto {
+  product_id: number;
+  attributes: Record<string, string>;
+  sku?: string;
+  barcode?: string;
+  price: number;
+  cost?: number;
+  stock?: number;
+  stock_min?: number;
+  allow_negative?: boolean;
+}
+
+export interface UpdateVariantDto {
+  attributes?: Record<string, string>;
+  sku?: string;
+  barcode?: string;
+  price?: number;
+  cost?: number;
+  stock_min?: number;
+  allow_negative?: boolean;
+  is_active?: boolean;
+}
+
+// ============================================================
+// MOVIMIENTOS DE INVENTARIO (KARDEX)
+// ============================================================
+
+export type MovementType =
+  | 'purchase'
+  | 'sale'
+  | 'sale_return'
+  | 'manual_in'
+  | 'manual_out'
+  | 'adjustment'
+  | 'initial_stock';
+
+export type MovementReason =
+  | 'damaged'
+  | 'lost'
+  | 'expired'
+  | 'theft'
+  | 'internal_use'
+  | 'count_correction'
+  | 'other';
+
+export interface InventoryMovement {
+  id: number;
+  variant_id: number;
+  movement_type: MovementType;
+  quantity: number;
+  stock_before: number;
+  stock_after: number;
+  unit_cost: number;
+  sale_id?: number;
+  purchase_id?: number;
+  reason: MovementReason | null;
+  notes?: string;
+  created_by: string;
+  created_at: string;
+}
+
+export interface MovementWithDetails extends InventoryMovement {
+  product_name: string;
+  attributes: Record<string, string>;
+  sku?: string;
+  barcode?: string;
+}
+
+// ============================================================
+// DTOs DE STOCK
+// ============================================================
+
+export interface StockEntryDto {
+  variant_id: number;
+  quantity: number;
+  unit_cost?: number;
+  notes?: string;
+  created_by?: string;
+}
+
+export interface StockOutDto {
+  variant_id: number;
+  quantity: number;
+  reason?: MovementReason;
+  notes?: string;
+  created_by?: string;
+}
+
+export interface StockAdjustmentDto {
+  variant_id: number;
+  actual_stock: number;
+  reason?: MovementReason;
+  notes?: string;
+  created_by?: string;
+}
+
+// ============================================================
+// FILTROS
+// ============================================================
+
+export interface ProductFilterDto {
+  category_id?: number;
+  search?: string;
+  is_active?: boolean;
+  variant_is_active?: boolean;
+  stock_status?: 'ok' | 'low' | 'out_of_stock';
+  sort_by?: 'name' | 'brand' | 'category' | 'created_at';
+  sort_dir?: 'asc' | 'desc';
+  page?: number;
+  page_size?: number;
+}
+
+export interface KardexFilterDto {
+  variant_id?: number;
+  product_id?: number;
+  movement_type?: string;
+  date_from?: string;
+  date_to?: string;
+  page?: number;
+  page_size?: number;
+}
+
+// ============================================================
+// RESPUESTAS
+// ============================================================
+
+export interface PaginatedResponse<T> {
+  data: T[];
+  total: number;
+  page: number;
+  page_size: number;
+  total_pages: number;
+}
+
+export interface LowStockItemDto {
+  variant_id: number;
+  product_name: string;
+  attributes: Record<string, string>;
+  barcode?: string;
+  stock: number;
+  stock_min: number;
+  stock_status: string;
+}
+
+export interface InventoryValueDto {
+  value_at_cost: number;
+  potential_sale_value: number;
+  variants_without_cost: number;
+  negative_stock_variants: number;
+  variants_valued: number;
+}
+
+export interface ProductStockStatsDto {
+  product_id: number;
+  variant_count: number;
+  total_stock: number;
+  min_stock_min: number;
+}
+
+export interface ExportSummaryDto {
+  active_rows: number;
+  inactive_rows: number;
+  low_stock_rows: number;
+}
+
+// ============================================================
+// AJUSTES
+// ============================================================
+
+export interface AppSettings {
+  id: number;
+  business_name: string;
+  tax_id?: string;
+  address?: string;
+  phone?: string;
+  email?: string;
+  currency: string;
+  tax_rate_bps: number;
+  ticket_header?: string;
+  ticket_footer?: string;
+  low_stock_default_threshold: number;
+  logo_url?: string;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface UpdateSettingsDto {
+  business_name?: string;
+  tax_id?: string;
+  address?: string;
+  phone?: string;
+  email?: string;
+  currency?: string;
+  tax_rate_bps?: number;
+  ticket_header?: string;
+  ticket_footer?: string;
+  low_stock_default_threshold?: number;
+  logo_url?: string;
+}
+// ============================================================
+// CAJA
+// ============================================================
+
+export type CashMovementType = 'manual_in' | 'manual_out' | 'sale_in' | 'sale_out';
+
+export interface CashSession {
+  id: number;
+  opening_amount: number;
+  expected_amount: number | null;
+  counted_amount: number | null;
+  difference: number | null;
+  status: 'open' | 'closed';
+  opened_by: string;
+  closed_by: string | null;
+  opening_notes: string | null;
+  closing_notes: string | null;
+  opened_at: string;
+  closed_at: string | null;
+}
+
+export interface CashSessionWithTotals {
+  id: number;
+  opening_amount: number;
+  status: 'open' | 'closed';
+  opened_by: string;
+  opening_notes: string | null;
+  opened_at: string;
+  total_in: number;
+  total_out: number;
+  current_balance: number;
+}
+
+export interface CashMovement {
+  id: number;
+  session_id: number;
+  movement_type: CashMovementType;
+  amount: number;
+  sale_id: number | null;
+  notes: string | null;
+  created_by: string;
+  created_at: string;
+}
+
+export interface OpenSessionDto {
+  opening_amount: number;
+  opening_notes?: string | null;
+  opened_by?: string | null;
+}
+
+export interface CloseSessionDto {
+  counted_amount: number;
+  closing_notes?: string | null;
+  closed_by?: string | null;
+}
+
+export interface CreateMovementDto {
+  movement_type: 'manual_in' | 'manual_out';
+  amount: number;
+  notes?: string | null;
+  created_by?: string | null;
+  sale_id?: number | null;
+}
+
+export interface CashSessionFilterDto {
+  status?: string | null;
+  date_from?: string | null;
+  date_to?: string | null;
+  page?: number;
+  page_size?: number;
+}
+
+export interface CashMovementFilterDto {
+  session_id?: number | null;
+  movement_type?: string | null;
+  page?: number;
+  page_size?: number;
+}
+
+// Si ya existe un PaginatedResponse<T> genérico de otro módulo, no lo dupliques.
+export interface PaginatedResponse<T> {
+  data: T[];
+  total: number;
+  page: number;
+  page_size: number;
+  total_pages: number;
+}
+// ============================================================
+// VENTAS
+// ============================================================
+
+export type PaymentMethod = 'cash' | 'card' | 'transfer';
+export type SaleStatus = 'completed' | 'cancelled' | 'refunded';
+
+export interface Sale {
+  id: number;
+  customer_id: number | null;
+  subtotal: number;
+  tax: number;
+  discount: number;
+  total: number;
+  status: SaleStatus;
+  notes: string | null;
+  created_by: string;
+  created_at: string;
+}
+
+export interface SaleItem {
+  id: number;
+  sale_id: number;
+  variant_id: number;
+  quantity: number;
+  unit_price: number;
+  discount: number;
+  tax: number;
+  subtotal: number;
+}
+
+export interface SalePayment {
+  id: number;
+  sale_id: number;
+  method: PaymentMethod;
+  amount: number;
+}
+
+export interface SaleDetail extends Sale {
+  items: SaleItem[];
+  payments: SalePayment[];
+}
+
+export interface CreateSaleItemDto {
+  variant_id: number;
+  quantity: number;
+  discount?: number | null;
+}
+
+export interface CreateSalePaymentDto {
+  method: PaymentMethod;
+  amount: number;
+}
+
+export interface CreateSaleDto {
+  customer_id?: number | null;
+  items: CreateSaleItemDto[];
+  payments: CreateSalePaymentDto[];
+  discount?: number | null;
+  notes?: string | null;
+  created_by?: string | null;
+}
+
+export interface SaleFilterDto {
+  status?: string | null;
+  customer_id?: number | null;
+  date_from?: string | null;
+  date_to?: string | null;
+  page?: number;
+  page_size?: number;
+}
+export interface ImportRowResult {
+  row_number: number;
+  product_name: string;
+  sku?: string;
+  status: 'new_product' | 'existing_product' | 'skipped_duplicate_sku' | 'error';
+  message?: string;
+}
+
+export interface ImportSummaryDto {
+  new_categories: number;
+  new_products: number;
+  new_variants: number;
+  skipped: number;
+  errors: number;
+  rows: ImportRowResult[];
+  can_execute: boolean;
+}
+
+export type StocktakeStatus = 'counting' | 'applied' | 'cancelled';
+
+export interface Stocktake {
+  id: number;
+  category_id: number | null;
+  category_name: string | null;
+  status: StocktakeStatus;
+  notes: string | null;
+  created_by: string;
+  created_at: string;
+  applied_at: string | null;
+  cancelled_at: string | null;
+  total_lines: number;
+  counted_lines: number;
+}
+
+export interface CreateStocktakeDto {
+  category_id?: number | null;
+  notes?: string | null;
+  created_by?: string | null;
+}
+
+export interface StocktakeLineFilterDto {
+  search?: string | null;
+  only_pending?: boolean;
+  page?: number;
+  page_size?: number;
+}
+
+/** Fila para el conteo ciego: no contiene el stock del sistema. */
+export interface StocktakeCountLineDto {
+  variant_id: number;
+  product_name: string;
+  attributes: Record<string, string>;
+  sku: string | null;
+  barcode: string | null;
+  counted_stock: number | null;
+}
+
+export interface StocktakeReviewLineDto {
+  variant_id: number;
+  product_name: string;
+  attributes: Record<string, string>;
+  sku: string | null;
+  barcode: string | null;
+  expected_stock: number;
+  current_stock: number;
+  counted_stock: number;
+  difference: number;
+  moved_during_count: boolean;
+}
+
+export interface StocktakeSummaryDto {
+  uncounted: number;
+  matching: number;
+  with_difference: number;
+  surplus_units: number;
+  shortage_units: number;
+  moved_during_count: number;
+}
+
+export interface StocktakeReviewDto {
+  stocktake: Stocktake;
+  summary: StocktakeSummaryDto;
+  lines: StocktakeReviewLineDto[];
+}
+
+export interface StocktakeApplyResultDto {
+  adjusted: number;
+  unchanged: number;
+  uncounted: number;
+}

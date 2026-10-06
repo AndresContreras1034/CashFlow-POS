@@ -1,0 +1,24 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "SELECT COUNT(*)\n           FROM stocktake_lines l\n           JOIN product_variants v ON v.id = l.variant_id\n           JOIN products p ON p.id = v.product_id\n           WHERE l.stocktake_id = $1\n             AND ($2::TEXT IS NULL\n                  OR p.name ILIKE $2 OR p.brand ILIKE $2\n                  OR v.sku ILIKE $2 OR v.barcode ILIKE $2)\n             AND ($3::BOOL = FALSE OR l.counted_stock IS NULL)",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "count",
+        "type_info": "Int8"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Int4",
+        "Text",
+        "Bool"
+      ]
+    },
+    "nullable": [
+      null
+    ]
+  },
+  "hash": "375201c0120f117f1f47b41d14b2ad37644c4df8942f3b6b00eac3239c5ec3e5"
+}

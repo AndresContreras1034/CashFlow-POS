@@ -1,0 +1,525 @@
+/* ============================================================
+   SALES PAGE
+   ============================================================ */
+
+.sales-page {
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+  padding: 28px 32px;
+  min-height: 100%;
+  box-sizing: border-box;
+}
+
+/* ── Header ── */
+
+.sales-page h1 {
+  font-size: 22px;
+  font-weight: 700;
+  color: var(--text-primary);
+  line-height: 1.2;
+  margin: 0;
+}
+
+.sales-page h2 {
+  font-size: 16px;
+  font-weight: 600;
+  color: var(--text-primary);
+  margin: 0 0 16px;
+}
+
+/* ============================================================
+   CARDS
+   ============================================================ */
+
+.sales-card {
+  background: var(--bg-surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 20px;
+}
+
+/* ============================================================
+   ERROR
+   ============================================================ */
+
+.form-error {
+  padding: 12px 16px;
+  background: var(--danger-dim);
+  border: 1px solid var(--stock-out-dim);
+  border-radius: var(--radius);
+  color: var(--danger);
+  font-size: 13px;
+}
+
+/* ============================================================
+   SUCCESS
+   ============================================================ */
+
+.sales-success {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+
+  padding: 12px 16px;
+
+  background: var(--success-dim);
+  border: 1px solid var(--stock-ok-dim);
+  border-radius: var(--radius);
+
+  color: var(--stock-ok);
+  font-size: 13px;
+  font-weight: 600;
+}
+
+/* ============================================================
+   BARCODE / SEARCH
+   ============================================================ */
+
+.sales-scan-form {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.sales-scan-form .form-input {
+  flex: 1;
+  min-width: 0;
+}
+
+/* ============================================================
+   SEARCH RESULTS
+   ============================================================ */
+
+.sales-search-results {
+  list-style: none;
+  padding: 0;
+  margin: 12px 0 0;
+
+  background: var(--bg-surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+
+  overflow: hidden;
+}
+
+.sales-search-results li {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+
+  padding: 11px 14px;
+
+  color: var(--text-primary);
+  font-size: 13px;
+
+  border-bottom: 1px solid var(--border-subtle);
+
+  cursor: pointer;
+
+  transition:
+    background var(--transition),
+    color var(--transition);
+}
+
+.sales-search-results li:last-child {
+  border-bottom: none;
+}
+
+.sales-search-results li:hover {
+  background: var(--bg-hover);
+}
+
+.sales-search-results li span:first-child {
+  font-weight: 500;
+}
+
+.sales-search-results li span:last-child {
+  color: var(--text-muted);
+  font-size: 12px;
+  white-space: nowrap;
+}
+
+/* ============================================================
+   CART TABLE
+   ============================================================ */
+
+.sales-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 13.5px;
+}
+
+.sales-table th {
+  background: var(--bg-elevated);
+  color: var(--text-muted);
+
+  font-size: 11px;
+  font-weight: 600;
+
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+
+  padding: 11px 14px;
+
+  text-align: left;
+
+  border-bottom: 1px solid var(--border);
+}
+
+.sales-table td {
+  padding: 11px 14px;
+
+  color: var(--text-primary);
+
+  border-bottom: 1px solid var(--border-subtle);
+
+  vertical-align: middle;
+}
+
+.sales-table tbody tr {
+  transition: background var(--transition);
+}
+
+.sales-table tbody tr:hover {
+  background: var(--bg-hover);
+}
+
+.sales-table tbody tr:last-child td {
+  border-bottom: none;
+}
+
+/* ============================================================
+   PRODUCT ATTRIBUTES
+   ============================================================ */
+
+.sales-line-attrs {
+  margin-top: 3px;
+
+  color: var(--text-muted);
+
+  font-size: 12px;
+}
+
+/* ============================================================
+   QUANTITY / DISCOUNT
+   ============================================================ */
+
+.sales-qty-input {
+  width: 82px;
+  padding: 7px 8px;
+  text-align: center;
+  box-sizing: border-box;
+}
+
+/* ============================================================
+   EMPTY CART
+   ============================================================ */
+
+.sales-meta {
+  margin: 0;
+
+  color: var(--text-muted);
+
+  font-size: 13px;
+}
+
+/* ============================================================
+   REMOVE BUTTON
+   ============================================================ */
+
+.sales-remove-btn {
+  width: 32px;
+  height: 32px;
+
+  padding: 0;
+
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+
+  background: transparent;
+  color: var(--danger);
+
+  border: 1px solid var(--stock-out-dim);
+  border-radius: var(--radius-sm);
+
+  cursor: pointer;
+
+  transition:
+    background var(--transition),
+    border-color var(--transition);
+}
+
+.sales-remove-btn:hover {
+  background: var(--danger-dim);
+  border-color: var(--stock-out-dim);
+}
+
+/* ============================================================
+   TOTAL
+   ============================================================ */
+
+.sales-total-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+
+  padding: 14px 16px;
+
+  background: var(--bg-elevated);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+
+  color: var(--text-secondary);
+
+  font-size: 14px;
+  font-weight: 600;
+}
+
+.sales-total-value {
+  color: var(--accent);
+
+  font-size: 22px;
+  font-weight: 700;
+}
+
+/* ============================================================
+   PAYMENTS
+   ============================================================ */
+
+.sales-payment-row {
+  display: grid;
+  grid-template-columns: 180px 1fr auto;
+  align-items: center;
+
+  gap: 10px;
+
+  margin-top: 10px;
+}
+
+.sales-payment-row .form-input {
+  min-width: 0;
+}
+
+/* ============================================================
+   PAYMENT ACTIONS
+   ============================================================ */
+
+.sales-payment-actions {
+  display: flex;
+  flex-wrap: wrap;
+
+  gap: 10px;
+
+  margin-top: 14px;
+}
+
+/* ============================================================
+   REMAINING
+   ============================================================ */
+
+.sales-remaining {
+  margin-top: 16px;
+
+  padding: 10px 14px;
+
+  border-radius: var(--radius-sm);
+
+  font-size: 13px;
+  font-weight: 600;
+
+  text-align: center;
+}
+
+.sales-remaining-ok {
+  background: var(--success-dim);
+  border: 1px solid var(--stock-ok-dim);
+
+  color: var(--stock-ok);
+}
+
+.sales-remaining-pending {
+  background: var(--warning-dim);
+  border: 1px solid var(--stock-low-dim);
+
+  color: var(--warning);
+}
+
+/* ============================================================
+   CONFIRM SALE
+   ============================================================ */
+
+.sales-confirm-btn {
+  width: 100%;
+
+  min-height: 44px;
+
+  margin-top: 16px;
+
+  font-size: 13.5px;
+  font-weight: 600;
+}
+
+/* ============================================================
+   BUTTONS
+   ============================================================ */
+
+.sales-page .btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+
+  gap: 6px;
+
+  padding: 8px 18px;
+
+  border-radius: var(--radius-sm);
+
+  font-family: var(--font-sans);
+  font-size: 13.5px;
+  font-weight: 600;
+
+  cursor: pointer;
+
+  border: none;
+
+  transition:
+    background var(--transition),
+    color var(--transition),
+    border-color var(--transition),
+    opacity var(--transition);
+}
+
+.sales-page .btn:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.sales-page .btn-primary {
+  background: var(--accent);
+  color: #fff;
+}
+
+.sales-page .btn-primary:hover:not(:disabled) {
+  background: var(--accent-hover);
+}
+
+.sales-page .btn:not(.btn-primary):not(.btn-danger) {
+  background: transparent;
+  color: var(--text-secondary);
+  border: 1px solid var(--border);
+}
+
+.sales-page .btn:not(.btn-primary):not(.btn-danger):hover:not(:disabled) {
+  background: var(--bg-hover);
+  color: var(--text-primary);
+}
+
+.sales-page .btn-danger {
+  background: transparent;
+  color: var(--danger);
+  border: 1px solid var(--stock-out-dim);
+}
+
+.sales-page .btn-danger:hover:not(:disabled) {
+  background: var(--danger-dim);
+  border-color: var(--stock-out-dim);
+}
+
+/* ============================================================
+   RESPONSIVE
+   ============================================================ */
+
+@media (max-width: 900px) {
+  .sales-page {
+    padding: 22px 24px;
+  }
+
+  .sales-table {
+    font-size: 13px;
+  }
+
+  .sales-table th,
+  .sales-table td {
+    padding: 9px 10px;
+  }
+
+  .sales-payment-row {
+    grid-template-columns: 150px 1fr auto;
+  }
+}
+
+@media (max-width: 700px) {
+  .sales-page {
+    padding: 18px;
+  }
+
+  .sales-scan-form {
+    flex-direction: column;
+    align-items: stretch;
+  }
+
+  .sales-scan-form .btn {
+    width: 100%;
+  }
+
+  .sales-success {
+    flex-direction: column;
+    align-items: stretch;
+  }
+
+  .sales-success .btn {
+    width: 100%;
+  }
+
+  .sales-card:has(.sales-table) {
+    overflow-x: auto;
+  }
+
+  .sales-table {
+    min-width: 720px;
+  }
+
+  .sales-payment-row {
+    grid-template-columns: 1fr;
+  }
+
+  .sales-payment-row .btn {
+    width: 100%;
+  }
+
+  .sales-payment-actions {
+    flex-direction: column;
+  }
+
+  .sales-payment-actions .btn {
+    width: 100%;
+  }
+
+  .sales-total-row {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 6px;
+  }
+}
+
+@media (max-width: 450px) {
+  .sales-page {
+    padding: 14px;
+  }
+
+  .sales-page h1 {
+    font-size: 20px;
+  }
+
+  .sales-card {
+    padding: 14px;
+  }
+
+  .sales-total-value {
+    font-size: 20px;
+  }
+}

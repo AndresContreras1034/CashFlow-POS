@@ -3,7 +3,7 @@
   align-items: center;
   gap: 6px;
   padding: 3px 8px;
-  border-radius: 20px;
+  border-radius: var(--radius-sm);
   font-size: 12px;
   font-weight: 600;
   font-variant-numeric: tabular-nums;
@@ -19,6 +19,6 @@
 .badge--low { background: var(--stock-low-dim); color: var(--stock-low); }
 .badge--out { background: var(--stock-out-dim); color: var(--stock-out); }
 
-.badge--ok  .stock-badge-dot { background: var(--stock-ok);  box-shadow: 0 0 4px var(--stock-ok);  }
-.badge--low .stock-badge-dot { background: var(--stock-low); box-shadow: 0 0 4px var(--stock-low); }
-.badge--out .stock-badge-dot { background: var(--stock-out); box-shadow: 0 0 4px var(--stock-out); }
+.badge--ok  .stock-badge-dot { background: var(--stock-ok); }
+.badge--low .stock-badge-dot { background: var(--stock-low); }
+.badge--out .stock-badge-dot { background: var(--stock-out); }

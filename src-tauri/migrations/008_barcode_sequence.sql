@@ -1,0 +1,1 @@
+CREATE SEQUENCE IF NOT EXISTS internal_barcode_seq START 1;

@@ -1,0 +1,90 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "INSERT INTO cash_sessions (opening_amount, opening_notes, opened_by)\n         VALUES ($1, $2, $3)\n         RETURNING *",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "id",
+        "type_info": "Int4"
+      },
+      {
+        "ordinal": 1,
+        "name": "opening_amount",
+        "type_info": "Int8"
+      },
+      {
+        "ordinal": 2,
+        "name": "expected_amount",
+        "type_info": "Int8"
+      },
+      {
+        "ordinal": 3,
+        "name": "counted_amount",
+        "type_info": "Int8"
+      },
+      {
+        "ordinal": 4,
+        "name": "difference",
+        "type_info": "Int8"
+      },
+      {
+        "ordinal": 5,
+        "name": "status",
+        "type_info": "Varchar"
+      },
+      {
+        "ordinal": 6,
+        "name": "opened_by",
+        "type_info": "Varchar"
+      },
+      {
+        "ordinal": 7,
+        "name": "closed_by",
+        "type_info": "Varchar"
+      },
+      {
+        "ordinal": 8,
+        "name": "opening_notes",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 9,
+        "name": "closing_notes",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 10,
+        "name": "opened_at",
+        "type_info": "Timestamptz"
+      },
+      {
+        "ordinal": 11,
+        "name": "closed_at",
+        "type_info": "Timestamptz"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Int8",
+        "Text",
+        "Varchar"
+      ]
+    },
+    "nullable": [
+      false,
+      false,
+      true,
+      true,
+      true,
+      false,
+      false,
+      true,
+      true,
+      true,
+      false,
+      true
+    ]
+  },
+  "hash": "8fcb897f99f8dc4cfb7a708dc6bd5ab63605826552d3645e6387e17089aa0b0f"
+}

@@ -1,5 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import type { ProductVariant, CreateVariantDto, UpdateVariantDto } from '../../types';
+import { generateInternalBarcode } from '../../services/inventory.service';
+import { calcMargin, formatMargin } from '../../utils/format';
 import './ProductForm.css';
 
 interface VariantFormProps {
@@ -11,14 +13,26 @@ interface VariantFormProps {
 }
 
 const parseAttributes = (text: string) => {
+  let genericCount = 0;
+
   return text
     .split('\n')
     .map(line => line.trim())
     .filter(Boolean)
     .reduce<Record<string, string>>((acc, line) => {
-      const [key, ...rest] = line.split(':');
-      const value = rest.join(':').trim();
-      if (key && value) acc[key.trim()] = value;
+      if (line.includes(':')) {
+        const [key, ...rest] = line.split(':');
+        const value = rest.join(':').trim();
+        if (key.trim() && value) acc[key.trim()] = value;
+        return acc;
+      }
+
+      // Línea sin "Clave: Valor" (ej: escribieron solo "Azul").
+      // La tratamos como atributo genérico en vez de descartarla,
+      // para no perder lo que el usuario ya escribió.
+      genericCount += 1;
+      const genericKey = genericCount === 1 ? 'Atributo' : `Atributo ${genericCount}`;
+      acc[genericKey] = line;
       return acc;
     }, {});
 };
@@ -51,6 +65,7 @@ export const VariantForm: React.FC<VariantFormProps> = ({
   });
 
   const [errors, setErrors] = useState<Record<string, string>>({});
+  const [generating, setGenerating] = useState(false);
 
   useEffect(() => {
     if (variant) {
@@ -81,6 +96,15 @@ export const VariantForm: React.FC<VariantFormProps> = ({
     if (form.cost.trim() && Number(form.cost) < 0) errs.cost = 'El costo no puede ser negativo';
     if (!form.stock.trim() || Number(form.stock) < 0) errs.stock = 'El stock no puede ser negativo';
     if (!form.stock_min.trim() || Number(form.stock_min) < 0) errs.stock_min = 'El stock mínimo no puede ser negativo';
+
+    // La base de datos exige que cada variante de un mismo producto tenga
+    // atributos distintos (UNIQUE product_id + attributes). Si se deja vacío,
+    // dos variantes "sin atributos" chocan y el INSERT falla en el backend.
+    // Por eso lo validamos aquí, antes de enviar.
+    if (Object.keys(parseAttributes(form.attributes)).length === 0) {
+      errs.attributes = 'Agrega al menos un atributo que distinga esta variante (ej: Talla: M)';
+    }
+
     setErrors(errs);
     return Object.keys(errs).length === 0;
   };
@@ -96,7 +120,7 @@ export const VariantForm: React.FC<VariantFormProps> = ({
       barcode: form.barcode.trim() || undefined,
       price: Number(form.price),
       cost: Number(form.cost) || 0,
-      stock: Number(form.stock),
+      ...(!isEdit && { stock: Number(form.stock) }),
       stock_min: Number(form.stock_min),
       allow_negative: form.allow_negative,
       ...(isEdit && { is_active: form.is_active }),
@@ -104,6 +128,22 @@ export const VariantForm: React.FC<VariantFormProps> = ({
 
     await onSubmit(dto);
   };
+
+  const handleGenerateBarcode = async () => {
+    setGenerating(true);
+    try {
+      const barcode = await generateInternalBarcode();
+      setForm(prev => ({ ...prev, barcode }));
+      setErrors(prev => ({ ...prev, barcode: '' }));
+    } catch (error) {
+      const message = typeof error === 'string' ? error : 'No se pudo generar el código';
+      setErrors(prev => ({ ...prev, barcode: message }));
+    } finally {
+      setGenerating(false);
+    }
+  };
+
+  const margin = calcMargin(Number(form.price) || 0, Number(form.cost) || 0);
 
   return (
     <form className="product-form" onSubmit={handleSubmit} noValidate>
@@ -122,12 +162,23 @@ export const VariantForm: React.FC<VariantFormProps> = ({
         <div className="form-field">
           <label className="form-label">Código de barras</label>
           <input
-            className="form-input"
+            className={`form-input ${errors.barcode ? 'form-input--error' : ''}`}
             type="text"
             value={form.barcode}
             onChange={setValue('barcode')}
             placeholder="Ej: 7501234000011"
           />
+          {!form.barcode.trim() && (
+            <button
+              type="button"
+              className="btn btn-ghost"
+              onClick={handleGenerateBarcode}
+              disabled={generating}
+            >
+              {generating ? 'Generando…' : 'Generar código interno'}
+            </button>
+          )}
+          {errors.barcode && <span className="form-error">{errors.barcode}</span>}
         </div>
       </div>
 
@@ -159,6 +210,16 @@ export const VariantForm: React.FC<VariantFormProps> = ({
         </div>
       </div>
 
+      <div className="form-field">
+        <label className="form-label">Margen</label>
+        <div className="form-static">{formatMargin(margin)}</div>
+        {margin.kind === 'ok' && margin.percent < 0 && (
+          <span className="form-hint">
+            El costo es mayor al precio: esta variante se vendería con pérdida.
+          </span>
+        )}
+      </div>
+
       <div className="form-row">
         <div className="form-field">
           <label className="form-label">Stock</label>
@@ -168,9 +229,15 @@ export const VariantForm: React.FC<VariantFormProps> = ({
             min="0"
             value={form.stock}
             onChange={setValue('stock')}
+            disabled={isEdit}
             placeholder="0"
           />
           {errors.stock && <span className="form-error">{errors.stock}</span>}
+          {isEdit && (
+            <span className="form-hint">
+              Para cambiar el stock usa Entrada, Salida o Ajuste.
+            </span>
+          )}
         </div>
 
         <div className="form-field">
@@ -188,14 +255,22 @@ export const VariantForm: React.FC<VariantFormProps> = ({
       </div>
 
       <div className="form-field">
-        <label className="form-label">Atributos</label>
+        <label className="form-label">
+          Atributos <span className="required">*</span>
+        </label>
         <textarea
-          className="form-input form-textarea"
+          className={`form-input form-textarea ${errors.attributes ? 'form-input--error' : ''}`}
           value={form.attributes}
           onChange={setValue('attributes')}
-          placeholder="Tamaño: 400 ml\nColor: Rojo"
+          placeholder={'Color: Azul\nTalla: M'}
           rows={4}
         />
+        <span className="form-hint">
+          Cada variante del mismo producto necesita al menos un atributo que la distinga
+          (talla, color, tamaño, presentación, etc.). Escribe "Clave: Valor" en cada línea,
+          por ejemplo "Color: Azul". Si solo escribes el valor (ej. "Azul"), se guardará igual.
+        </span>
+        {errors.attributes && <span className="form-error">{errors.attributes}</span>}
       </div>
 
       <div className="form-field form-field--inline">

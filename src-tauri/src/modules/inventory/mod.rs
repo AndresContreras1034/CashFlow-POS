@@ -1,6 +1,10 @@
+pub mod barcode;
 pub mod dto;
+pub mod export;
 pub mod handlers;
+pub mod import;
 pub mod kardex;
+pub mod label;
 pub mod models;
 pub mod repository;
 pub mod router;

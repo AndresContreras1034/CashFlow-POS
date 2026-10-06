@@ -1,0 +1,92 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "INSERT INTO sales (customer_id, subtotal, tax, discount, total, status, notes, created_by)\n           VALUES ($1, $2, 0, $3, $4, 'completed', $5, $6)\n           RETURNING id, customer_id, subtotal, tax, discount, total,\n                     status AS \"status: SaleStatus\", notes, created_by, created_at",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "id",
+        "type_info": "Int4"
+      },
+      {
+        "ordinal": 1,
+        "name": "customer_id",
+        "type_info": "Int4"
+      },
+      {
+        "ordinal": 2,
+        "name": "subtotal",
+        "type_info": "Int8"
+      },
+      {
+        "ordinal": 3,
+        "name": "tax",
+        "type_info": "Int8"
+      },
+      {
+        "ordinal": 4,
+        "name": "discount",
+        "type_info": "Int8"
+      },
+      {
+        "ordinal": 5,
+        "name": "total",
+        "type_info": "Int8"
+      },
+      {
+        "ordinal": 6,
+        "name": "status: SaleStatus",
+        "type_info": {
+          "Custom": {
+            "name": "sale_status",
+            "kind": {
+              "Enum": [
+                "completed",
+                "cancelled",
+                "refunded"
+              ]
+            }
+          }
+        }
+      },
+      {
+        "ordinal": 7,
+        "name": "notes",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 8,
+        "name": "created_by",
+        "type_info": "Varchar"
+      },
+      {
+        "ordinal": 9,
+        "name": "created_at",
+        "type_info": "Timestamptz"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Int4",
+        "Int8",
+        "Int8",
+        "Int8",
+        "Text",
+        "Varchar"
+      ]
+    },
+    "nullable": [
+      false,
+      true,
+      false,
+      false,
+      false,
+      false,
+      false,
+      true,
+      false,
+      false
+    ]
+  },
+  "hash": "687dc55728e0beffbafd6e1aff9cc35d40ccecb414d5442854ec5db0e2b1ed0a"
+}

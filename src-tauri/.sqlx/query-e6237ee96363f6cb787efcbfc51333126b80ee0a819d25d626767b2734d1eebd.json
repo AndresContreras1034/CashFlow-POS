@@ -1,0 +1,58 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "SELECT\n               si.quantity,\n               si.unit_price,\n               si.discount,\n               si.subtotal,\n               p.name AS product_name,\n               v.sku,\n               v.attributes as \"attributes!: serde_json::Value\"\n           FROM sale_items si\n           JOIN product_variants v ON v.id = si.variant_id\n           JOIN products p ON p.id = v.product_id\n           WHERE si.sale_id = $1\n           ORDER BY si.id ASC",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "quantity",
+        "type_info": "Int4"
+      },
+      {
+        "ordinal": 1,
+        "name": "unit_price",
+        "type_info": "Int8"
+      },
+      {
+        "ordinal": 2,
+        "name": "discount",
+        "type_info": "Int8"
+      },
+      {
+        "ordinal": 3,
+        "name": "subtotal",
+        "type_info": "Int8"
+      },
+      {
+        "ordinal": 4,
+        "name": "product_name",
+        "type_info": "Varchar"
+      },
+      {
+        "ordinal": 5,
+        "name": "sku",
+        "type_info": "Varchar"
+      },
+      {
+        "ordinal": 6,
+        "name": "attributes!: serde_json::Value",
+        "type_info": "Jsonb"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Int4"
+      ]
+    },
+    "nullable": [
+      false,
+      false,
+      false,
+      false,
+      false,
+      true,
+      false
+    ]
+  },
+  "hash": "e6237ee96363f6cb787efcbfc51333126b80ee0a819d25d626767b2734d1eebd"
+}

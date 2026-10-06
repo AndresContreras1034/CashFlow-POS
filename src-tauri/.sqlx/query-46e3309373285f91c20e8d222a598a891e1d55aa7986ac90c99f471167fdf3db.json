@@ -1,0 +1,84 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "SELECT\n               p.id, p.category_id, c.name AS category_name,\n               p.name, p.description, p.brand, p.image_url,\n               p.is_active, p.created_at, p.updated_at\n           FROM products p\n           JOIN categories c ON c.id = p.category_id\n           WHERE ($1::BOOL IS NULL OR p.is_active = $1)\n             AND ($2::INT  IS NULL OR p.category_id = $2)\n             AND ($3::TEXT IS NULL\n                  OR p.name ILIKE $3\n                  OR p.brand ILIKE $3\n                  OR EXISTS (\n                      SELECT 1 FROM product_variants v\n                      WHERE v.product_id = p.id\n                        AND (v.sku ILIKE $3 OR v.barcode ILIKE $3)\n                  ))\n             AND ($4::BOOL IS NULL OR EXISTS (\n                      SELECT 1 FROM product_variants v\n                      WHERE v.product_id = p.id\n                        AND v.is_active = $4\n                  ))\n             AND ($5::TEXT IS NULL OR EXISTS (\n                      SELECT 1 FROM product_variants v\n                      WHERE v.product_id = p.id\n                        AND v.is_active = TRUE\n                        AND CASE $5::TEXT\n                              WHEN 'out_of_stock' THEN v.stock <= 0\n                              WHEN 'low' THEN (v.stock > 0 AND v.stock <= v.stock_min)\n                              WHEN 'ok' THEN v.stock > v.stock_min\n                              ELSE FALSE\n                            END\n                  ))\n           ORDER BY\n               CASE WHEN $6::TEXT = 'name'       AND $7::TEXT = 'asc'  THEN p.name       END ASC,\n               CASE WHEN $6::TEXT = 'name'       AND $7::TEXT = 'desc' THEN p.name       END DESC,\n               CASE WHEN $6::TEXT = 'brand'      AND $7::TEXT = 'asc'  THEN p.brand      END ASC,\n               CASE WHEN $6::TEXT = 'brand'      AND $7::TEXT = 'desc' THEN p.brand      END DESC,\n               CASE WHEN $6::TEXT = 'category'   AND $7::TEXT = 'asc'  THEN c.name       END ASC,\n               CASE WHEN $6::TEXT = 'category'   AND $7::TEXT = 'desc' THEN c.name       END DESC,\n               CASE WHEN $6::TEXT = 'created_at' AND $7::TEXT = 'asc'  THEN p.created_at END ASC,\n               CASE WHEN $6::TEXT = 'created_at' AND $7::TEXT = 'desc' THEN p.created_at END DESC,\n               p.id ASC\n           LIMIT $8 OFFSET $9",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "id",
+        "type_info": "Int4"
+      },
+      {
+        "ordinal": 1,
+        "name": "category_id",
+        "type_info": "Int4"
+      },
+      {
+        "ordinal": 2,
+        "name": "category_name",
+        "type_info": "Varchar"
+      },
+      {
+        "ordinal": 3,
+        "name": "name",
+        "type_info": "Varchar"
+      },
+      {
+        "ordinal": 4,
+        "name": "description",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 5,
+        "name": "brand",
+        "type_info": "Varchar"
+      },
+      {
+        "ordinal": 6,
+        "name": "image_url",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 7,
+        "name": "is_active",
+        "type_info": "Bool"
+      },
+      {
+        "ordinal": 8,
+        "name": "created_at",
+        "type_info": "Timestamptz"
+      },
+      {
+        "ordinal": 9,
+        "name": "updated_at",
+        "type_info": "Timestamptz"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Bool",
+        "Int4",
+        "Text",
+        "Bool",
+        "Text",
+        "Text",
+        "Text",
+        "Int8",
+        "Int8"
+      ]
+    },
+    "nullable": [
+      false,
+      false,
+      false,
+      false,
+      true,
+      true,
+      true,
+      false,
+      false,
+      false
+    ]
+  },
+  "hash": "46e3309373285f91c20e8d222a598a891e1d55aa7986ac90c99f471167fdf3db"
+}

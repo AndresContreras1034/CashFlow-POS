@@ -49,7 +49,8 @@
 
 .form-input:focus {
   border-color: var(--accent);
-  box-shadow: 0 0 0 3px var(--accent-dim);
+  outline: 2px solid var(--accent-dim);
+  outline-offset: 1px;
 }
 
 .form-input--error {
@@ -57,7 +58,8 @@
 }
 
 .form-input--error:focus {
-  box-shadow: 0 0 0 3px rgba(255, 77, 109, 0.15);
+  outline: 2px solid var(--danger-dim);
+  outline-offset: 1px;
 }
 
 .form-select {
@@ -185,11 +187,66 @@
 }
 
 .btn-danger {
-  background: rgba(255, 77, 109, 0.12);
+  background: var(--danger-dim);
   color: var(--danger);
-  border: 1px solid rgba(255, 77, 109, 0.2);
+  border: 1px solid var(--stock-out-dim);
 }
 
 .btn-danger:hover:not(:disabled) {
-  background: rgba(255, 77, 109, 0.2);
+  background: var(--stock-out-dim);
+}
+
+.form-hint {
+  display: block;
+  font-size: 12px;
+  color: var(--text-secondary, #888);
+  margin-top: 4px;
+}
+
+.label-print-form .form-field {
+  min-width: 0;
+}
+
+.label-print-form .label-print-summary {
+  display: grid;
+  gap: 8px;
+  min-width: 0;
+  padding: 14px 16px;
+  background: var(--bg-elevated);
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-sm);
+  color: var(--text-secondary);
+  font-size: 14px;
+  line-height: 1.5;
+}
+
+.label-print-form .label-print-summary__name,
+.label-print-form .label-print-summary__attributes,
+.label-print-form .label-print-summary__barcode {
+  min-width: 0;
+  overflow-wrap: anywhere;
+  word-break: break-word;
+}
+
+.label-print-form .label-print-summary__name {
+  color: var(--text-primary);
+  font-weight: 650;
+  font-size: 15px;
+}
+
+.label-print-form .label-print-summary__price {
+  color: var(--text-primary);
+  font-size: 19px;
+  font-weight: 700;
+  line-height: 1.3;
+}
+
+.label-print-form .label-print-summary__barcode {
+  font-family: var(--font-mono, monospace);
+  font-size: 13px;
+  letter-spacing: 0.02em;
+}
+
+.label-print-form .form-hint {
+  line-height: 1.5;
 }

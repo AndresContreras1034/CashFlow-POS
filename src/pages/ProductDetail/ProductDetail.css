@@ -93,7 +93,7 @@
   flex-shrink: 0;
 }
 .status-dot--active  { color: var(--stock-ok); }
-.status-dot--active::before  { background: var(--stock-ok);  box-shadow: 0 0 4px var(--stock-ok); }
+.status-dot--active::before  { background: var(--stock-ok); }
 .status-dot--inactive { color: var(--text-muted); }
 .status-dot--inactive::before { background: var(--text-muted); }
 
@@ -233,7 +233,6 @@
 }
 .variant-card:hover {
   border-color: var(--accent);
-  box-shadow: 0 0 0 1px var(--accent-dim);
 }
 .variant-card--inactive { opacity: 0.55; }
 
@@ -243,6 +242,14 @@
   justify-content: space-between;
   gap: 8px;
   flex-wrap: wrap;
+}
+
+.variant-card-status {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 6px;
+  flex-shrink: 0;
 }
 
 .variant-attrs { display: flex; flex-wrap: wrap; gap: 6px; }
@@ -300,34 +307,34 @@
 
 /* ── Variant actions ── */
 .variant-actions {
-  display: flex;
-  gap: 6px;
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 8px;
   padding-top: 4px;
   border-top: 1px solid var(--border-subtle);
-  flex-wrap: wrap;
 }
 
 .vaction-btn {
-  flex: 1;
   min-width: 0;
+  min-height: 36px;
   background: var(--bg-elevated);
   border: 1px solid var(--border);
   border-radius: var(--radius-sm);
   color: var(--text-secondary);
   font-family: var(--font-sans);
-  font-size: 12px;
+  font-size: 12.5px;
   font-weight: 600;
-  padding: 5px 8px;
+  padding: 7px 10px;
   cursor: pointer;
   transition: background var(--transition), color var(--transition), border-color var(--transition);
-  white-space: nowrap;
+  line-height: 1.25;
   text-align: center;
 }
 
 .vaction-btn--in:hover  { background: var(--stock-ok-dim);  color: var(--stock-ok);  border-color: var(--stock-ok); }
 .vaction-btn--out:hover { background: var(--stock-out-dim); color: var(--stock-out); border-color: var(--stock-out); }
 .vaction-btn--adj:hover { background: var(--stock-low-dim); color: var(--stock-low); border-color: var(--stock-low); }
-.vaction-btn--edit { flex: 0 0 auto; padding: 5px 10px; }
+.vaction-btn--edit { grid-column: 1 / -1; }
 .vaction-btn--edit:hover { background: var(--bg-hover); color: var(--text-primary); }
 
 /* ── Stock form ── */
@@ -360,7 +367,7 @@
   width: 100%;
   transition: border-color var(--transition), box-shadow var(--transition);
 }
-.form-input:focus { border-color: var(--accent); box-shadow: 0 0 0 3px var(--accent-dim); }
+.form-input:focus { border-color: var(--accent); outline: 2px solid var(--accent-dim); outline-offset: 1px; }
 .form-input--error { border-color: var(--danger); }
 .form-error { font-size: 12px; color: var(--danger); }
 .form-actions { display: flex; justify-content: flex-end; gap: 10px; padding-top: 4px; border-top: 1px solid var(--border-subtle); margin-top: 4px; }

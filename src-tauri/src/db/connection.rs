@@ -24,9 +24,7 @@ pub async fn init_db() -> Result<DbPool, sqlx::Error> {
     tracing::info!("Pool creado. Corriendo migraciones...");
 
     // Corre automáticamente todos los archivos en src-tauri/migrations/
-    sqlx::migrate!("./migrations")
-        .run(&pool)
-        .await?;
+    sqlx::migrate!("./migrations").run(&pool).await?;
 
     tracing::info!("Migraciones aplicadas correctamente.");
 

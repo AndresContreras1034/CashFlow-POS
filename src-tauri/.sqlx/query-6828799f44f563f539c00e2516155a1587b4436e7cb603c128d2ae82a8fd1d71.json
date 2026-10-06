@@ -1,0 +1,93 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "SELECT\n               s.id,\n               s.category_id,\n               c.name AS \"category_name?\",\n               s.status AS \"status: StocktakeStatus\",\n               s.notes,\n               s.created_by,\n               s.created_at,\n               s.applied_at,\n               s.cancelled_at,\n               (SELECT COUNT(*) FROM stocktake_lines l\n                 WHERE l.stocktake_id = s.id) AS \"total_lines!\",\n               (SELECT COUNT(*) FROM stocktake_lines l\n                 WHERE l.stocktake_id = s.id AND l.counted_stock IS NOT NULL) AS \"counted_lines!\"\n           FROM stocktakes s\n           LEFT JOIN categories c ON c.id = s.category_id\n           WHERE ($1::INT IS NULL OR s.id = $1)\n           ORDER BY s.id DESC\n           LIMIT 50",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "id",
+        "type_info": "Int4"
+      },
+      {
+        "ordinal": 1,
+        "name": "category_id",
+        "type_info": "Int4"
+      },
+      {
+        "ordinal": 2,
+        "name": "category_name?",
+        "type_info": "Varchar"
+      },
+      {
+        "ordinal": 3,
+        "name": "status: StocktakeStatus",
+        "type_info": {
+          "Custom": {
+            "name": "stocktake_status",
+            "kind": {
+              "Enum": [
+                "counting",
+                "applied",
+                "cancelled"
+              ]
+            }
+          }
+        }
+      },
+      {
+        "ordinal": 4,
+        "name": "notes",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 5,
+        "name": "created_by",
+        "type_info": "Varchar"
+      },
+      {
+        "ordinal": 6,
+        "name": "created_at",
+        "type_info": "Timestamptz"
+      },
+      {
+        "ordinal": 7,
+        "name": "applied_at",
+        "type_info": "Timestamptz"
+      },
+      {
+        "ordinal": 8,
+        "name": "cancelled_at",
+        "type_info": "Timestamptz"
+      },
+      {
+        "ordinal": 9,
+        "name": "total_lines!",
+        "type_info": "Int8"
+      },
+      {
+        "ordinal": 10,
+        "name": "counted_lines!",
+        "type_info": "Int8"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Int4"
+      ]
+    },
+    "nullable": [
+      false,
+      true,
+      false,
+      false,
+      true,
+      false,
+      false,
+      true,
+      true,
+      null,
+      null
+    ]
+  },
+  "hash": "6828799f44f563f539c00e2516155a1587b4436e7cb603c128d2ae82a8fd1d71"
+}

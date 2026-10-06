@@ -1,0 +1,56 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "SELECT\n               v.id AS variant_id,\n               p.name AS product_name,\n               v.attributes,\n               v.sku,\n               v.barcode,\n               l.counted_stock\n           FROM stocktake_lines l\n           JOIN product_variants v ON v.id = l.variant_id\n           JOIN products p ON p.id = v.product_id\n           WHERE l.stocktake_id = $1\n             AND ($2::TEXT IS NULL\n                  OR p.name ILIKE $2 OR p.brand ILIKE $2\n                  OR v.sku ILIKE $2 OR v.barcode ILIKE $2)\n             AND ($3::BOOL = FALSE OR l.counted_stock IS NULL)\n           ORDER BY p.name, v.id\n           LIMIT $4 OFFSET $5",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "variant_id",
+        "type_info": "Int4"
+      },
+      {
+        "ordinal": 1,
+        "name": "product_name",
+        "type_info": "Varchar"
+      },
+      {
+        "ordinal": 2,
+        "name": "attributes",
+        "type_info": "Jsonb"
+      },
+      {
+        "ordinal": 3,
+        "name": "sku",
+        "type_info": "Varchar"
+      },
+      {
+        "ordinal": 4,
+        "name": "barcode",
+        "type_info": "Varchar"
+      },
+      {
+        "ordinal": 5,
+        "name": "counted_stock",
+        "type_info": "Int4"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Int4",
+        "Text",
+        "Bool",
+        "Int8",
+        "Int8"
+      ]
+    },
+    "nullable": [
+      false,
+      false,
+      false,
+      true,
+      true,
+      true
+    ]
+  },
+  "hash": "be26db38c15b28792ae431900496710365a830d553e3d498730873000f27d2f7"
+}

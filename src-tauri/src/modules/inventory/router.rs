@@ -1,47 +1,51 @@
 /// Retorna todos los comandos del módulo de inventario
-/// para ser registrados en tauri::generate_handler!
 ///
-/// Uso en lib.rs:
-///   .invoke_handler(tauri::generate_handler![
-///       ...inventory::router::commands(),  // no funciona así en Tauri
-///   ])
+/// para ser registrados en tauri::generate_handler!
 ///
 /// En Tauri los comandos se deben listar explícitamente en generate_handler!
 /// Este archivo sirve como referencia de todos los comandos disponibles.
 /// Ver lib.rs para el registro final.
-
 pub use super::handlers::{
-    // Categorías
-    list_categories,
-    get_category,
-    create_category,
-    update_category,
-
-    // Productos
-    list_products,
-    get_product,
-    create_product,
-    update_product,
-    deactivate_product,
-
-    // Variantes
-    list_variants,
-    get_variant,
-    find_by_barcode,
-    search_variants,
-    create_variant,
-    update_variant,
-
-    // Stock
-    register_stock_entry,
-    register_initial_stock,
-    register_manual_entry,
-    register_manual_out,
     adjust_stock,
 
+    create_category,
+    create_product,
+    create_variant,
+    deactivate_product,
+
+    execute_import_inventory,
+    export_inventory,
+    export_inventory_template,
+
+    find_by_barcode,
+    generate_internal_barcode,
+    get_category,
+    get_inventory_value,
     // Kardex
     get_kardex,
 
     // Alertas
     get_low_stock,
+    get_product,
+    get_product_stock_stats,
+    get_variant,
+    // Categorías
+    list_categories,
+    // Productos
+    list_products,
+    // Variantes
+    list_variants,
+    // Importación masiva
+    preview_import_inventory,
+    print_variant_labels,
+    register_initial_stock,
+    register_manual_entry,
+    register_manual_out,
+    // Stock
+    register_stock_entry,
+    search_variants,
+    update_category,
+
+    update_product,
+    update_variant,
 };

@@ -1,0 +1,52 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "INSERT INTO inventory_movements\n             (variant_id, movement_type, quantity, stock_before, stock_after,\n              unit_cost, sale_id, reason, notes, created_by)\n         VALUES ($1, $2, $3, $4, $5, 0, $6, $7, $8, $9)",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Int4",
+        {
+          "Custom": {
+            "name": "movement_type",
+            "kind": {
+              "Enum": [
+                "purchase",
+                "sale",
+                "sale_return",
+                "manual_in",
+                "manual_out",
+                "adjustment",
+                "initial_stock"
+              ]
+            }
+          }
+        },
+        "Int4",
+        "Int4",
+        "Int4",
+        "Int4",
+        {
+          "Custom": {
+            "name": "movement_reason",
+            "kind": {
+              "Enum": [
+                "damaged",
+                "lost",
+                "expired",
+                "theft",
+                "internal_use",
+                "count_correction",
+                "other"
+              ]
+            }
+          }
+        },
+        "Text",
+        "Varchar"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "941e363530dc248078651eb76b89b15fdedf4660ff66de515af99a135ebe33f7"
+}

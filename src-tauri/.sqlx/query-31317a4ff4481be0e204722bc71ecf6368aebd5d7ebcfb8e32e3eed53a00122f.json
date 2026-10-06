@@ -1,0 +1,15 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "INSERT INTO stocktake_lines (stocktake_id, variant_id, expected_stock)\n         SELECT $1, v.id, v.stock\n         FROM product_variants v\n         JOIN products p ON p.id = v.product_id\n         WHERE v.is_active = TRUE\n           AND p.is_active = TRUE\n           AND ($2::INT IS NULL OR p.category_id = $2)",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Int4",
+        "Int4"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "31317a4ff4481be0e204722bc71ecf6368aebd5d7ebcfb8e32e3eed53a00122f"
+}

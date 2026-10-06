@@ -1,0 +1,40 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "SELECT\n               product_id AS \"product_id!\",\n               COUNT(*) AS \"variant_count!\",\n               COALESCE(SUM(stock), 0)::BIGINT AS \"total_stock!\",\n               COALESCE(MIN(stock_min), 0) AS \"min_stock_min!\"\n           FROM product_variants\n           WHERE product_id = ANY($1)\n           GROUP BY product_id",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "product_id!",
+        "type_info": "Int4"
+      },
+      {
+        "ordinal": 1,
+        "name": "variant_count!",
+        "type_info": "Int8"
+      },
+      {
+        "ordinal": 2,
+        "name": "total_stock!",
+        "type_info": "Int8"
+      },
+      {
+        "ordinal": 3,
+        "name": "min_stock_min!",
+        "type_info": "Int4"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Int4Array"
+      ]
+    },
+    "nullable": [
+      false,
+      null,
+      null,
+      null
+    ]
+  },
+  "hash": "a414f1ff9aeda4242982cd96461de388ab024fec2b9b00f19112679b0264dc00"
+}

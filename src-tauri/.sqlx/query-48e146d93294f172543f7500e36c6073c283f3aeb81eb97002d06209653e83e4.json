@@ -1,0 +1,93 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "INSERT INTO cash_movements\n               (session_id, movement_type, amount, sale_id, notes, created_by)\n           VALUES ($1, $2, $3, $4, $5, $6)\n           RETURNING\n               id,\n               session_id,\n               movement_type AS \"movement_type: CashMovementType\",\n               amount,\n               sale_id,\n               notes,\n               created_by,\n               created_at",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "id",
+        "type_info": "Int4"
+      },
+      {
+        "ordinal": 1,
+        "name": "session_id",
+        "type_info": "Int4"
+      },
+      {
+        "ordinal": 2,
+        "name": "movement_type: CashMovementType",
+        "type_info": {
+          "Custom": {
+            "name": "cash_movement_type",
+            "kind": {
+              "Enum": [
+                "manual_in",
+                "manual_out",
+                "sale_in",
+                "sale_out"
+              ]
+            }
+          }
+        }
+      },
+      {
+        "ordinal": 3,
+        "name": "amount",
+        "type_info": "Int8"
+      },
+      {
+        "ordinal": 4,
+        "name": "sale_id",
+        "type_info": "Int4"
+      },
+      {
+        "ordinal": 5,
+        "name": "notes",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 6,
+        "name": "created_by",
+        "type_info": "Varchar"
+      },
+      {
+        "ordinal": 7,
+        "name": "created_at",
+        "type_info": "Timestamptz"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Int4",
+        {
+          "Custom": {
+            "name": "cash_movement_type",
+            "kind": {
+              "Enum": [
+                "manual_in",
+                "manual_out",
+                "sale_in",
+                "sale_out"
+              ]
+            }
+          }
+        },
+        "Int8",
+        "Int4",
+        "Text",
+        "Varchar"
+      ]
+    },
+    "nullable": [
+      false,
+      false,
+      false,
+      false,
+      true,
+      true,
+      false,
+      false
+    ]
+  },
+  "hash": "48e146d93294f172543f7500e36c6073c283f3aeb81eb97002d06209653e83e4"
+}

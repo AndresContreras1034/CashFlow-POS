@@ -6,6 +6,7 @@ import { StockBadge } from '../../components/inventory/StockBadge';
 import { KardexTable } from '../../components/inventory/KardexTable';
 import { VariantForm } from '../../components/inventory/VariantForm';
 import { StockMoveForm } from '../../components/inventory/StockMoveForm';
+import { LabelPrintForm } from '../../components/inventory/LabelPrintForm';
 import {
   ProductWithCategory,
   ProductVariant,
@@ -16,7 +17,7 @@ import {
   StockOutDto,
   StockAdjustmentDto,
 } from '../../types';
-import { formatMoney } from '../../utils/format';
+import { calcMargin, formatMargin, formatMoney } from '../../utils/format';
 import {
   getProduct,
   listVariants,
@@ -26,8 +27,16 @@ import {
   registerManualEntry,
   registerManualOut,
   adjustStock,
+  printVariantLabels,
 } from '../../services/inventory.service';
 import './ProductDetail.css';
+
+const errorMessage = (error: unknown): string =>
+  typeof error === 'string'
+    ? error
+    : error instanceof Error
+      ? error.message
+      : 'Error desconocido';
 
 export const ProductDetail: React.FC = () => {
   const { id } = useParams<{ id: string }>();
@@ -37,10 +46,12 @@ export const ProductDetail: React.FC = () => {
   const [product, setProduct] = useState<ProductWithCategory | null>(null);
   const [variants, setVariants] = useState<ProductVariant[]>([]);
   const [movements, setMovements] = useState<MovementWithDetails[]>([]);
+  const [movementsTotal, setMovementsTotal] = useState(0);
   const [toasts, setToasts] = useState<ToastData[]>([]);
   const [activeTab, setActiveTab] = useState<'variants' | 'kardex'>('variants');
   const [showCreateVar, setShowCreateVar] = useState(false);
   const [editVariant, setEditVariant] = useState<ProductVariant | null>(null);
+  const [labelVariant, setLabelVariant] = useState<ProductVariant | null>(null);
   const [stockModal, setStockModal] = useState<{ mode: 'entry' | 'out' | 'adjustment'; variantId: number } | null>(null);
   const [saving, setSaving] = useState(false);
   const [loading, setLoading] = useState(true);
@@ -73,6 +84,7 @@ export const ProductDetail: React.FC = () => {
         setProduct(productRes);
         setVariants(variantsRes);
         setMovements(kardexRes.data);
+        setMovementsTotal(kardexRes.total);
       } catch (error) {
         setNotFound(true);
         addToast('No se pudo cargar el producto', 'error');
@@ -88,6 +100,7 @@ export const ProductDetail: React.FC = () => {
     try {
       const kardexRes = await getKardex({ product_id: productId });
       setMovements(kardexRes.data);
+      setMovementsTotal(kardexRes.total);
     } catch (error) {
       addToast('No se pudo actualizar el kardex', 'error');
     }
@@ -99,12 +112,12 @@ export const ProductDetail: React.FC = () => {
     try {
       const newVar = await createVariant({ ...(dto as CreateVariantDto), product_id: productId });
       setVariants(prev => [newVar, ...prev]);
+      setShowCreateVar(false);
       addToast('Variante creada', 'success');
     } catch (error) {
-      addToast('No se pudo crear la variante', 'error');
+      addToast(`No se pudo crear la variante: ${errorMessage(error)}`, 'error');
     } finally {
       setSaving(false);
-      setShowCreateVar(false);
     }
   };
 
@@ -117,7 +130,7 @@ export const ProductDetail: React.FC = () => {
       setEditVariant(null);
       addToast('Variante actualizada', 'success');
     } catch (error) {
-      addToast('No se pudo actualizar la variante', 'error');
+      addToast(`No se pudo actualizar la variante: ${errorMessage(error)}`, 'error');
     } finally {
       setSaving(false);
     }
@@ -137,17 +150,34 @@ export const ProductDetail: React.FC = () => {
       }
 
       setVariants(prev => prev.map(v => v.id === updatedVariant.id ? updatedVariant : v));
-      await refreshMovements();
+      setStockModal(null);
       addToast(
         stockModal.mode === 'entry' ? 'Entrada registrada' :
         stockModal.mode === 'out' ? 'Salida registrada' : 'Stock ajustado',
         'success'
       );
+      await refreshMovements();
     } catch (error) {
-      addToast('No se pudo registrar el movimiento', 'error');
+      addToast(`No se pudo registrar el movimiento: ${errorMessage(error)}`, 'error');
     } finally {
       setSaving(false);
-      setStockModal(null);
+    }
+  };
+
+  const handlePrintLabels = async (copies: number) => {
+    if (!labelVariant) return;
+    setSaving(true);
+    try {
+      await printVariantLabels(labelVariant.id, copies);
+      setLabelVariant(null);
+      addToast(
+        `${copies} etiqueta${copies !== 1 ? 's' : ''} enviada${copies !== 1 ? 's' : ''} a la impresora`,
+        'success'
+      );
+    } catch (error) {
+      addToast(`No se pudo imprimir: ${errorMessage(error)}`, 'error');
+    } finally {
+      setSaving(false);
     }
   };
 
@@ -220,7 +250,7 @@ export const ProductDetail: React.FC = () => {
           </div>
           <div className="stat-card">
             <span className="stat-label">Movimientos</span>
-            <span className="stat-value tabular">{movements.length}</span>
+            <span className="stat-value tabular">{movementsTotal}</span>
           </div>
         </div>
       </div>
@@ -236,7 +266,7 @@ export const ProductDetail: React.FC = () => {
           className={`detail-tab ${activeTab === 'kardex' ? 'detail-tab--active' : ''}`}
           onClick={() => setActiveTab('kardex')}
         >
-          Kardex <span className="tab-count">{movements.length}</span>
+          Kardex <span className="tab-count">{movementsTotal}</span>
         </button>
       </div>
 
@@ -267,7 +297,12 @@ export const ProductDetail: React.FC = () => {
                         : <span className="attr-tag">Variante única</span>
                       }
                     </div>
-                    <StockBadge stock={v.stock} stockMin={v.stock_min} />
+                    <div className="variant-card-status">
+                      <span className={`status-dot ${v.is_active ? 'status-dot--active' : 'status-dot--inactive'}`}>
+                        {v.is_active ? 'Activo' : 'Inactivo'}
+                      </span>
+                      <StockBadge stock={v.stock} stockMin={v.stock_min} />
+                    </div>
                   </div>
 
                   <div className="variant-prices">
@@ -275,18 +310,18 @@ export const ProductDetail: React.FC = () => {
                       <span className="price-label">Precio</span>
                       <span className="price-value tabular">{formatMoney(v.price)}</span>
                     </div>
-                    {v.cost > 0 && (
-                      <div className="price-row">
-                        <span className="price-label">Costo</span>
-                        <span className="price-value price-cost tabular">{formatMoney(v.cost)}</span>
-                      </div>
-                    )}
-                    {v.cost > 0 && (
-                      <div className="price-row">
-                        <span className="price-label">Margen</span>
-                        <span className="price-value price-margin tabular">{(((v.price - v.cost) / v.price) * 100).toFixed(1)}%</span>
-                      </div>
-                    )}
+                    <div className="price-row">
+                      <span className="price-label">Costo</span>
+                      <span className="price-value price-cost tabular">
+                        {v.cost > 0 ? formatMoney(v.cost) : 'Sin costo'}
+                      </span>
+                    </div>
+                    <div className="price-row">
+                      <span className="price-label">Margen</span>
+                      <span className="price-value price-margin tabular">
+                        {formatMargin(calcMargin(v.price, v.cost))}
+                      </span>
+                    </div>
                   </div>
 
                   {(v.sku || v.barcode) && (
@@ -300,7 +335,8 @@ export const ProductDetail: React.FC = () => {
                     <button className="vaction-btn vaction-btn--in" onClick={() => setStockModal({ mode: 'entry', variantId: v.id })}>↑ Entrada</button>
                     <button className="vaction-btn vaction-btn--out" onClick={() => setStockModal({ mode: 'out', variantId: v.id })}>↓ Salida</button>
                     <button className="vaction-btn vaction-btn--adj" onClick={() => setStockModal({ mode: 'adjustment', variantId: v.id })}>⊕ Ajuste</button>
-                    <button className="vaction-btn vaction-btn--edit" onClick={() => setEditVariant(v)}>✎</button>
+                    <button className="vaction-btn" title="Imprimir etiquetas" onClick={() => setLabelVariant(v)}>Etiqueta</button>
+                    <button className="vaction-btn vaction-btn--edit" onClick={() => setEditVariant(v)}>✎ Editar variante</button>
                   </div>
                 </div>
               ))}
@@ -336,6 +372,18 @@ export const ProductDetail: React.FC = () => {
             variant={editVariant}
             onSubmit={handleEditVariant}
             onCancel={() => setEditVariant(null)}
+            loading={saving}
+          />
+        </Modal>
+      )}
+
+      {labelVariant && product && (
+        <Modal title="Imprimir etiquetas" onClose={() => setLabelVariant(null)} width={440}>
+          <LabelPrintForm
+            productName={product.name}
+            variant={labelVariant}
+            onPrint={handlePrintLabels}
+            onCancel={() => setLabelVariant(null)}
             loading={saving}
           />
         </Modal>

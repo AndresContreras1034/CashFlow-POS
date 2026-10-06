@@ -1,0 +1,92 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "SELECT * FROM cash_sessions\n           WHERE ($1::TEXT IS NULL OR status = $1)\n             AND ($2::DATE IS NULL OR opened_at::DATE >= $2)\n             AND ($3::DATE IS NULL OR opened_at::DATE <= $3)\n           ORDER BY opened_at DESC\n           LIMIT $4 OFFSET $5",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "id",
+        "type_info": "Int4"
+      },
+      {
+        "ordinal": 1,
+        "name": "opening_amount",
+        "type_info": "Int8"
+      },
+      {
+        "ordinal": 2,
+        "name": "expected_amount",
+        "type_info": "Int8"
+      },
+      {
+        "ordinal": 3,
+        "name": "counted_amount",
+        "type_info": "Int8"
+      },
+      {
+        "ordinal": 4,
+        "name": "difference",
+        "type_info": "Int8"
+      },
+      {
+        "ordinal": 5,
+        "name": "status",
+        "type_info": "Varchar"
+      },
+      {
+        "ordinal": 6,
+        "name": "opened_by",
+        "type_info": "Varchar"
+      },
+      {
+        "ordinal": 7,
+        "name": "closed_by",
+        "type_info": "Varchar"
+      },
+      {
+        "ordinal": 8,
+        "name": "opening_notes",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 9,
+        "name": "closing_notes",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 10,
+        "name": "opened_at",
+        "type_info": "Timestamptz"
+      },
+      {
+        "ordinal": 11,
+        "name": "closed_at",
+        "type_info": "Timestamptz"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Text",
+        "Date",
+        "Date",
+        "Int8",
+        "Int8"
+      ]
+    },
+    "nullable": [
+      false,
+      false,
+      true,
+      true,
+      true,
+      false,
+      false,
+      true,
+      true,
+      true,
+      false,
+      true
+    ]
+  },
+  "hash": "0b12edeb6b74540a3b225f6b5ef7332c414773545e31f21f417c6c00e66a144f"
+}

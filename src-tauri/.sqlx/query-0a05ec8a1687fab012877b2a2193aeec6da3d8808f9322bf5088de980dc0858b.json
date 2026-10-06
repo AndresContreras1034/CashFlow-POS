@@ -1,0 +1,76 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "SELECT\n               v.id AS variant_id,\n               p.name AS product_name,\n               v.attributes,\n               v.sku,\n               v.barcode,\n               l.expected_stock,\n               v.stock AS current_stock,\n               l.counted_stock AS \"counted_stock!\",\n               (l.counted_stock::BIGINT - v.stock::BIGINT) AS \"difference!\",\n               (v.stock <> l.expected_stock) AS \"moved_during_count!\"\n           FROM stocktake_lines l\n           JOIN product_variants v ON v.id = l.variant_id\n           JOIN products p ON p.id = v.product_id\n           WHERE l.stocktake_id = $1\n             AND l.counted_stock IS NOT NULL\n             AND l.counted_stock <> v.stock\n           ORDER BY p.name, v.id",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "variant_id",
+        "type_info": "Int4"
+      },
+      {
+        "ordinal": 1,
+        "name": "product_name",
+        "type_info": "Varchar"
+      },
+      {
+        "ordinal": 2,
+        "name": "attributes",
+        "type_info": "Jsonb"
+      },
+      {
+        "ordinal": 3,
+        "name": "sku",
+        "type_info": "Varchar"
+      },
+      {
+        "ordinal": 4,
+        "name": "barcode",
+        "type_info": "Varchar"
+      },
+      {
+        "ordinal": 5,
+        "name": "expected_stock",
+        "type_info": "Int4"
+      },
+      {
+        "ordinal": 6,
+        "name": "current_stock",
+        "type_info": "Int4"
+      },
+      {
+        "ordinal": 7,
+        "name": "counted_stock!",
+        "type_info": "Int4"
+      },
+      {
+        "ordinal": 8,
+        "name": "difference!",
+        "type_info": "Int8"
+      },
+      {
+        "ordinal": 9,
+        "name": "moved_during_count!",
+        "type_info": "Bool"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Int4"
+      ]
+    },
+    "nullable": [
+      false,
+      false,
+      false,
+      true,
+      true,
+      false,
+      false,
+      true,
+      null,
+      null
+    ]
+  },
+  "hash": "0a05ec8a1687fab012877b2a2193aeec6da3d8808f9322bf5088de980dc0858b"
+}

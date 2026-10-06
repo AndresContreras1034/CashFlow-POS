@@ -1,6 +1,7 @@
 import React from 'react';
 import type { MovementWithDetails } from '../../types';
 import { formatDate, formatMoney, formatAttributes, formatMovementType } from '../../utils/format';
+import { formatReason } from '../../utils/movementReasons';
 import './KardexTable.css';
 
 interface KardexTableProps { movements: MovementWithDetails[]; }
@@ -32,6 +33,7 @@ export const KardexTable: React.FC<KardexTableProps> = ({ movements }) => {
             <th className="col-right">Antes</th>
             <th className="col-right">Después</th>
             <th className="col-right">Costo u.</th>
+            <th>Motivo</th>
             <th>Notas</th>
             <th>Usuario</th>
           </tr>
@@ -53,6 +55,7 @@ export const KardexTable: React.FC<KardexTableProps> = ({ movements }) => {
                 <td className="cell-stock tabular">{m.stock_before}</td>
                 <td className="cell-stock tabular">{m.stock_after}</td>
                 <td className="cell-cost tabular">{m.unit_cost > 0 ? formatMoney(m.unit_cost) : '—'}</td>
+                <td className="cell-notes">{formatReason(m.reason)}</td>
                 <td className="cell-notes">{m.notes ?? '—'}</td>
                 <td className="cell-user">{m.created_by}</td>
               </tr>

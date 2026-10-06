@@ -1,0 +1,17 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "INSERT INTO inventory_movements\n                 (variant_id, movement_type, quantity, stock_before, stock_after,\n                  unit_cost, notes, created_by)\n             VALUES ($1, 'initial_stock', $2, 0, $2, $3, $4, 'system')",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Int4",
+        "Int4",
+        "Int8",
+        "Text"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "350f333f7c20d9ca5be22ee9662e90fbe6393abbcd2c19d5753ba620c53b7954"
+}

@@ -1,0 +1,56 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "SELECT\n               v.id AS variant_id,\n               p.name AS product_name,\n               v.attributes,\n               v.barcode,\n               v.stock,\n               v.stock_min,\n               CASE WHEN v.stock <= 0 THEN 'out_of_stock' ELSE 'low' END AS \"stock_status!\"\n           FROM product_variants v\n           JOIN products p ON p.id = v.product_id\n           WHERE v.is_active = TRUE\n             AND p.is_active = TRUE\n             AND v.stock <= v.stock_min\n           ORDER BY v.stock ASC, p.name ASC",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "variant_id",
+        "type_info": "Int4"
+      },
+      {
+        "ordinal": 1,
+        "name": "product_name",
+        "type_info": "Varchar"
+      },
+      {
+        "ordinal": 2,
+        "name": "attributes",
+        "type_info": "Jsonb"
+      },
+      {
+        "ordinal": 3,
+        "name": "barcode",
+        "type_info": "Varchar"
+      },
+      {
+        "ordinal": 4,
+        "name": "stock",
+        "type_info": "Int4"
+      },
+      {
+        "ordinal": 5,
+        "name": "stock_min",
+        "type_info": "Int4"
+      },
+      {
+        "ordinal": 6,
+        "name": "stock_status!",
+        "type_info": "Text"
+      }
+    ],
+    "parameters": {
+      "Left": []
+    },
+    "nullable": [
+      false,
+      false,
+      false,
+      true,
+      false,
+      false,
+      null
+    ]
+  },
+  "hash": "28ade5e1f1b8d965e41ea9412fdf8e3c8a565f41885d81731856e37185e4b2c4"
+}

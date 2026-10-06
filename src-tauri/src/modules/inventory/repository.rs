@@ -1,14 +1,15 @@
-use sqlx::PgPool;
+use sqlx::{PgConnection, PgPool};
 
 use crate::modules::inventory::{
     dto::{
-        CreateCategoryDto, CreateProductDto, CreateVariantDto, KardexFilterDto,
-        ProductFilterDto, StockAdjustmentDto, StockEntryDto, StockOutDto, UpdateCategoryDto,
-        UpdateProductDto, UpdateVariantDto,
+        CreateCategoryDto, CreateProductDto, CreateVariantDto, ExportVariantRow, InventoryValueDto,
+        KardexFilterDto, LabelData, LowStockItemDto, ProductFilterDto, ProductSortBy,
+        ProductStockStatsDto, SortDir, StockAdjustmentDto, StockEntryDto, StockOutDto,
+        UpdateCategoryDto, UpdateProductDto, UpdateVariantDto,
     },
     models::{
-        Category, InventoryMovement, MovementType, MovementWithDetails, Product,
-        ProductVariant, ProductWithCategory, VariantWithProduct,
+        Category, MovementReason, MovementType, MovementWithDetails, Product, ProductVariant,
+        ProductWithCategory, VariantWithProduct,
     },
 };
 
@@ -77,11 +78,14 @@ pub async fn get_products(
     pool: &PgPool,
     filter: &ProductFilterDto,
 ) -> Result<(Vec<ProductWithCategory>, i64), sqlx::Error> {
-    let page      = filter.page.unwrap_or(1).max(1);
+    let page = filter.page.unwrap_or(1).max(1);
     let page_size = filter.page_size.unwrap_or(20).clamp(1, 100);
-    let offset    = (page - 1) * page_size;
-    let search    = filter.search.as_deref().map(|s| format!("%{}%", s));
-    let is_active = filter.is_active.unwrap_or(true);
+    let offset = (page - 1) * page_size;
+    let search = filter.search.as_deref().map(|s| format!("%{}%", s));
+    let is_active = filter.is_active;
+    let stock_status = filter.stock_status.map(|status| status.as_str());
+    let sort_by = filter.sort_by.unwrap_or(ProductSortBy::Name).as_str();
+    let sort_dir = filter.sort_dir.unwrap_or(SortDir::Asc).as_str();
 
     let rows = sqlx::query_as!(
         ProductWithCategory,
@@ -91,14 +95,50 @@ pub async fn get_products(
                p.is_active, p.created_at, p.updated_at
            FROM products p
            JOIN categories c ON c.id = p.category_id
-           WHERE p.is_active = $1
+           WHERE ($1::BOOL IS NULL OR p.is_active = $1)
              AND ($2::INT  IS NULL OR p.category_id = $2)
-             AND ($3::TEXT IS NULL OR p.name ILIKE $3 OR p.brand ILIKE $3)
-           ORDER BY p.name ASC
-           LIMIT $4 OFFSET $5"#,
+             AND ($3::TEXT IS NULL
+                  OR p.name ILIKE $3
+                  OR p.brand ILIKE $3
+                  OR EXISTS (
+                      SELECT 1 FROM product_variants v
+                      WHERE v.product_id = p.id
+                        AND (v.sku ILIKE $3 OR v.barcode ILIKE $3)
+                  ))
+             AND ($4::BOOL IS NULL OR EXISTS (
+                      SELECT 1 FROM product_variants v
+                      WHERE v.product_id = p.id
+                        AND v.is_active = $4
+                  ))
+             AND ($5::TEXT IS NULL OR EXISTS (
+                      SELECT 1 FROM product_variants v
+                      WHERE v.product_id = p.id
+                        AND v.is_active = TRUE
+                        AND CASE $5::TEXT
+                              WHEN 'out_of_stock' THEN v.stock <= 0
+                              WHEN 'low' THEN (v.stock > 0 AND v.stock <= v.stock_min)
+                              WHEN 'ok' THEN v.stock > v.stock_min
+                              ELSE FALSE
+                            END
+                  ))
+           ORDER BY
+               CASE WHEN $6::TEXT = 'name'       AND $7::TEXT = 'asc'  THEN p.name       END ASC,
+               CASE WHEN $6::TEXT = 'name'       AND $7::TEXT = 'desc' THEN p.name       END DESC,
+               CASE WHEN $6::TEXT = 'brand'      AND $7::TEXT = 'asc'  THEN p.brand      END ASC,
+               CASE WHEN $6::TEXT = 'brand'      AND $7::TEXT = 'desc' THEN p.brand      END DESC,
+               CASE WHEN $6::TEXT = 'category'   AND $7::TEXT = 'asc'  THEN c.name       END ASC,
+               CASE WHEN $6::TEXT = 'category'   AND $7::TEXT = 'desc' THEN c.name       END DESC,
+               CASE WHEN $6::TEXT = 'created_at' AND $7::TEXT = 'asc'  THEN p.created_at END ASC,
+               CASE WHEN $6::TEXT = 'created_at' AND $7::TEXT = 'desc' THEN p.created_at END DESC,
+               p.id ASC
+           LIMIT $8 OFFSET $9"#,
         is_active,
         filter.category_id,
         search,
+        filter.variant_is_active,
+        stock_status,
+        sort_by,
+        sort_dir,
         page_size,
         offset
     )
@@ -107,12 +147,37 @@ pub async fn get_products(
 
     let total = sqlx::query_scalar!(
         "SELECT COUNT(*) FROM products p
-         WHERE p.is_active = $1
+         WHERE ($1::BOOL IS NULL OR p.is_active = $1)
            AND ($2::INT  IS NULL OR p.category_id = $2)
-           AND ($3::TEXT IS NULL OR p.name ILIKE $3 OR p.brand ILIKE $3)",
+           AND ($3::TEXT IS NULL
+                OR p.name ILIKE $3
+                OR p.brand ILIKE $3
+                OR EXISTS (
+                    SELECT 1 FROM product_variants v
+                    WHERE v.product_id = p.id
+                      AND (v.sku ILIKE $3 OR v.barcode ILIKE $3)
+                ))
+           AND ($4::BOOL IS NULL OR EXISTS (
+                    SELECT 1 FROM product_variants v
+                    WHERE v.product_id = p.id
+                      AND v.is_active = $4
+                ))
+           AND ($5::TEXT IS NULL OR EXISTS (
+                    SELECT 1 FROM product_variants v
+                    WHERE v.product_id = p.id
+                      AND v.is_active = TRUE
+                      AND CASE $5::TEXT
+                            WHEN 'out_of_stock' THEN v.stock <= 0
+                            WHEN 'low' THEN (v.stock > 0 AND v.stock <= v.stock_min)
+                            WHEN 'ok' THEN v.stock > v.stock_min
+                            ELSE FALSE
+                          END
+                ))",
         is_active,
         filter.category_id,
-        search
+        search,
+        filter.variant_is_active,
+        stock_status
     )
     .fetch_one(pool)
     .await?
@@ -140,10 +205,7 @@ pub async fn get_product_by_id(
     .await
 }
 
-pub async fn create_product(
-    pool: &PgPool,
-    dto: CreateProductDto,
-) -> Result<Product, sqlx::Error> {
+pub async fn create_product(pool: &PgPool, dto: CreateProductDto) -> Result<Product, sqlx::Error> {
     sqlx::query_as!(
         Product,
         "INSERT INTO products (category_id, name, description, brand, image_url)
@@ -240,12 +302,33 @@ pub async fn get_variant_by_barcode(
     .await
 }
 
+pub async fn get_label_data(
+    pool: &PgPool,
+    variant_id: i32,
+) -> Result<Option<LabelData>, sqlx::Error> {
+    sqlx::query_as!(
+        LabelData,
+        r#"SELECT
+               p.name AS product_name,
+               v.attributes,
+               v.barcode,
+               v.price
+           FROM product_variants v
+           JOIN products p ON p.id = v.product_id
+           WHERE v.id = $1"#,
+        variant_id
+    )
+    .fetch_optional(pool)
+    .await
+}
+
 /// Busca variantes por texto — usado en ventas cuando no hay barcode
 pub async fn search_variants(
     pool: &PgPool,
     query: &str,
 ) -> Result<Vec<VariantWithProduct>, sqlx::Error> {
     let pattern = format!("%{}%", query);
+
     sqlx::query_as!(
         VariantWithProduct,
         r#"SELECT
@@ -271,24 +354,55 @@ pub async fn create_variant(
     pool: &PgPool,
     dto: CreateVariantDto,
 ) -> Result<ProductVariant, sqlx::Error> {
-    sqlx::query_as!(
+    let mut tx = pool.begin().await?;
+
+    let cost = dto.cost.unwrap_or(0);
+    let initial_stock = dto.stock.unwrap_or(0);
+
+    let mut variant = sqlx::query_as!(
         ProductVariant,
         "INSERT INTO product_variants
              (product_id, attributes, sku, barcode, price, cost, stock, stock_min, allow_negative)
-         VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
+         VALUES ($1, $2, $3, $4, $5, $6, 0, $7, $8)
          RETURNING *",
         dto.product_id,
         dto.attributes,
         dto.sku,
         dto.barcode,
         dto.price,
-        dto.cost.unwrap_or(0),
-        dto.stock.unwrap_or(0),
+        cost,
         dto.stock_min.unwrap_or(0),
         dto.allow_negative.unwrap_or(false)
     )
-    .fetch_one(pool)
-    .await
+    .fetch_one(&mut *tx)
+    .await?;
+
+    if initial_stock > 0 {
+        variant = sqlx::query_as!(
+            ProductVariant,
+            "UPDATE product_variants SET stock = $1 WHERE id = $2 RETURNING *",
+            initial_stock,
+            variant.id
+        )
+        .fetch_one(&mut *tx)
+        .await?;
+
+        sqlx::query!(
+            "INSERT INTO inventory_movements
+                 (variant_id, movement_type, quantity, stock_before, stock_after,
+                  unit_cost, notes, created_by)
+             VALUES ($1, 'initial_stock', $2, 0, $2, $3, $4, 'system')",
+            variant.id,
+            initial_stock,
+            cost,
+            "Stock inicial al crear la variante"
+        )
+        .execute(&mut *tx)
+        .await?;
+    }
+
+    tx.commit().await?;
+    Ok(variant)
 }
 
 pub async fn update_variant(
@@ -327,7 +441,9 @@ pub async fn update_variant(
 // STOCK — operaciones atómicas con movimiento incluido
 // ============================================================
 
-/// Aplica entrada de stock y registra movimiento. Retorna variante actualizada.
+/// Aplica entrada de stock y registra movimiento.
+/// Esta operación mantiene su propia transacción porque
+/// actualmente se utiliza de forma independiente.
 pub async fn apply_stock_entry(
     pool: &PgPool,
     dto: StockEntryDto,
@@ -344,7 +460,7 @@ pub async fn apply_stock_entry(
     .await?;
 
     let stock_before = current;
-    let stock_after  = current + dto.quantity;
+    let stock_after = current + dto.quantity;
 
     // 2. Actualizar stock
     let variant = sqlx::query_as!(
@@ -374,72 +490,93 @@ pub async fn apply_stock_entry(
     .await?;
 
     tx.commit().await?;
+
     Ok(variant)
 }
 
-/// Aplica salida de stock y registra movimiento.
+/// Aplica salida de stock usando una conexión/transacción
+/// proporcionada por el llamador.
+///
+/// IMPORTANTE:
+/// No abre ni hace COMMIT de una transacción propia.
+/// Esto permite que una venta pueda hacer:
+///
+/// BEGIN
+///   -> crear venta
+///   -> descontar inventario
+///   -> registrar movimiento de caja
+/// COMMIT
+///
+/// Si algo falla, el llamador puede hacer ROLLBACK de todo.
 pub async fn apply_stock_out(
-    pool: &PgPool,
+    conn: &mut PgConnection,
     dto: StockOutDto,
     movement_type: MovementType,
 ) -> Result<ProductVariant, sqlx::Error> {
-    let mut tx = pool.begin().await?;
-
+    // 1. Bloquear la variante y obtener el stock actual
     let row = sqlx::query!(
-        "SELECT stock, allow_negative FROM product_variants WHERE id = $1 FOR UPDATE",
+        "SELECT stock, allow_negative
+         FROM product_variants
+         WHERE id = $1
+         FOR UPDATE",
         dto.variant_id
     )
-    .fetch_one(&mut *tx)
+    .fetch_one(&mut *conn)
     .await?;
 
     let stock_before = row.stock;
-    let stock_after  = stock_before - dto.quantity;
+    let stock_after = stock_before - dto.quantity;
 
-    // Bloquear si no permite negativos
+    // 2. Validar stock negativo
     if stock_after < 0 && !row.allow_negative {
-        return Err(sqlx::Error::RowNotFound); // el service convierte esto en error amigable
+        return Err(sqlx::Error::RowNotFound);
     }
 
+    // 3. Actualizar stock
     let variant = sqlx::query_as!(
         ProductVariant,
-        "UPDATE product_variants SET stock = $1 WHERE id = $2 RETURNING *",
+        "UPDATE product_variants
+         SET stock = $1
+         WHERE id = $2
+         RETURNING *",
         stock_after,
         dto.variant_id
     )
-    .fetch_one(&mut *tx)
+    .fetch_one(&mut *conn)
     .await?;
 
+    // 4. Registrar movimiento vinculado a la venta si existe sale_id
     sqlx::query!(
         "INSERT INTO inventory_movements
-             (variant_id, movement_type, quantity, stock_before, stock_after, unit_cost, notes, created_by)
-         VALUES ($1, $2, $3, $4, $5, 0, $6, $7)",
+             (variant_id, movement_type, quantity, stock_before, stock_after,
+              unit_cost, sale_id, reason, notes, created_by)
+         VALUES ($1, $2, $3, $4, $5, 0, $6, $7, $8, $9)",
         dto.variant_id,
         movement_type as MovementType,
         dto.quantity,
         stock_before,
         stock_after,
+        dto.sale_id,
+        dto.reason as Option<MovementReason>,
         dto.notes,
         dto.created_by.as_deref().unwrap_or("system")
     )
-    .execute(&mut *tx)
+    .execute(&mut *conn)
     .await?;
 
-    tx.commit().await?;
     Ok(variant)
 }
 
-/// Ajuste por conteo físico — establece el stock al valor real contado.
+/// Ajuste por conteo físico sobre la conexión/transacción del llamador.
 pub async fn apply_stock_adjustment(
-    pool: &PgPool,
+    conn: &mut PgConnection,
     dto: StockAdjustmentDto,
 ) -> Result<ProductVariant, sqlx::Error> {
-    let mut tx = pool.begin().await?;
-
     let stock_before = sqlx::query_scalar!(
         "SELECT stock FROM product_variants WHERE id = $1 FOR UPDATE",
         dto.variant_id
     )
-    .fetch_one(&mut *tx)
+    .fetch_one(&mut *conn)
     .await?;
 
     let diff = (dto.actual_stock - stock_before).abs();
@@ -450,28 +587,44 @@ pub async fn apply_stock_adjustment(
         dto.actual_stock,
         dto.variant_id
     )
-    .fetch_one(&mut *tx)
+    .fetch_one(&mut *conn)
     .await?;
 
     // Solo registrar movimiento si hubo diferencia
     if diff > 0 {
         sqlx::query!(
             "INSERT INTO inventory_movements
-                 (variant_id, movement_type, quantity, stock_before, stock_after, unit_cost, notes, created_by)
-             VALUES ($1, 'adjustment', $2, $3, $4, 0, $5, $6)",
+                 (variant_id, movement_type, quantity, stock_before, stock_after,
+                  unit_cost, reason, notes, created_by)
+             VALUES ($1, 'adjustment', $2, $3, $4, 0, $5, $6, $7)",
             dto.variant_id,
             diff,
             stock_before,
             dto.actual_stock,
+            dto.reason as Option<MovementReason>,
             dto.notes,
             dto.created_by.as_deref().unwrap_or("system")
         )
-        .execute(&mut *tx)
+        .execute(&mut *conn)
         .await?;
     }
 
-    tx.commit().await?;
     Ok(variant)
+}
+
+pub async fn next_barcode_seq(pool: &PgPool) -> Result<i64, sqlx::Error> {
+    sqlx::query_scalar!("SELECT nextval('internal_barcode_seq') AS \"nextval!\"")
+        .fetch_one(pool)
+        .await
+}
+
+pub async fn barcode_exists(pool: &PgPool, barcode: &str) -> Result<bool, sqlx::Error> {
+    sqlx::query_scalar!(
+        "SELECT EXISTS(SELECT 1 FROM product_variants WHERE barcode = $1) AS \"exists!\"",
+        barcode
+    )
+    .fetch_one(pool)
+    .await
 }
 
 // ============================================================
@@ -482,9 +635,9 @@ pub async fn get_kardex(
     pool: &PgPool,
     filter: &KardexFilterDto,
 ) -> Result<(Vec<MovementWithDetails>, i64), sqlx::Error> {
-    let page      = filter.page.unwrap_or(1).max(1);
+    let page = filter.page.unwrap_or(1).max(1);
     let page_size = filter.page_size.unwrap_or(50).clamp(1, 200);
-    let offset    = (page - 1) * page_size;
+    let offset = (page - 1) * page_size;
 
     let rows = sqlx::query_as!(
         MovementWithDetails,
@@ -492,7 +645,9 @@ pub async fn get_kardex(
                m.id, m.variant_id,
                m.movement_type AS "movement_type: MovementType",
                m.quantity, m.stock_before, m.stock_after,
-               m.unit_cost, m.notes, m.created_by, m.created_at,
+               m.unit_cost, m.sale_id, m.purchase_id,
+               m.reason AS "reason?: MovementReason",
+               m.notes, m.created_by, m.created_at,
                p.name  AS product_name,
                v.attributes, v.sku, v.barcode
            FROM inventory_movements m
@@ -541,23 +696,98 @@ pub async fn get_kardex(
 // ALERTAS DE STOCK
 // ============================================================
 
-pub async fn get_low_stock_variants(pool: &PgPool) -> Result<Vec<ProductVariant>, sqlx::Error> {
+pub async fn get_low_stock_items(pool: &PgPool) -> Result<Vec<LowStockItemDto>, sqlx::Error> {
     sqlx::query_as!(
-        ProductVariant,
-        "SELECT * FROM product_variants
-         WHERE is_active = TRUE AND stock <= stock_min
-         ORDER BY stock ASC"
+        LowStockItemDto,
+        r#"SELECT
+               v.id AS variant_id,
+               p.name AS product_name,
+               v.attributes,
+               v.barcode,
+               v.stock,
+               v.stock_min,
+               CASE WHEN v.stock <= 0 THEN 'out_of_stock' ELSE 'low' END AS "stock_status!"
+           FROM product_variants v
+           JOIN products p ON p.id = v.product_id
+           WHERE v.is_active = TRUE
+             AND p.is_active = TRUE
+             AND v.stock <= v.stock_min
+           ORDER BY v.stock ASC, p.name ASC"#
     )
     .fetch_all(pool)
     .await
 }
 
-pub async fn get_out_of_stock_variants(pool: &PgPool) -> Result<Vec<ProductVariant>, sqlx::Error> {
+pub async fn get_inventory_value(pool: &PgPool) -> Result<InventoryValueDto, sqlx::Error> {
     sqlx::query_as!(
-        ProductVariant,
-        "SELECT * FROM product_variants
-         WHERE is_active = TRUE AND stock <= 0
-         ORDER BY id ASC"
+        InventoryValueDto,
+        r#"SELECT
+               COALESCE(
+                   SUM(GREATEST(v.stock, 0)::BIGINT * v.cost)
+                       FILTER (WHERE v.cost > 0), 0
+               )::BIGINT AS "value_at_cost!",
+               COALESCE(
+                   SUM(GREATEST(v.stock, 0)::BIGINT * v.price)
+                       FILTER (WHERE v.cost > 0), 0
+               )::BIGINT AS "potential_sale_value!",
+               COUNT(*) FILTER (WHERE v.cost = 0 AND v.stock > 0)
+                   AS "variants_without_cost!",
+               COUNT(*) FILTER (WHERE v.stock < 0)
+                   AS "negative_stock_variants!",
+               COUNT(*) FILTER (WHERE v.cost > 0)
+                   AS "variants_valued!"
+           FROM product_variants v
+           JOIN products p ON p.id = v.product_id
+           WHERE v.is_active = TRUE
+             AND p.is_active = TRUE"#
+    )
+    .fetch_one(pool)
+    .await
+}
+
+pub async fn get_product_stock_stats(
+    pool: &PgPool,
+    product_ids: &[i32],
+) -> Result<Vec<ProductStockStatsDto>, sqlx::Error> {
+    sqlx::query_as!(
+        ProductStockStatsDto,
+        r#"SELECT
+               product_id AS "product_id!",
+               COUNT(*) AS "variant_count!",
+               COALESCE(SUM(stock), 0)::BIGINT AS "total_stock!",
+               COALESCE(MIN(stock_min), 0) AS "min_stock_min!"
+           FROM product_variants
+           WHERE product_id = ANY($1)
+           GROUP BY product_id"#,
+        product_ids
+    )
+    .fetch_all(pool)
+    .await
+}
+
+pub async fn get_export_rows(pool: &PgPool) -> Result<Vec<ExportVariantRow>, sqlx::Error> {
+    sqlx::query_as!(
+        ExportVariantRow,
+        r#"SELECT
+               v.id AS variant_id,
+               p.id AS product_id,
+               p.name AS product_name,
+               p.brand,
+               c.name AS category_name,
+               p.description,
+               v.sku,
+               v.barcode,
+               v.price,
+               v.cost,
+               v.stock,
+               v.stock_min,
+               v.attributes,
+               v.allow_negative,
+               (v.is_active AND p.is_active) AS "is_active!"
+           FROM product_variants v
+           JOIN products p ON p.id = v.product_id
+           JOIN categories c ON c.id = p.category_id
+           ORDER BY c.name, p.name, v.id"#
     )
     .fetch_all(pool)
     .await

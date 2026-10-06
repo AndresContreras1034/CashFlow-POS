@@ -1,0 +1,68 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "SELECT\n               s.id, s.opening_amount, s.status, s.opened_by,\n               s.opening_notes, s.opened_at,\n               COALESCE(SUM(m.amount) FILTER (\n                   WHERE m.movement_type IN ('manual_in', 'sale_in')\n               ), 0)::BIGINT AS \"total_in!\",\n               COALESCE(SUM(m.amount) FILTER (\n                   WHERE m.movement_type IN ('manual_out', 'sale_out')\n               ), 0)::BIGINT AS \"total_out!\",\n               (s.opening_amount\n                   + COALESCE(SUM(m.amount) FILTER (\n                       WHERE m.movement_type IN ('manual_in', 'sale_in')\n                     ), 0)\n                   - COALESCE(SUM(m.amount) FILTER (\n                       WHERE m.movement_type IN ('manual_out', 'sale_out')\n                     ), 0))::BIGINT AS \"current_balance!\"\n           FROM cash_sessions s\n           LEFT JOIN cash_movements m ON m.session_id = s.id\n           WHERE s.status = 'open'\n           GROUP BY s.id",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "id",
+        "type_info": "Int4"
+      },
+      {
+        "ordinal": 1,
+        "name": "opening_amount",
+        "type_info": "Int8"
+      },
+      {
+        "ordinal": 2,
+        "name": "status",
+        "type_info": "Varchar"
+      },
+      {
+        "ordinal": 3,
+        "name": "opened_by",
+        "type_info": "Varchar"
+      },
+      {
+        "ordinal": 4,
+        "name": "opening_notes",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 5,
+        "name": "opened_at",
+        "type_info": "Timestamptz"
+      },
+      {
+        "ordinal": 6,
+        "name": "total_in!",
+        "type_info": "Int8"
+      },
+      {
+        "ordinal": 7,
+        "name": "total_out!",
+        "type_info": "Int8"
+      },
+      {
+        "ordinal": 8,
+        "name": "current_balance!",
+        "type_info": "Int8"
+      }
+    ],
+    "parameters": {
+      "Left": []
+    },
+    "nullable": [
+      false,
+      false,
+      false,
+      false,
+      true,
+      false,
+      null,
+      null,
+      null
+    ]
+  },
+  "hash": "6bb7f6f7c6c99b178d151b215817e709264ae6d56ba5588d2a4005093e48d157"
+}

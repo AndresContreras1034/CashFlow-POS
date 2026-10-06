@@ -1,0 +1,69 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "INSERT INTO sale_items (sale_id, variant_id, quantity, unit_price, discount, tax, subtotal)\n             VALUES ($1, $2, $3, $4, $5, 0, $6)\n             RETURNING *",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "id",
+        "type_info": "Int4"
+      },
+      {
+        "ordinal": 1,
+        "name": "sale_id",
+        "type_info": "Int4"
+      },
+      {
+        "ordinal": 2,
+        "name": "variant_id",
+        "type_info": "Int4"
+      },
+      {
+        "ordinal": 3,
+        "name": "quantity",
+        "type_info": "Int4"
+      },
+      {
+        "ordinal": 4,
+        "name": "unit_price",
+        "type_info": "Int8"
+      },
+      {
+        "ordinal": 5,
+        "name": "discount",
+        "type_info": "Int8"
+      },
+      {
+        "ordinal": 6,
+        "name": "tax",
+        "type_info": "Int8"
+      },
+      {
+        "ordinal": 7,
+        "name": "subtotal",
+        "type_info": "Int8"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Int4",
+        "Int4",
+        "Int4",
+        "Int8",
+        "Int8",
+        "Int8"
+      ]
+    },
+    "nullable": [
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false
+    ]
+  },
+  "hash": "eab72750b6f3f484cb73a34d90f60fbf5f4b49ef49696e0c0af76a82be33bcc9"
+}

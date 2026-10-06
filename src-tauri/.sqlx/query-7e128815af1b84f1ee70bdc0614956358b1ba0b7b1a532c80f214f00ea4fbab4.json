@@ -1,0 +1,14 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "UPDATE stocktakes SET status = 'applied', applied_at = NOW() WHERE id = $1",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Int4"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "7e128815af1b84f1ee70bdc0614956358b1ba0b7b1a532c80f214f00ea4fbab4"
+}

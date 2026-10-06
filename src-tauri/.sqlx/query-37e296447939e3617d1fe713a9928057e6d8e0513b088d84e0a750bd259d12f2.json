@@ -1,0 +1,40 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "SELECT\n               p.name AS product_name,\n               v.attributes,\n               v.barcode,\n               v.price\n           FROM product_variants v\n           JOIN products p ON p.id = v.product_id\n           WHERE v.id = $1",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "product_name",
+        "type_info": "Varchar"
+      },
+      {
+        "ordinal": 1,
+        "name": "attributes",
+        "type_info": "Jsonb"
+      },
+      {
+        "ordinal": 2,
+        "name": "barcode",
+        "type_info": "Varchar"
+      },
+      {
+        "ordinal": 3,
+        "name": "price",
+        "type_info": "Int8"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Int4"
+      ]
+    },
+    "nullable": [
+      false,
+      false,
+      true,
+      false
+    ]
+  },
+  "hash": "37e296447939e3617d1fe713a9928057e6d8e0513b088d84e0a750bd259d12f2"
+}

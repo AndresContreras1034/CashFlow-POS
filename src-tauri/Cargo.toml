@@ -15,23 +15,101 @@ tauri-build = { version = "2", features = [] }
 [dependencies]
 tauri = { version = "2", features = [] }
 tauri-plugin-opener = "2"
+tauri-plugin-dialog = "2"
+
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"
 
+# ==========================================
 # Base de datos
-sqlx = { version = "0.8", features = ["postgres", "runtime-tokio", "macros", "migrate", "chrono", "uuid", "json"] }
+# ==========================================
+
+sqlx = {
+    version = "0.8",
+    features = [
+        "postgres",
+        "runtime-tokio",
+        "macros",
+        "migrate",
+        "chrono",
+        "uuid",
+        "json"
+    ]
+}
+
 tokio = { version = "1", features = ["full"] }
 
+# ==========================================
 # Utilidades
+# ==========================================
+
 chrono = { version = "0.4", features = ["serde"] }
-uuid = { version = "1", features = ["v4", "serde"] }
+
+uuid = {
+    version = "1",
+    features = ["v4", "serde"]
+}
+
 thiserror = "1"
 anyhow = "1"
-rust_decimal = { version = "1", features = ["serde-with-str"] }
 
-# Configuración desde .env
+rust_decimal = {
+    version = "1",
+    features = ["serde-with-str"]
+}
+
+# ==========================================
+# Configuración
+# ==========================================
+
 dotenvy = "0.15"
 
+# ==========================================
 # Logging
+# ==========================================
+
 tracing = "0.1"
-tracing-subscriber = { version = "0.3", features = ["env-filter"] }
+
+tracing-subscriber = {
+    version = "0.3",
+    features = ["env-filter"]
+}
+
+# ==========================================
+# Excel / Importación masiva
+# ==========================================
+
+calamine = "0.26"
+
+# ==========================================
+# Logo / imágenes para ESC/POS
+# ==========================================
+#
+# Se utiliza únicamente para leer el JPG del
+# logo y convertirlo a bitmap monocromático.
+#
+
+image = {
+    version = "0.25",
+    default-features = false,
+    features = ["jpeg"]
+}
+rust_xlsxwriter = "0.99.1"
+
+# ==========================================
+# Impresión térmica ESC/POS
+# Windows Spooler
+# ==========================================
+
+[target.'cfg(windows)'.dependencies]
+
+winapi = {
+    version = "0.3",
+features = [
+    "winspool",
+    "winnt",
+    "minwindef",
+    "handleapi",
+    "errhandlingapi"
+]
+}

@@ -1,0 +1,64 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "SELECT * FROM sale_items WHERE sale_id = $1 ORDER BY id ASC",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "id",
+        "type_info": "Int4"
+      },
+      {
+        "ordinal": 1,
+        "name": "sale_id",
+        "type_info": "Int4"
+      },
+      {
+        "ordinal": 2,
+        "name": "variant_id",
+        "type_info": "Int4"
+      },
+      {
+        "ordinal": 3,
+        "name": "quantity",
+        "type_info": "Int4"
+      },
+      {
+        "ordinal": 4,
+        "name": "unit_price",
+        "type_info": "Int8"
+      },
+      {
+        "ordinal": 5,
+        "name": "discount",
+        "type_info": "Int8"
+      },
+      {
+        "ordinal": 6,
+        "name": "tax",
+        "type_info": "Int8"
+      },
+      {
+        "ordinal": 7,
+        "name": "subtotal",
+        "type_info": "Int8"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Int4"
+      ]
+    },
+    "nullable": [
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false
+    ]
+  },
+  "hash": "4fee968fa5188687b917f6701d7239db4088c3c1e9027893cb834edc30fe2df2"
+}

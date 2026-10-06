@@ -6,4 +6,6 @@ pub mod debts;
 pub mod inventory;
 pub mod reports;
 pub mod sales;
+pub mod settings; // ← agregar esta línea
+pub mod stocktake;
 pub mod suppliers;

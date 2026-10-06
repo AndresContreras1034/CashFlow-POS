@@ -1,0 +1,52 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "SELECT\n               COUNT(*) FILTER (WHERE l.counted_stock IS NULL) AS \"uncounted!\",\n               COUNT(*) FILTER (WHERE l.counted_stock IS NOT NULL\n                                  AND l.counted_stock = v.stock) AS \"matching!\",\n               COUNT(*) FILTER (WHERE l.counted_stock IS NOT NULL\n                                  AND l.counted_stock <> v.stock) AS \"with_difference!\",\n               COALESCE(SUM(l.counted_stock::BIGINT - v.stock::BIGINT)\n                        FILTER (WHERE l.counted_stock > v.stock), 0)::BIGINT AS \"surplus_units!\",\n               COALESCE(SUM(v.stock::BIGINT - l.counted_stock::BIGINT)\n                        FILTER (WHERE l.counted_stock < v.stock), 0)::BIGINT AS \"shortage_units!\",\n               COUNT(*) FILTER (WHERE v.stock <> l.expected_stock) AS \"moved_during_count!\"\n           FROM stocktake_lines l\n           JOIN product_variants v ON v.id = l.variant_id\n           WHERE l.stocktake_id = $1",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "uncounted!",
+        "type_info": "Int8"
+      },
+      {
+        "ordinal": 1,
+        "name": "matching!",
+        "type_info": "Int8"
+      },
+      {
+        "ordinal": 2,
+        "name": "with_difference!",
+        "type_info": "Int8"
+      },
+      {
+        "ordinal": 3,
+        "name": "surplus_units!",
+        "type_info": "Int8"
+      },
+      {
+        "ordinal": 4,
+        "name": "shortage_units!",
+        "type_info": "Int8"
+      },
+      {
+        "ordinal": 5,
+        "name": "moved_during_count!",
+        "type_info": "Int8"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Int4"
+      ]
+    },
+    "nullable": [
+      null,
+      null,
+      null,
+      null,
+      null,
+      null
+    ]
+  },
+  "hash": "ae09f39543caea7f803e83c29d65a4a04de82e052f7b1e76d59d4fdf37464f29"
+}

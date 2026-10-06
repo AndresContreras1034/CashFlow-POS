@@ -1,0 +1,557 @@
+/* =========================================================
+   SALES HISTORY
+   ========================================================= */
+
+.sales-history-page {
+  width: 100%;
+  max-width: 1400px;
+  margin: 0 auto;
+  padding: 28px 32px 40px;
+  color: var(--text-primary);
+}
+
+.sales-history-page h1 {
+  margin: 0 0 24px;
+  font-size: 28px;
+  font-weight: 700;
+  letter-spacing: -0.02em;
+}
+
+/* =========================================================
+   GENERAL
+   ========================================================= */
+
+.sales-history-meta {
+  color: var(--text-secondary);
+  font-size: 14px;
+  margin: 0;
+}
+
+.form-error {
+  margin-bottom: 18px;
+  padding: 12px 14px;
+  border: 1px solid var(--stock-out-dim);
+  border-radius: var(--radius-sm);
+  background: var(--danger-dim);
+  color: var(--danger);
+  font-size: 14px;
+}
+
+/* =========================================================
+   FILTERS
+   ========================================================= */
+
+.sales-history-filters {
+  display: grid;
+  grid-template-columns: 1fr 1fr 1fr auto;
+  align-items: end;
+  gap: 16px;
+  margin-bottom: 22px;
+  padding: 20px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  background: var(--bg-surface);
+}
+
+.form-field {
+  display: flex;
+  flex-direction: column;
+  gap: 7px;
+}
+
+.form-field label {
+  color: var(--text-secondary);
+  font-size: 13px;
+  font-weight: 600;
+}
+
+.form-input {
+  width: 100%;
+  min-height: 42px;
+  padding: 9px 12px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  outline: none;
+  background: var(--bg-elevated);
+  color: var(--text-primary);
+  font-family: var(--font-sans);
+  font-size: 14px;
+  transition:
+    border-color var(--transition),
+    background var(--transition),
+    box-shadow var(--transition);
+}
+
+.form-input:hover {
+  border-color: var(--border-subtle);
+}
+
+.form-input:focus {
+  border-color: var(--accent);
+  outline: 2px solid var(--accent-dim);
+  outline-offset: 1px;
+}
+
+.sales-history-filter-actions {
+  display: flex;
+  gap: 10px;
+}
+
+/* =========================================================
+   BUTTONS
+   ========================================================= */
+
+.btn {
+  min-height: 42px;
+  padding: 9px 16px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  background: var(--bg-elevated);
+  color: var(--text-primary);
+  font-family: var(--font-sans);
+  font-size: 14px;
+  font-weight: 600;
+  cursor: pointer;
+  transition:
+    background var(--transition),
+    border-color var(--transition),
+    transform var(--transition),
+    opacity var(--transition);
+}
+
+.btn:hover:not(:disabled) {
+  background: var(--bg-hover);
+  border-color: var(--border-subtle);
+}
+
+.btn:active:not(:disabled) {
+  transform: translateY(1px);
+}
+
+.btn:disabled {
+  cursor: not-allowed;
+  opacity: 0.45;
+}
+
+.btn-primary {
+  border-color: var(--accent);
+  background: var(--accent);
+  color: #fff;
+}
+
+.btn-primary:hover:not(:disabled) {
+  background: var(--accent-hover);
+  border-color: var(--accent-hover);
+}
+
+/* =========================================================
+   TABLE CARD
+   ========================================================= */
+
+.sales-history-card {
+  overflow: hidden;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  background: var(--bg-surface);
+}
+
+.sales-history-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 14px;
+}
+
+.sales-history-table thead {
+  background: var(--bg-elevated);
+}
+
+.sales-history-table th {
+  padding: 14px 16px;
+  border-bottom: 1px solid var(--border);
+  color: var(--text-secondary);
+  font-size: 12px;
+  font-weight: 700;
+  text-align: left;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+
+.sales-history-table td {
+  padding: 15px 16px;
+  border-bottom: 1px solid var(--border-subtle);
+  color: var(--text-primary);
+  vertical-align: middle;
+}
+
+.sales-history-table tbody tr:last-child td {
+  border-bottom: none;
+}
+
+/* =========================================================
+   SALE ROW
+   ========================================================= */
+
+.sales-history-row {
+  cursor: pointer;
+  transition:
+    background var(--transition),
+    transform var(--transition);
+}
+
+.sales-history-row:hover {
+  background: var(--bg-hover);
+}
+
+.sales-history-row td:first-child {
+  font-weight: 700;
+}
+
+/* =========================================================
+   STATUS
+   ========================================================= */
+
+.sales-history-status {
+  display: inline-flex;
+  align-items: center;
+  min-height: 27px;
+  padding: 4px 10px;
+  border-radius: 999px;
+  font-size: 12px;
+  font-weight: 700;
+}
+
+.status-completed {
+  background: var(--stock-ok-dim);
+  color: var(--stock-ok);
+}
+
+.status-cancelled {
+  background: var(--stock-out-dim);
+  color: var(--danger);
+}
+
+.status-refunded {
+  background: var(--stock-low-dim);
+  color: var(--warning);
+}
+
+/* =========================================================
+   PAGINATION
+   ========================================================= */
+
+.sales-history-pagination {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  padding: 16px 18px;
+  border-top: 1px solid var(--border);
+  background: var(--bg-elevated);
+}
+
+.sales-history-pagination span {
+  color: var(--text-secondary);
+  font-size: 13px;
+  font-weight: 600;
+}
+
+/* =========================================================
+   MODAL BACKDROP
+   ========================================================= */
+
+.sales-history-modal-backdrop {
+  position: fixed;
+  z-index: 1000;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 24px;
+  background: var(--overlay-bg);
+}
+
+/* =========================================================
+   MODAL
+   ========================================================= */
+
+.sales-history-modal {
+  width: min(900px, 100%);
+  max-height: calc(100vh - 48px);
+  overflow-y: auto;
+  padding: 24px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  background: var(--bg-surface);
+  box-shadow: none;
+}
+
+.sales-history-modal::-webkit-scrollbar {
+  width: 8px;
+}
+
+.sales-history-modal::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+.sales-history-modal::-webkit-scrollbar-thumb {
+  border-radius: 999px;
+  background: var(--border);
+}
+
+.sales-history-modal::-webkit-scrollbar-thumb:hover {
+  background: var(--border-subtle);
+}
+
+/* =========================================================
+   MODAL HEADER
+   ========================================================= */
+
+.sales-history-modal-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  margin-bottom: 18px;
+}
+
+.sales-history-modal-header h2 {
+  margin: 0;
+  font-size: 22px;
+  font-weight: 700;
+  color: var(--text-primary);
+}
+
+.sales-history-modal-actions {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+/* =========================================================
+   PRINT SUCCESS
+   ========================================================= */
+
+.sales-history-print-success {
+  margin-bottom: 16px;
+  padding: 11px 14px;
+  border: 1px solid var(--stock-ok-dim);
+  border-radius: var(--radius-sm);
+  background: var(--success-dim);
+  color: var(--stock-ok);
+  font-size: 14px;
+  font-weight: 600;
+}
+
+/* =========================================================
+   DETAIL META
+   ========================================================= */
+
+.sales-history-modal > .sales-history-meta {
+  margin-bottom: 20px;
+  padding-bottom: 18px;
+  border-bottom: 1px solid var(--border);
+}
+
+/* =========================================================
+   DETAIL TABLE
+   ========================================================= */
+
+.sales-history-modal .sales-history-table {
+  margin-bottom: 22px;
+}
+
+.sales-history-modal .sales-history-table th,
+.sales-history-modal .sales-history-table td {
+  padding: 12px 13px;
+}
+
+.sales-history-modal .sales-history-table td:nth-child(2),
+.sales-history-modal .sales-history-table td:nth-child(3),
+.sales-history-modal .sales-history-table td:nth-child(4),
+.sales-history-modal .sales-history-table td:nth-child(5) {
+  text-align: right;
+}
+
+.sales-history-modal .sales-history-table th:nth-child(2),
+.sales-history-modal .sales-history-table th:nth-child(3),
+.sales-history-modal .sales-history-table th:nth-child(4),
+.sales-history-modal .sales-history-table th:nth-child(5) {
+  text-align: right;
+}
+
+/* =========================================================
+   TOTALS
+   ========================================================= */
+
+.sales-history-totals {
+  width: min(380px, 100%);
+  margin-left: auto;
+  margin-bottom: 24px;
+  padding: 14px 16px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  background: var(--bg-elevated);
+}
+
+.sales-history-totals > div {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 20px;
+  padding: 7px 0;
+  color: var(--text-secondary);
+  font-size: 14px;
+}
+
+.sales-history-totals > div span:last-child {
+  color: var(--text-primary);
+  font-weight: 600;
+}
+
+.sales-history-total-final {
+  margin-top: 8px;
+  padding-top: 13px !important;
+  border-top: 1px solid var(--border);
+  color: var(--text-primary) !important;
+  font-size: 18px !important;
+  font-weight: 700;
+}
+
+.sales-history-total-final span:last-child {
+  color: var(--accent) !important;
+  font-size: 20px;
+}
+
+/* =========================================================
+   PAYMENTS
+   ========================================================= */
+
+.sales-history-modal h3 {
+  margin: 0 0 10px;
+  font-size: 16px;
+  color: var(--text-primary);
+}
+
+.sales-history-payments {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin: 0 0 20px;
+  padding: 0;
+  list-style: none;
+}
+
+.sales-history-payments li {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 11px 13px;
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-sm);
+  background: var(--bg-elevated);
+  color: var(--text-secondary);
+  font-size: 14px;
+}
+
+/* =========================================================
+   NOTES
+   ========================================================= */
+
+.sales-history-notes {
+  margin: 0;
+  padding: 13px 14px;
+  border-left: 3px solid var(--accent);
+  background: var(--bg-elevated);
+  color: var(--text-secondary);
+  font-size: 14px;
+  line-height: 1.5;
+}
+
+/* =========================================================
+   RESPONSIVE
+   ========================================================= */
+
+@media (max-width: 900px) {
+  .sales-history-page {
+    padding: 22px 20px 32px;
+  }
+
+  .sales-history-filters {
+    grid-template-columns: 1fr 1fr;
+  }
+
+  .sales-history-filter-actions {
+    grid-column: 1 / -1;
+  }
+}
+
+@media (max-width: 700px) {
+  .sales-history-page {
+    padding: 18px 14px 28px;
+  }
+
+  .sales-history-page h1 {
+    font-size: 24px;
+  }
+
+  .sales-history-filters {
+    grid-template-columns: 1fr;
+    padding: 16px;
+  }
+
+  .sales-history-filter-actions {
+    grid-column: auto;
+  }
+
+  .sales-history-filter-actions .btn {
+    flex: 1;
+  }
+
+  .sales-history-card {
+    overflow-x: auto;
+  }
+
+  .sales-history-table {
+    min-width: 650px;
+  }
+
+  .sales-history-pagination {
+    min-width: 650px;
+  }
+
+  .sales-history-modal-backdrop {
+    align-items: flex-start;
+    padding: 12px;
+  }
+
+  .sales-history-modal {
+    max-height: calc(100vh - 24px);
+    padding: 18px;
+  }
+
+  .sales-history-modal-header {
+    align-items: flex-start;
+  }
+
+  .sales-history-modal-actions {
+    flex-shrink: 0;
+  }
+}
+
+@media (max-width: 480px) {
+  .sales-history-modal-header {
+    flex-direction: column;
+  }
+
+  .sales-history-modal-actions {
+    width: 100%;
+  }
+
+  .sales-history-modal-actions .btn-primary {
+    flex: 1;
+  }
+
+  .sales-history-totals {
+    width: 100%;
+  }
+}

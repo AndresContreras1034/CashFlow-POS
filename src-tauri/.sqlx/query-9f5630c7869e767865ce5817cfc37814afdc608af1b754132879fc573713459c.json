@@ -1,0 +1,79 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "SELECT\n               id,\n               session_id,\n               movement_type AS \"movement_type: CashMovementType\",\n               amount,\n               sale_id,\n               notes,\n               created_by,\n               created_at\n           FROM cash_movements\n           WHERE ($1::INT  IS NULL OR session_id = $1)\n             AND ($2::TEXT IS NULL OR movement_type::TEXT = $2)\n           ORDER BY created_at DESC\n           LIMIT $3 OFFSET $4",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "id",
+        "type_info": "Int4"
+      },
+      {
+        "ordinal": 1,
+        "name": "session_id",
+        "type_info": "Int4"
+      },
+      {
+        "ordinal": 2,
+        "name": "movement_type: CashMovementType",
+        "type_info": {
+          "Custom": {
+            "name": "cash_movement_type",
+            "kind": {
+              "Enum": [
+                "manual_in",
+                "manual_out",
+                "sale_in",
+                "sale_out"
+              ]
+            }
+          }
+        }
+      },
+      {
+        "ordinal": 3,
+        "name": "amount",
+        "type_info": "Int8"
+      },
+      {
+        "ordinal": 4,
+        "name": "sale_id",
+        "type_info": "Int4"
+      },
+      {
+        "ordinal": 5,
+        "name": "notes",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 6,
+        "name": "created_by",
+        "type_info": "Varchar"
+      },
+      {
+        "ordinal": 7,
+        "name": "created_at",
+        "type_info": "Timestamptz"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Int4",
+        "Text",
+        "Int8",
+        "Int8"
+      ]
+    },
+    "nullable": [
+      false,
+      false,
+      false,
+      false,
+      true,
+      true,
+      false,
+      false
+    ]
+  },
+  "hash": "9f5630c7869e767865ce5817cfc37814afdc608af1b754132879fc573713459c"
+}
