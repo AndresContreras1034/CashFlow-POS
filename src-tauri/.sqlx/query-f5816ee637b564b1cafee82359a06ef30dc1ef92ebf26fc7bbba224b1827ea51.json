@@ -1,6 +1,6 @@
 {
   "db_name": "PostgreSQL",
-  "query": "UPDATE app_settings\n         SET business_name               = COALESCE($1, business_name),\n             tax_id                      = COALESCE($2, tax_id),\n             address                     = COALESCE($3, address),\n             phone                       = COALESCE($4, phone),\n             email                       = COALESCE($5, email),\n             currency                    = COALESCE($6, currency),\n             tax_rate_bps                = COALESCE($7, tax_rate_bps),\n             ticket_header               = COALESCE($8, ticket_header),\n             ticket_footer               = COALESCE($9, ticket_footer),\n             low_stock_default_threshold = COALESCE($10, low_stock_default_threshold),\n             logo_url                    = COALESCE($11, logo_url)\n         WHERE id = 1\n         RETURNING *",
+  "query": "UPDATE app_settings\n         SET business_name               = COALESCE($1, business_name),\n             tax_id                      = $2,\n             address                     = $3,\n             phone                       = $4,\n             email                       = $5,\n             currency                    = COALESCE($6, currency),\n             tax_rate_bps                = COALESCE($7, tax_rate_bps),\n             ticket_header               = $8,\n             ticket_footer               = $9,\n             low_stock_default_threshold = COALESCE($10, low_stock_default_threshold),\n             logo_url                    = $11\n         WHERE id = 1\n         RETURNING *",
   "describe": {
     "columns": [
       {
@@ -106,5 +106,5 @@
       false
     ]
   },
-  "hash": "a697d2e7c1e040b43b14380172a08ab703dea23285c77893c8dd8f76b037a256"
+  "hash": "f5816ee637b564b1cafee82359a06ef30dc1ef92ebf26fc7bbba224b1827ea51"
 }

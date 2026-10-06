@@ -261,32 +261,33 @@ export interface ExportSummaryDto {
 export interface AppSettings {
   id: number;
   business_name: string;
-  tax_id?: string;
-  address?: string;
-  phone?: string;
-  email?: string;
+  tax_id: string | null;
+  address: string | null;
+  phone: string | null;
+  email: string | null;
   currency: string;
   tax_rate_bps: number;
-  ticket_header?: string;
-  ticket_footer?: string;
+  ticket_header: string | null;
+  ticket_footer: string | null;
   low_stock_default_threshold: number;
-  logo_url?: string;
+  logo_url: string | null;
   created_at: string;
   updated_at: string;
 }
 
 export interface UpdateSettingsDto {
   business_name?: string;
-  tax_id?: string;
-  address?: string;
-  phone?: string;
-  email?: string;
+  // Nullable fields always replace current values; null clears the field.
+  tax_id: string | null;
+  address: string | null;
+  phone: string | null;
+  email: string | null;
   currency?: string;
   tax_rate_bps?: number;
-  ticket_header?: string;
-  ticket_footer?: string;
+  ticket_header: string | null;
+  ticket_footer: string | null;
   low_stock_default_threshold?: number;
-  logo_url?: string;
+  logo_url: string | null;
 }
 // ============================================================
 // CAJA
@@ -367,14 +368,6 @@ export interface CashMovementFilterDto {
   page_size?: number;
 }
 
-// Si ya existe un PaginatedResponse<T> genérico de otro módulo, no lo dupliques.
-export interface PaginatedResponse<T> {
-  data: T[];
-  total: number;
-  page: number;
-  page_size: number;
-  total_pages: number;
-}
 // ============================================================
 // VENTAS
 // ============================================================

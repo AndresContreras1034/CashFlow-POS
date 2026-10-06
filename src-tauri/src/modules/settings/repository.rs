@@ -16,16 +16,16 @@ pub async fn update_settings(
         AppSettings,
         "UPDATE app_settings
          SET business_name               = COALESCE($1, business_name),
-             tax_id                      = COALESCE($2, tax_id),
-             address                     = COALESCE($3, address),
-             phone                       = COALESCE($4, phone),
-             email                       = COALESCE($5, email),
+             tax_id                      = $2,
+             address                     = $3,
+             phone                       = $4,
+             email                       = $5,
              currency                    = COALESCE($6, currency),
              tax_rate_bps                = COALESCE($7, tax_rate_bps),
-             ticket_header               = COALESCE($8, ticket_header),
-             ticket_footer               = COALESCE($9, ticket_footer),
+             ticket_header               = $8,
+             ticket_footer               = $9,
              low_stock_default_threshold = COALESCE($10, low_stock_default_threshold),
-             logo_url                    = COALESCE($11, logo_url)
+             logo_url                    = $11
          WHERE id = 1
          RETURNING *",
         dto.business_name,

@@ -3,6 +3,11 @@ use serde::Deserialize;
 // No existe CreateSettingsDto: la fila única se siembra en la migración.
 // Solo se puede leer y actualizar.
 
+// Semántica de actualización:
+// - business_name, currency, tax_rate_bps, low_stock_default_threshold:
+//   None = no cambiar.
+// - Los campos nullable se reemplazan siempre; None = borrar (NULL).
+//   El frontend debe enviar el objeto completo.
 #[derive(Debug, Deserialize)]
 pub struct UpdateSettingsDto {
     pub business_name: Option<String>,

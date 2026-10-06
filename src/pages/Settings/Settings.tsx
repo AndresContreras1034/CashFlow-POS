@@ -118,16 +118,16 @@ export const Settings: React.FC = () => {
 
     const dto: UpdateSettingsDto = {
       business_name: form.business_name.trim(),
-      tax_id: form.tax_id.trim() || undefined,
-      address: form.address.trim() || undefined,
-      phone: form.phone.trim() || undefined,
-      email: form.email.trim() || undefined,
+      tax_id: form.tax_id.trim() || null,
+      address: form.address.trim() || null,
+      phone: form.phone.trim() || null,
+      email: form.email.trim() || null,
       currency: form.currency.trim().toUpperCase(),
       tax_rate_bps: Math.round(Number(form.tax_rate_percent) * 100),
-      ticket_header: form.ticket_header.trim() || undefined,
-      ticket_footer: form.ticket_footer.trim() || undefined,
+      ticket_header: form.ticket_header.trim() || null,
+      ticket_footer: form.ticket_footer.trim() || null,
       low_stock_default_threshold: Number(form.low_stock_default_threshold),
-      logo_url: form.logo_url.trim() || undefined,
+      logo_url: form.logo_url.trim() || null,
     };
 
     setSaving(true);
