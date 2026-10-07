@@ -1,0 +1,14 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "UPDATE license_state SET license_file = $1 WHERE id = 1",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Text"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "355f4b59958c21155415b2e0f62e3d3c810a0921e7cbe1414cfd85ec46d51824"
+}

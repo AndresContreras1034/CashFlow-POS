@@ -1,0 +1,32 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "SELECT installation_id, license_file, last_seen_at\n         FROM license_state\n         WHERE id = 1",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "installation_id",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 1,
+        "name": "license_file",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 2,
+        "name": "last_seen_at",
+        "type_info": "Timestamptz"
+      }
+    ],
+    "parameters": {
+      "Left": []
+    },
+    "nullable": [
+      false,
+      true,
+      true
+    ]
+  },
+  "hash": "0c97dbad4e8db35f19dc9320d4108c1dff3e0ab50b9f42c488a574246cfcaa64"
+}

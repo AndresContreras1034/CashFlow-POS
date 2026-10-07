@@ -1,4 +1,4 @@
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 
 use calamine::{open_workbook, Data, DataType, Reader, Xlsx};
 use serde_json::{Map, Value as JsonValue};
@@ -7,7 +7,13 @@ use sqlx::{PgConnection, PgPool};
 use crate::errors::app_error::AppError;
 use crate::modules::inventory::dto::{ImportRowResult, ImportSummaryDto};
 use crate::modules::inventory::export::IMPORT_HEADERS;
-use crate::modules::inventory::models::MovementType;
+
+/// Máximo de filas que se devuelven a la interfaz (errores y omitidas primero).
+/// Devolver 20.000 filas congelaba React al renderizar la tabla.
+const MAX_RESULT_ROWS: usize = 500;
+
+/// Filas por sentencia INSERT ... UNNEST.
+const BATCH_SIZE: usize = 5_000;
 
 // ============================================================
 // PARSEO DEL ARCHIVO
@@ -255,23 +261,216 @@ fn parse_attributes(raw: &str) -> JsonValue {
     JsonValue::Object(map)
 }
 
+/// Clave canónica de un objeto de atributos (independiente del orden de las claves).
+fn attrs_key(value: &JsonValue) -> String {
+    match value {
+        JsonValue::Object(map) => {
+            let mut entries: Vec<(&String, &JsonValue)> = map.iter().collect();
+            entries.sort_by(|a, b| a.0.cmp(b.0));
+            entries
+                .iter()
+                .map(|(key, value)| format!("{}={}", key, value))
+                .collect::<Vec<_>>()
+                .join("\u{1}")
+        }
+        other => other.to_string(),
+    }
+}
+
 // ============================================================
 // EJECUCIÓN (compartida por preview y execute)
+//
+// Estrategia:
+//   1. Parsear el Excel una vez (en un hilo bloqueante).
+//   2. Precargar de PostgreSQL, en pocas consultas con = ANY($1), todo lo
+//      que hace falta para validar: SKUs, códigos de barras, categorías,
+//      productos por nombre y atributos de variantes de esos productos.
+//   3. Validar las 20.000 filas EN MEMORIA (sin SQL por fila).
+//   4. Solo en "execute" y sin errores: insertar por lotes con UNNEST.
+//      El preview no escribe nada.
 // ============================================================
+
+struct NewProduct {
+    key: String,
+    category_key: String,
+    name: String,
+    description: Option<String>,
+    brand: Option<String>,
+}
+
+struct AcceptedVariant {
+    product_key: String,
+    attributes: JsonValue,
+    sku: Option<String>,
+    barcode: Option<String>,
+    price: i64,
+    cost: i64,
+    stock: i32,
+    stock_min: i32,
+    allow_negative: bool,
+}
+
+struct Lookups {
+    /// SKUs existentes en minúsculas (más los aceptados durante la validación).
+    skus: HashSet<String>,
+    /// Códigos de barras existentes (más los aceptados durante la validación).
+    barcodes: HashSet<String>,
+    /// nombre de categoría normalizado -> id
+    categories: HashMap<String, i32>,
+    /// nombre de producto normalizado -> id
+    products: HashMap<String, i32>,
+    /// (producto normalizado, atributos canónicos) ya ocupados
+    variant_attrs: HashSet<(String, String)>,
+}
+
+async fn load_lookups(conn: &mut PgConnection, rows: &[&ParsedRow]) -> Result<Lookups, AppError> {
+    let sku_list: Vec<String> = rows
+        .iter()
+        .filter_map(|row| row.sku.as_ref().map(|sku| sku.to_lowercase()))
+        .collect::<HashSet<_>>()
+        .into_iter()
+        .collect();
+    let barcode_list: Vec<String> = rows
+        .iter()
+        .filter_map(|row| row.barcode.clone())
+        .collect::<HashSet<_>>()
+        .into_iter()
+        .collect();
+    let product_key_list: Vec<String> = rows
+        .iter()
+        .map(|row| row.product_name.trim().to_lowercase())
+        .collect::<HashSet<_>>()
+        .into_iter()
+        .collect();
+
+    let mut skus = HashSet::new();
+    if !sku_list.is_empty() {
+        let found: Vec<String> = sqlx::query_scalar(
+            "SELECT LOWER(sku) FROM product_variants WHERE LOWER(sku) = ANY($1)",
+        )
+        .bind(&sku_list)
+        .fetch_all(&mut *conn)
+        .await
+        .map_err(AppError::from)?;
+        skus.extend(found);
+    }
+
+    let mut barcodes = HashSet::new();
+    if !barcode_list.is_empty() {
+        let found: Vec<String> =
+            sqlx::query_scalar("SELECT barcode FROM product_variants WHERE barcode = ANY($1)")
+                .bind(&barcode_list)
+                .fetch_all(&mut *conn)
+                .await
+                .map_err(AppError::from)?;
+        barcodes.extend(found);
+    }
+
+    let mut categories = HashMap::new();
+    let category_rows: Vec<(i32, String)> =
+        sqlx::query_as("SELECT id, LOWER(TRIM(name)) FROM categories ORDER BY id")
+            .fetch_all(&mut *conn)
+            .await
+            .map_err(AppError::from)?;
+    for (id, key) in category_rows {
+        categories.entry(key).or_insert(id);
+    }
+
+    let mut products: HashMap<String, i32> = HashMap::new();
+    if !product_key_list.is_empty() {
+        let product_rows: Vec<(i32, String)> = sqlx::query_as(
+            "SELECT id, LOWER(TRIM(name)) FROM products
+             WHERE LOWER(TRIM(name)) = ANY($1) ORDER BY id",
+        )
+        .bind(&product_key_list)
+        .fetch_all(&mut *conn)
+        .await
+        .map_err(AppError::from)?;
+        for (id, key) in product_rows {
+            products.entry(key).or_insert(id);
+        }
+    }
+
+    let mut variant_attrs = HashSet::new();
+    if !products.is_empty() {
+        let id_to_key: HashMap<i32, &String> = products.iter().map(|(k, id)| (*id, k)).collect();
+        let product_ids: Vec<i32> = id_to_key.keys().copied().collect();
+        let variant_rows: Vec<(i32, JsonValue)> = sqlx::query_as(
+            "SELECT product_id, attributes FROM product_variants WHERE product_id = ANY($1)",
+        )
+        .bind(&product_ids)
+        .fetch_all(&mut *conn)
+        .await
+        .map_err(AppError::from)?;
+        for (product_id, attributes) in variant_rows {
+            if let Some(key) = id_to_key.get(&product_id) {
+                variant_attrs.insert(((*key).clone(), attrs_key(&attributes)));
+            }
+        }
+    }
+
+    Ok(Lookups {
+        skus,
+        barcodes,
+        categories,
+        products,
+        variant_attrs,
+    })
+}
+
+fn limit_rows(mut rows: Vec<ImportRowResult>) -> Vec<ImportRowResult> {
+    if rows.len() <= MAX_RESULT_ROWS {
+        return rows;
+    }
+    // Estable: errores primero, luego omitidas, luego el resto (en orden de fila).
+    rows.sort_by_key(|row| match row.status.as_str() {
+        "error" => 0u8,
+        "skipped_duplicate_sku" => 1,
+        _ => 2,
+    });
+    rows.truncate(MAX_RESULT_ROWS);
+    rows.sort_by_key(|row| row.row_number);
+    rows
+}
 
 async fn run_import(
     pool: &PgPool,
     path: &str,
     dry_run: bool,
 ) -> Result<ImportSummaryDto, AppError> {
-    let parsed = parse_workbook(path)?;
+    // Parseo del XLSX: CPU + I/O síncrono. Fuera del hilo async de tokio.
+    let path_owned = path.to_string();
+    let parsed = tokio::task::spawn_blocking(move || parse_workbook(&path_owned))
+        .await
+        .map_err(|e| AppError::internal(&format!("Falló la lectura del Excel: {}", e)))??;
 
     let mut tx = pool.begin().await.map_err(AppError::from)?;
 
-    let mut category_cache: HashMap<String, i32> = HashMap::new();
-    let mut product_cache: HashMap<String, (i32, i32)> = HashMap::new(); // nombre_lower -> (id, category_id)
+    let decimals: i16 =
+        sqlx::query_scalar("SELECT currency_decimals FROM app_settings WHERE id = 1")
+            .fetch_one(&mut *tx)
+            .await
+            .map_err(AppError::from)?;
+    let money_step: i64 = if decimals == 0 { 100 } else { 1 };
 
-    let mut result_rows = Vec::new();
+    let mut lookups = {
+        let ok_rows: Vec<&ParsedRow> = parsed
+            .iter()
+            .filter_map(|outcome| match outcome {
+                RowOutcome::Ok(row) => Some(row),
+                RowOutcome::Error { .. } => None,
+            })
+            .collect();
+        load_lookups(&mut *tx, &ok_rows).await?
+    };
+
+    let mut new_category_keys: HashSet<String> = HashSet::new();
+    let mut new_categories_list: Vec<(String, String)> = Vec::new(); // (key, nombre)
+    let mut new_product_keys: HashSet<String> = HashSet::new();
+    let mut new_products_list: Vec<NewProduct> = Vec::new();
+    let mut accepted: Vec<AcceptedVariant> = Vec::new();
+
+    let mut result_rows: Vec<ImportRowResult> = Vec::with_capacity(parsed.len());
     let mut new_categories = 0;
     let mut new_products = 0;
     let mut new_variants = 0;
@@ -298,17 +497,24 @@ async fn run_import(
             RowOutcome::Ok(r) => r,
         };
 
-        // -- SKU duplicado: se omite la fila --
-        if let Some(ref sku) = row.sku {
-            let exists = sqlx::query_scalar!(
-                "SELECT id FROM product_variants WHERE LOWER(sku) = LOWER($1)",
-                sku
-            )
-            .fetch_optional(&mut *tx)
-            .await
-            .map_err(AppError::from)?;
+        if row.price % money_step != 0 || row.cost % money_step != 0 {
+            errors += 1;
+            result_rows.push(ImportRowResult {
+                row_number: row.row_number,
+                product_name: row.product_name.clone(),
+                sku: row.sku.clone(),
+                status: "error".into(),
+                message: Some(
+                    "La moneda configurada no admite centavos: usa pesos enteros en precio y costo"
+                        .into(),
+                ),
+            });
+            continue;
+        }
 
-            if exists.is_some() {
+        // -- SKU duplicado (en BD o en filas anteriores del archivo): se omite --
+        if let Some(sku) = &row.sku {
+            if lookups.skus.contains(&sku.to_lowercase()) {
                 skipped += 1;
                 result_rows.push(ImportRowResult {
                     row_number: row.row_number,
@@ -322,16 +528,8 @@ async fn run_import(
         }
 
         // -- Código de barras duplicado: requiere corregir los datos --
-        if let Some(ref barcode) = row.barcode {
-            let exists = sqlx::query_scalar!(
-                "SELECT id FROM product_variants WHERE barcode = $1",
-                barcode
-            )
-            .fetch_optional(&mut *tx)
-            .await
-            .map_err(AppError::from)?;
-
-            if exists.is_some() {
+        if let Some(barcode) = &row.barcode {
+            if lookups.barcodes.contains(barcode) {
                 errors += 1;
                 result_rows.push(ImportRowResult {
                     row_number: row.row_number,
@@ -344,103 +542,62 @@ async fn run_import(
             }
         }
 
-        // -- Categoría: buscar case-insensitive/trim, o crear --
+        // -- Categoría: existente o por crear --
         let category_key = row.category_name.trim().to_lowercase();
-        let category_id = if let Some(&id) = category_cache.get(&category_key) {
-            id
-        } else if let Some(id) = sqlx::query_scalar!(
-            "SELECT id FROM categories WHERE LOWER(TRIM(name)) = $1",
-            category_key
-        )
-        .fetch_optional(&mut *tx)
-        .await
-        .map_err(AppError::from)?
+        if !lookups.categories.contains_key(&category_key)
+            && !new_category_keys.contains(&category_key)
         {
-            category_cache.insert(category_key.clone(), id);
-            id
-        } else {
-            let id = sqlx::query_scalar!(
-                "INSERT INTO categories (name) VALUES ($1) RETURNING id",
-                row.category_name.trim()
-            )
-            .fetch_one(&mut *tx)
-            .await
-            .map_err(AppError::from)?;
-            category_cache.insert(category_key.clone(), id);
+            new_category_keys.insert(category_key.clone());
+            new_categories_list.push((category_key.clone(), row.category_name.trim().to_string()));
             new_categories += 1;
-            id
-        };
-
-        // -- Producto: buscar por nombre, o crear --
-        let product_key = row.product_name.trim().to_lowercase();
-        let (product_id, is_new_product) = if let Some(&(id, _)) = product_cache.get(&product_key) {
-            (id, false)
-        } else if let Some(id) = sqlx::query_scalar!(
-            "SELECT id FROM products WHERE LOWER(TRIM(name)) = $1",
-            product_key
-        )
-        .fetch_optional(&mut *tx)
-        .await
-        .map_err(AppError::from)?
-        {
-            product_cache.insert(product_key.clone(), (id, category_id));
-            (id, false)
-        } else {
-            let id = sqlx::query_scalar!(
-                "INSERT INTO products (category_id, name, description, brand)
-                 VALUES ($1, $2, $3, $4) RETURNING id",
-                category_id,
-                row.product_name.trim(),
-                row.description,
-                row.brand
-            )
-            .fetch_one(&mut *tx)
-            .await
-            .map_err(AppError::from)?;
-            product_cache.insert(product_key.clone(), (id, category_id));
-            new_products += 1;
-            (id, true)
-        };
-
-        if !is_new_product {
-            let duplicate = sqlx::query_scalar!(
-                "SELECT id FROM product_variants WHERE product_id = $1 AND attributes = $2",
-                product_id,
-                row.attributes
-            )
-            .fetch_optional(&mut *tx)
-            .await
-            .map_err(AppError::from)?;
-
-            if duplicate.is_some() {
-                errors += 1;
-                result_rows.push(ImportRowResult {
-                    row_number: row.row_number,
-                    product_name: row.product_name.clone(),
-                    sku: row.sku.clone(),
-                    status: "error".into(),
-                    message: Some(
-                        "Ya existe una variante de este producto con esos atributos".into(),
-                    ),
-                });
-                continue;
-            }
         }
 
-        // -- Variante: crear con stock 0, luego aplicar entrada inicial --
-        let variant_id = sqlx::query_scalar!(
-            "INSERT INTO product_variants
-                 (product_id, attributes, sku, barcode, price, cost, stock, stock_min, allow_negative)
-             VALUES ($1, $2, $3, $4, $5, $6, 0, $7, $8) RETURNING id",
-            product_id, row.attributes, row.sku, row.barcode,
-            row.price, row.cost, row.stock_min, row.allow_negative
-        )
-        .fetch_one(&mut *tx)
-        .await
-        .map_err(AppError::from)?;
+        // -- Producto: existente o por crear --
+        let product_key = row.product_name.trim().to_lowercase();
+        let is_new_product = if lookups.products.contains_key(&product_key)
+            || new_product_keys.contains(&product_key)
+        {
+            false
+        } else {
+            new_product_keys.insert(product_key.clone());
+            new_products_list.push(NewProduct {
+                key: product_key.clone(),
+                category_key: category_key.clone(),
+                name: row.product_name.trim().to_string(),
+                description: row.description.clone(),
+                brand: row.brand.clone(),
+            });
+            new_products += 1;
+            true
+        };
 
-        if row.stock > 0 {
-            apply_initial_stock(&mut tx, variant_id, row.stock, row.cost).await?;
+        // -- Variante duplicada (mismo producto + mismos atributos) --
+        let attributes_id = attrs_key(&row.attributes);
+        if !is_new_product
+            && lookups
+                .variant_attrs
+                .contains(&(product_key.clone(), attributes_id.clone()))
+        {
+            errors += 1;
+            result_rows.push(ImportRowResult {
+                row_number: row.row_number,
+                product_name: row.product_name.clone(),
+                sku: row.sku.clone(),
+                status: "error".into(),
+                message: Some("Ya existe una variante de este producto con esos atributos".into()),
+            });
+            continue;
+        }
+
+        // -- Fila aceptada: reservar SKU, barcode y atributos para las siguientes --
+        lookups
+            .variant_attrs
+            .insert((product_key.clone(), attributes_id));
+        if let Some(sku) = &row.sku {
+            lookups.skus.insert(sku.to_lowercase());
+        }
+        if let Some(barcode) = &row.barcode {
+            lookups.barcodes.insert(barcode.clone());
         }
 
         new_variants += 1;
@@ -455,6 +612,30 @@ async fn run_import(
             },
             message: None,
         });
+        accepted.push(AcceptedVariant {
+            product_key,
+            attributes: row.attributes,
+            sku: row.sku,
+            barcode: row.barcode,
+            price: row.price,
+            cost: row.cost,
+            stock: row.stock,
+            stock_min: row.stock_min,
+            allow_negative: row.allow_negative,
+        });
+    }
+
+    // Solo "execute" sin errores escribe. El preview nunca inserta nada.
+    if !dry_run && errors == 0 {
+        write_import(
+            &mut *tx,
+            &lookups.categories,
+            &lookups.products,
+            &new_categories_list,
+            &new_products_list,
+            &accepted,
+        )
+        .await?;
     }
 
     if dry_run || errors > 0 {
@@ -463,46 +644,201 @@ async fn run_import(
         tx.commit().await.map_err(AppError::from)?;
     }
 
+    let total_rows = result_rows.len();
+    let rows = limit_rows(result_rows);
+    let rows_truncated = total_rows > rows.len();
+
     Ok(ImportSummaryDto {
         new_categories,
         new_products,
         new_variants,
         skipped,
         errors,
-        rows: result_rows,
+        rows,
+        total_rows,
+        rows_truncated,
         can_execute: errors == 0,
     })
 }
 
-/// Misma lógica de 3 pasos que inventory::repository::apply_stock_entry,
-/// pero contra la transacción compartida del importador (no abre la suya propia).
-/// TODO: cuando se refactorice apply_stock_entry al patrón &mut PgConnection
-/// (como ya se hizo con apply_stock_out), reemplazar esto por una llamada directa.
-async fn apply_initial_stock(
+/// Inserta categorías, productos, variantes y movimientos de stock inicial por lotes.
+/// Todo dentro de la transacción del llamador.
+async fn write_import(
     conn: &mut PgConnection,
-    variant_id: i32,
-    quantity: i32,
-    unit_cost: i64,
+    existing_categories: &HashMap<String, i32>,
+    existing_products: &HashMap<String, i32>,
+    new_categories: &[(String, String)],
+    new_products: &[NewProduct],
+    variants: &[AcceptedVariant],
 ) -> Result<(), AppError> {
-    sqlx::query!(
-        "UPDATE product_variants SET stock = $1 WHERE id = $2",
-        quantity,
-        variant_id
-    )
-    .execute(&mut *conn)
-    .await
-    .map_err(AppError::from)?;
+    // ---- Categorías ----
+    let mut category_ids = existing_categories.clone();
+    if !new_categories.is_empty() {
+        let names: Vec<String> = new_categories
+            .iter()
+            .map(|(_, name)| name.clone())
+            .collect();
+        let key_by_name: HashMap<&str, &str> = new_categories
+            .iter()
+            .map(|(key, name)| (name.as_str(), key.as_str()))
+            .collect();
+        let inserted: Vec<(i32, String)> = sqlx::query_as(
+            "INSERT INTO categories (name) SELECT * FROM UNNEST($1::text[]) RETURNING id, name",
+        )
+        .bind(names)
+        .fetch_all(&mut *conn)
+        .await
+        .map_err(AppError::from)?;
+        for (id, name) in inserted {
+            if let Some(key) = key_by_name.get(name.as_str()) {
+                category_ids.insert((*key).to_string(), id);
+            }
+        }
+    }
 
-    sqlx::query!(
-        "INSERT INTO inventory_movements
-             (variant_id, movement_type, quantity, stock_before, stock_after, unit_cost, notes, created_by)
-         VALUES ($1, $2, $3, 0, $4, $5, $6, $7)",
-        variant_id, MovementType::InitialStock as MovementType, quantity, quantity,
-        unit_cost, "Importación masiva vía Excel", "system"
+    // ---- Productos ----
+    let mut product_ids = existing_products.clone();
+    for chunk in new_products.chunks(BATCH_SIZE) {
+        let mut categories: Vec<i32> = Vec::with_capacity(chunk.len());
+        let mut names: Vec<String> = Vec::with_capacity(chunk.len());
+        let mut descriptions: Vec<Option<String>> = Vec::with_capacity(chunk.len());
+        let mut brands: Vec<Option<String>> = Vec::with_capacity(chunk.len());
+        let mut key_by_name: HashMap<&str, &str> = HashMap::with_capacity(chunk.len());
+
+        for product in chunk {
+            let category_id = *category_ids.get(&product.category_key).ok_or_else(|| {
+                AppError::internal("No se pudo resolver una categoría durante la importación")
+            })?;
+            categories.push(category_id);
+            names.push(product.name.clone());
+            descriptions.push(product.description.clone());
+            brands.push(product.brand.clone());
+            key_by_name.insert(product.name.as_str(), product.key.as_str());
+        }
+
+        let inserted: Vec<(i32, String)> = sqlx::query_as(
+            "INSERT INTO products (category_id, name, description, brand)
+             SELECT * FROM UNNEST($1::int4[], $2::text[], $3::text[], $4::text[])
+             RETURNING id, name",
+        )
+        .bind(categories)
+        .bind(names)
+        .bind(descriptions)
+        .bind(brands)
+        .fetch_all(&mut *conn)
+        .await
+        .map_err(AppError::from)?;
+        for (id, name) in inserted {
+            if let Some(key) = key_by_name.get(name.as_str()) {
+                product_ids.insert((*key).to_string(), id);
+            }
+        }
+    }
+
+    if variants.is_empty() {
+        return Ok(());
+    }
+
+    // ---- IDs de variantes: se reservan de la secuencia para poder enlazar los
+    // movimientos sin depender del orden de RETURNING ----
+    let variant_ids: Vec<i32> = sqlx::query_scalar(
+        "SELECT nextval(pg_get_serial_sequence('product_variants', 'id'))::int4
+         FROM generate_series(1, $1::int4)",
     )
-    .execute(&mut *conn)
+    .bind(variants.len() as i32)
+    .fetch_all(&mut *conn)
     .await
     .map_err(AppError::from)?;
+    if variant_ids.len() != variants.len() {
+        return Err(AppError::internal(
+            "No se pudieron reservar los identificadores de variantes",
+        ));
+    }
+
+    let mut offset = 0usize;
+    for chunk in variants.chunks(BATCH_SIZE) {
+        let ids = &variant_ids[offset..offset + chunk.len()];
+        offset += chunk.len();
+
+        let mut product_col: Vec<i32> = Vec::with_capacity(chunk.len());
+        let mut attrs_col: Vec<String> = Vec::with_capacity(chunk.len());
+        let mut sku_col: Vec<Option<String>> = Vec::with_capacity(chunk.len());
+        let mut barcode_col: Vec<Option<String>> = Vec::with_capacity(chunk.len());
+        let mut price_col: Vec<i64> = Vec::with_capacity(chunk.len());
+        let mut cost_col: Vec<i64> = Vec::with_capacity(chunk.len());
+        let mut stock_col: Vec<i32> = Vec::with_capacity(chunk.len());
+        let mut stock_min_col: Vec<i32> = Vec::with_capacity(chunk.len());
+        let mut negative_col: Vec<bool> = Vec::with_capacity(chunk.len());
+
+        // Para los movimientos de stock inicial (solo stock > 0)
+        let mut mv_variant: Vec<i32> = Vec::new();
+        let mut mv_quantity: Vec<i32> = Vec::new();
+        let mut mv_cost: Vec<i64> = Vec::new();
+
+        for (variant, &variant_id) in chunk.iter().zip(ids.iter()) {
+            let product_id = *product_ids.get(&variant.product_key).ok_or_else(|| {
+                AppError::internal("No se pudo resolver un producto durante la importación")
+            })?;
+            product_col.push(product_id);
+            attrs_col.push(variant.attributes.to_string());
+            sku_col.push(variant.sku.clone());
+            barcode_col.push(variant.barcode.clone());
+            price_col.push(variant.price);
+            cost_col.push(variant.cost);
+            stock_col.push(variant.stock);
+            stock_min_col.push(variant.stock_min);
+            negative_col.push(variant.allow_negative);
+
+            if variant.stock > 0 {
+                mv_variant.push(variant_id);
+                mv_quantity.push(variant.stock);
+                mv_cost.push(variant.cost);
+            }
+        }
+
+        sqlx::query(
+            "INSERT INTO product_variants
+                 (id, product_id, attributes, sku, barcode, price, cost, stock, stock_min, allow_negative)
+             SELECT t.id, t.product_id, t.attributes::jsonb, t.sku, t.barcode,
+                    t.price, t.cost, t.stock, t.stock_min, t.allow_negative
+             FROM UNNEST(
+                 $1::int4[], $2::int4[], $3::text[], $4::text[], $5::text[],
+                 $6::int8[], $7::int8[], $8::int4[], $9::int4[], $10::bool[]
+             ) AS t(id, product_id, attributes, sku, barcode,
+                    price, cost, stock, stock_min, allow_negative)",
+        )
+        .bind(ids.to_vec())
+        .bind(product_col)
+        .bind(attrs_col)
+        .bind(sku_col)
+        .bind(barcode_col)
+        .bind(price_col)
+        .bind(cost_col)
+        .bind(stock_col)
+        .bind(stock_min_col)
+        .bind(negative_col)
+        .execute(&mut *conn)
+        .await
+        .map_err(AppError::from)?;
+
+        if !mv_variant.is_empty() {
+            sqlx::query(
+                "INSERT INTO inventory_movements
+                     (variant_id, movement_type, quantity, stock_before, stock_after,
+                      unit_cost, notes, created_by)
+                 SELECT t.variant_id, 'initial_stock'::movement_type, t.quantity, 0, t.quantity,
+                        t.unit_cost, 'Importación masiva vía Excel', 'system'
+                 FROM UNNEST($1::int4[], $2::int4[], $3::int8[])
+                      AS t(variant_id, quantity, unit_cost)",
+            )
+            .bind(mv_variant)
+            .bind(mv_quantity)
+            .bind(mv_cost)
+            .execute(&mut *conn)
+            .await
+            .map_err(AppError::from)?;
+        }
+    }
 
     Ok(())
 }
@@ -561,6 +897,39 @@ mod tests {
     fn attributes_parse() {
         let value = parse_attributes("Color: Azul; Talla: M");
         assert_eq!(value.as_object().unwrap().len(), 2);
+    }
+
+    #[test]
+    fn attributes_key_ignores_order() {
+        let a = parse_attributes("Color: Azul; Talla: M");
+        let b = parse_attributes("Talla: M; Color: Azul");
+        assert_eq!(attrs_key(&a), attrs_key(&b));
+        let c = parse_attributes("Color: Rojo; Talla: M");
+        assert_ne!(attrs_key(&a), attrs_key(&c));
+    }
+
+    #[test]
+    fn result_rows_are_capped_errors_first() {
+        let rows: Vec<ImportRowResult> = (1..=2_000)
+            .map(|n| ImportRowResult {
+                row_number: n,
+                product_name: format!("p{}", n),
+                sku: None,
+                status: if n % 1_000 == 0 {
+                    "error".into()
+                } else {
+                    "new_product".into()
+                },
+                message: None,
+            })
+            .collect();
+        let limited = limit_rows(rows);
+        assert_eq!(limited.len(), MAX_RESULT_ROWS);
+        assert!(limited.iter().any(|r| r.row_number == 1_000));
+        assert!(limited.iter().any(|r| r.row_number == 2_000));
+        assert!(limited
+            .windows(2)
+            .all(|w| w[0].row_number < w[1].row_number));
     }
 
     #[test]

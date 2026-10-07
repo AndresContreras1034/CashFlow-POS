@@ -1,0 +1,26 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "SELECT tax_rate_bps, currency_decimals FROM app_settings WHERE id = 1",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "tax_rate_bps",
+        "type_info": "Int4"
+      },
+      {
+        "ordinal": 1,
+        "name": "currency_decimals",
+        "type_info": "Int2"
+      }
+    ],
+    "parameters": {
+      "Left": []
+    },
+    "nullable": [
+      false,
+      false
+    ]
+  },
+  "hash": "3867b87c7a12760ffb2763099dc1e0d8650c95643c5169049fe393db6277c27b"
+}

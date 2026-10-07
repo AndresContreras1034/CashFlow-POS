@@ -2,6 +2,7 @@ import React from 'react';
 import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
 
 import { AppLayout } from '../components/layout/AppLayout';
+import { LicenseGate } from '../components/licensing/LicenseGate';
 import { Inventory } from '../pages/Inventory/Inventory';
 import { ProductDetail } from '../pages/ProductDetail/ProductDetail';
 import { Settings } from '../pages/Settings/Settings';
@@ -30,8 +31,9 @@ const Placeholder: React.FC<{ name: string }> = ({ name }) => (
 
 export const AppRouter: React.FC = () => (
   <BrowserRouter>
-    <AppLayout>
-      <Routes>
+    <LicenseGate>
+      <AppLayout>
+        <Routes>
         <Route path="/" element={<Navigate to="/inventory" replace />} />
 
         {/* Inventario */}
@@ -74,7 +76,8 @@ export const AppRouter: React.FC = () => (
 
         {/* Configuración */}
         <Route path="/settings" element={<Settings />} />
-      </Routes>
-    </AppLayout>
+        </Routes>
+      </AppLayout>
+    </LicenseGate>
   </BrowserRouter>
 );

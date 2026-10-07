@@ -55,8 +55,38 @@ pub async fn update_settings(
         }
     }
 
+    if let Some(decimals) = dto.currency_decimals {
+        if decimals != 0 && decimals != 2 {
+            return Err(AppError::validation(
+                "Los decimales de la moneda deben ser 0 o 2",
+            ));
+        }
+    }
+
+    if let Some(ref tax_name) = dto.tax_name {
+        let tax_name = tax_name.trim();
+        if tax_name.is_empty() || tax_name.chars().count() > 30 {
+            return Err(AppError::validation(
+                "El nombre del impuesto debe tener entre 1 y 30 caracteres",
+            ));
+        }
+    }
+
+    if let Some(ref timezone) = dto.timezone {
+        let exists = repository::timezone_exists(pool, timezone.trim())
+            .await
+            .map_err(AppError::from)?;
+        if !exists {
+            return Err(AppError::validation(
+                "Zona horaria no válida (ej: America/Bogota)",
+            ));
+        }
+    }
+
     dto.business_name = dto.business_name.map(|name| name.trim().to_string());
     dto.currency = dto.currency.map(|currency| currency.trim().to_uppercase());
+    dto.tax_name = dto.tax_name.map(|name| name.trim().to_string());
+    dto.timezone = dto.timezone.map(|timezone| timezone.trim().to_string());
     dto.tax_id = clean(dto.tax_id);
     dto.address = clean(dto.address);
     dto.phone = clean(dto.phone);

@@ -34,6 +34,18 @@ pub struct TicketData {
     pub ticket_header: Option<String>,
     pub ticket_footer: Option<String>,
 
+    // Print settings (from app_settings)
+    pub tax_name: String,
+    pub currency_decimals: u8,
+    pub show_logo: bool,
+    pub show_tax_id: bool,
+    pub show_address: bool,
+    pub show_phone: bool,
+    pub show_cashier: bool,
+    pub show_tax_breakdown: bool,
+    pub show_discounts: bool,
+    pub show_payment_method: bool,
+
     // Datos de la venta
     pub sale_id: i32,
     pub ticket_number: String,

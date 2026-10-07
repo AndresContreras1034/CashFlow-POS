@@ -16,11 +16,14 @@ const LOGO_FOOTER: &[u8] = include_bytes!("../../../assets/logo_footer.bin");
 
 pub fn build_sale_ticket(data: &TicketData) -> Vec<u8> {
     let mut b = Vec::new();
+    let money = |value: i64| format_money(value, data.currency_decimals);
 
     b.extend_from_slice(&[ESC, b'@']); // reset
 
     // ---- Logo (arriba) ----
-    print_logo(&mut b, LOGO_HEADER);
+    if data.show_logo {
+        print_logo(&mut b, LOGO_HEADER);
+    }
 
     // ---- Encabezado: negocio + slogan ----
     align_center(&mut b);
@@ -34,16 +37,22 @@ pub fn build_sale_ticket(data: &TicketData) -> Vec<u8> {
         push_line(&mut b, &ascii_safe(slogan));
     }
 
-    if let Some(tax_id) = &data.tax_id {
-        push_line(&mut b, &format!("NIT: {}", ascii_safe(tax_id)));
-    }
-    if let Some(address) = &data.address {
-        for line in wrap(&ascii_safe(address), CHARS_PER_LINE) {
-            push_line(&mut b, &line);
+    if data.show_tax_id {
+        if let Some(tax_id) = &data.tax_id {
+            push_line(&mut b, &format!("NIT: {}", ascii_safe(tax_id)));
         }
     }
-    if let Some(phone) = &data.phone {
-        push_line(&mut b, &format!("Tel: {}", ascii_safe(phone)));
+    if data.show_address {
+        if let Some(address) = &data.address {
+            for line in wrap(&ascii_safe(address), CHARS_PER_LINE) {
+                push_line(&mut b, &line);
+            }
+        }
+    }
+    if data.show_phone {
+        if let Some(phone) = &data.phone {
+            push_line(&mut b, &format!("Tel: {}", ascii_safe(phone)));
+        }
     }
     push_line(&mut b, "Servicio a domicilio");
 
@@ -64,10 +73,12 @@ pub fn build_sale_ticket(data: &TicketData) -> Vec<u8> {
         &mut b,
         &format!("Hora: {}", data.created_at.format("%I:%M %p")),
     );
-    push_line(
-        &mut b,
-        &format!("Vendedor: {}", ascii_safe(&data.created_by)),
-    );
+    if data.show_cashier {
+        push_line(
+            &mut b,
+            &format!("Vendedor: {}", ascii_safe(&data.created_by)),
+        );
+    }
 
     // Cliente y Documento: SIN conectar a ningún dato real, se llenan a mano.
     push_line(&mut b, "Cliente: _______________________");
@@ -77,49 +88,55 @@ pub fn build_sale_ticket(data: &TicketData) -> Vec<u8> {
 
     // ---- Productos ----
     for line in &data.lines {
-        push_line(&mut b, &format_item_line(line));
+        push_line(
+            &mut b,
+            &format_item_line(line, data.currency_decimals),
+        );
     }
 
     push_line(&mut b, &"-".repeat(CHARS_PER_LINE));
 
     // ---- Totales ----
-    push_line(&mut b, &two_col("Subtotal:", &format_money(data.subtotal)));
-    if data.discount > 0 {
+    push_line(&mut b, &two_col("Subtotal:", &money(data.subtotal)));
+    if data.show_discounts && data.discount > 0 {
         push_line(
             &mut b,
-            &two_col("Descuento:", &format!("-{}", format_money(data.discount))),
+            &two_col("Descuento:", &format!("-{}", money(data.discount))),
         );
     }
-    push_line(&mut b, &two_col("Impuestos:", &format_money(data.tax)));
+    if data.show_tax_breakdown {
+        let label = format!("{} incl.:", ascii_safe(&data.tax_name));
+        push_line(&mut b, &two_col(&label, &money(data.tax)));
+    }
 
     push_line(&mut b, &"-".repeat(CHARS_PER_LINE));
     bold_on(&mut b);
-    push_line(&mut b, &two_col("TOTAL:", &format_money(data.total)));
+    push_line(&mut b, &two_col("TOTAL:", &money(data.total)));
     bold_off(&mut b);
     push_line(&mut b, &"-".repeat(CHARS_PER_LINE));
 
     // ---- Forma de pago ----
-    align_center(&mut b);
-    push_line(&mut b, "FORMA DE PAGO");
-    align_left(&mut b);
+    if data.show_payment_method {
+        align_center(&mut b);
+        push_line(&mut b, "FORMA DE PAGO");
+        align_left(&mut b);
 
-    let cash: i64 = sum_by_method(data, crate::modules::sales::models::PaymentMethod::Cash);
-    let transfer: i64 = sum_by_method(data, crate::modules::sales::models::PaymentMethod::Transfer);
-    let card: i64 = sum_by_method(data, crate::modules::sales::models::PaymentMethod::Card);
-    let total_received = cash + transfer + card;
-    let change = (total_received - data.total).max(0);
+        let cash: i64 = sum_by_method(data, crate::modules::sales::models::PaymentMethod::Cash);
+        let transfer: i64 =
+            sum_by_method(data, crate::modules::sales::models::PaymentMethod::Transfer);
+        let card: i64 = sum_by_method(data, crate::modules::sales::models::PaymentMethod::Card);
+        let total_received = cash + transfer + card;
+        let change = (total_received - data.total).max(0);
 
-    push_line(&mut b, &two_col("Efectivo:", &format_money(cash)));
-    push_line(&mut b, &two_col("Transferencia:", &format_money(transfer)));
-    push_line(&mut b, &two_col("Tarjeta:", &format_money(card)));
-    push_line(&mut b, &"-".repeat(CHARS_PER_LINE));
-    push_line(
-        &mut b,
-        &two_col("Total recibido:", &format_money(total_received)),
-    );
-    push_line(&mut b, &two_col("Cambio:", &format_money(change)));
+        push_line(&mut b, &two_col("Efectivo:", &money(cash)));
+        push_line(&mut b, &two_col("Transferencia:", &money(transfer)));
+        push_line(&mut b, &two_col("Tarjeta:", &money(card)));
+        push_line(&mut b, &"-".repeat(CHARS_PER_LINE));
+        push_line(&mut b, &two_col("Total recibido:", &money(total_received)));
+        push_line(&mut b, &two_col("Cambio:", &money(change)));
 
-    push_line(&mut b, &"-".repeat(CHARS_PER_LINE));
+        push_line(&mut b, &"-".repeat(CHARS_PER_LINE));
+    }
 
     // ---- Pie ----
     align_center(&mut b);
@@ -130,8 +147,10 @@ pub fn build_sale_ticket(data: &TicketData) -> Vec<u8> {
     if let Some(slogan) = &data.ticket_header {
         push_line(&mut b, &ascii_safe(slogan));
     }
-    if let Some(phone) = &data.phone {
-        push_line(&mut b, &format!("Tel: {}", ascii_safe(phone)));
+    if data.show_phone {
+        if let Some(phone) = &data.phone {
+            push_line(&mut b, &format!("Tel: {}", ascii_safe(phone)));
+        }
     }
     push_line(&mut b, "Servicio a domicilio");
     if let Some(footer) = &data.ticket_footer {
@@ -162,7 +181,7 @@ fn sum_by_method(data: &TicketData, method: crate::modules::sales::models::Payme
         .sum()
 }
 
-fn format_item_line(item: &TicketLine) -> String {
+fn format_item_line(item: &TicketLine, decimals: u8) -> String {
     let name = ascii_safe(&item.product_name);
     let mut out = String::new();
 
@@ -179,8 +198,12 @@ fn format_item_line(item: &TicketLine) -> String {
     }
 
     out.push('\n');
-    let detail = format!("{} x {}", item.quantity, format_money(item.unit_price));
-    out.push_str(&two_col(&detail, &format_money(item.subtotal)));
+    let detail = format!(
+        "{} x {}",
+        item.quantity,
+        format_money(item.unit_price, decimals)
+    );
+    out.push_str(&two_col(&detail, &format_money(item.subtotal, decimals)));
 
     out
 }
@@ -194,13 +217,18 @@ fn two_col(left: &str, right: &str) -> String {
     format!("{}{}{}", left_trunc, " ".repeat(padding.max(1)), right)
 }
 
-fn format_money(cents: i64) -> String {
-    let pesos = cents / 100;
-    let negative = pesos < 0;
-    let abs = pesos.abs().to_string();
-
+/// Amounts are stored in hundredths. Zero-decimal currencies round to the nearest unit.
+fn format_money(cents: i64, decimals: u8) -> String {
+    let negative = cents < 0;
+    let absolute = cents.unsigned_abs();
+    let (units, fraction) = if decimals == 0 {
+        ((absolute + 50) / 100, None)
+    } else {
+        (absolute / 100, Some(absolute % 100))
+    };
+    let digits = units.to_string();
     let mut grouped = String::new();
-    for (i, c) in abs.chars().rev().enumerate() {
+    for (i, c) in digits.chars().rev().enumerate() {
         if i > 0 && i % 3 == 0 {
             grouped.push('.');
         }
@@ -208,10 +236,15 @@ fn format_money(cents: i64) -> String {
     }
     let grouped: String = grouped.chars().rev().collect();
 
-    if negative {
-        format!("-$ {}", grouped)
+    let body = match fraction {
+        Some(value) => format!("{grouped},{value:02}"),
+        None => grouped,
+    };
+
+    if negative && absolute != 0 {
+        format!("-$ {body}")
     } else {
-        format!("$ {}", grouped)
+        format!("$ {body}")
     }
 }
 
@@ -292,4 +325,66 @@ fn double_size_on(buf: &mut Vec<u8>) {
 
 fn double_size_off(buf: &mut Vec<u8>) {
     buf.extend_from_slice(&[GS, b'!', 0x00]);
+}
+
+#[cfg(test)]
+mod tests {
+    use super::{build_sale_ticket, format_money};
+    use crate::modules::billing::models::TicketData;
+    use crate::modules::sales::models::SaleStatus;
+    use chrono::{TimeZone, Utc};
+
+    #[test]
+    fn formats_money_using_currency_precision() {
+        assert_eq!(format_money(2_800_050, 0), "$ 28.001");
+        assert_eq!(format_money(2_800_050, 2), "$ 28.000,50");
+        assert_eq!(format_money(-50, 0), "-$ 1");
+        assert_eq!(format_money(0, 0), "$ 0");
+    }
+
+    #[test]
+    fn ticket_respects_hidden_output_settings() {
+        let data = TicketData {
+            business_name: "Tienda".into(),
+            tax_id: Some("900123".into()),
+            address: Some("Calle 1".into()),
+            phone: Some("3010000000".into()),
+            ticket_header: None,
+            ticket_footer: None,
+            tax_name: "IVA".into(),
+            currency_decimals: 0,
+            show_logo: false,
+            show_tax_id: false,
+            show_address: false,
+            show_phone: false,
+            show_cashier: false,
+            show_tax_breakdown: false,
+            show_discounts: false,
+            show_payment_method: false,
+            sale_id: 1,
+            ticket_number: "V-1".into(),
+            created_at: Utc.timestamp_opt(0, 0).single().unwrap(),
+            created_by: "Operador".into(),
+            status: SaleStatus::Completed,
+            lines: Vec::new(),
+            payments: Vec::new(),
+            subtotal: 1000,
+            discount: 100,
+            tax: 190,
+            total: 1090,
+        };
+
+        let ticket = String::from_utf8(build_sale_ticket(&data)).unwrap();
+        for hidden in [
+            "NIT:",
+            "Calle 1",
+            "Tel:",
+            "Vendedor:",
+            "Descuento:",
+            "IVA incl.:",
+            "FORMA DE PAGO",
+        ] {
+            assert!(!ticket.contains(hidden), "unexpected ticket text: {hidden}");
+        }
+    }
 }

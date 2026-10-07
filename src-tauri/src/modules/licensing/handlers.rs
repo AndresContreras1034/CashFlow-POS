@@ -13,10 +13,7 @@ pub async fn get_license_status(pool: State<'_, DbPool>) -> Result<LicenseStatus
 }
 
 #[tauri::command]
-pub async fn activate_license(
-    pool: State<'_, DbPool>,
-    file_path: String,
-) -> Result<(), String> {
+pub async fn activate_license(pool: State<'_, DbPool>, file_path: String) -> Result<(), String> {
     service::activate(&pool, &file_path)
         .await
         .map_err(|error| error.to_string())

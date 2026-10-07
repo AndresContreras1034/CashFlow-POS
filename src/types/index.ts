@@ -254,6 +254,20 @@ export interface ExportSummaryDto {
   low_stock_rows: number;
 }
 
+export type LicenseKind = 'purchase' | 'rental';
+export type LicenseStatusKind = 'unlicensed' | 'active' | 'expired' | 'invalid';
+
+export interface LicenseStatusDto {
+  installation_id: string;
+  status: LicenseStatusKind;
+  license_id: string | null;
+  licensee: string | null;
+  kind: LicenseKind | null;
+  expires_at: string | null;
+  source_code_access: boolean;
+  message: string;
+}
+
 // ============================================================
 // AJUSTES
 // ============================================================
@@ -266,9 +280,20 @@ export interface AppSettings {
   phone: string | null;
   email: string | null;
   currency: string;
+  currency_decimals: number;
   tax_rate_bps: number;
+  tax_name: string;
+  timezone: string;
   ticket_header: string | null;
   ticket_footer: string | null;
+  show_logo: boolean;
+  show_tax_id: boolean;
+  show_address: boolean;
+  show_phone: boolean;
+  show_cashier: boolean;
+  show_tax_breakdown: boolean;
+  show_discounts: boolean;
+  show_payment_method: boolean;
   low_stock_default_threshold: number;
   logo_url: string | null;
   created_at: string;
@@ -283,9 +308,20 @@ export interface UpdateSettingsDto {
   phone: string | null;
   email: string | null;
   currency?: string;
+  currency_decimals?: number;
   tax_rate_bps?: number;
+  tax_name?: string;
+  timezone?: string;
   ticket_header: string | null;
   ticket_footer: string | null;
+  show_logo?: boolean;
+  show_tax_id?: boolean;
+  show_address?: boolean;
+  show_phone?: boolean;
+  show_cashier?: boolean;
+  show_tax_breakdown?: boolean;
+  show_discounts?: boolean;
+  show_payment_method?: boolean;
   low_stock_default_threshold?: number;
   logo_url: string | null;
 }
@@ -345,8 +381,10 @@ export interface CloseSessionDto {
   closed_by?: string | null;
 }
 
+export type ManualCashMovementType = 'manual_in' | 'manual_out';
+
 export interface CreateMovementDto {
-  movement_type: 'manual_in' | 'manual_out';
+  movement_type: ManualCashMovementType;
   amount: number;
   notes?: string | null;
   created_by?: string | null;
@@ -454,6 +492,8 @@ export interface ImportSummaryDto {
   skipped: number;
   errors: number;
   rows: ImportRowResult[];
+  total_rows: number;
+  rows_truncated: boolean;
   can_execute: boolean;
 }
 

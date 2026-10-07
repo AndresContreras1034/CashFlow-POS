@@ -115,3 +115,6 @@ features = [
     "errhandlingapi"
 ]
 }
+
+[profile.dev.package."*"]
+opt-level = 3

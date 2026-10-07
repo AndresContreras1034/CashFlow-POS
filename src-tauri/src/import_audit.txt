@@ -1,0 +1,54 @@
+
+===== src\components\inventory\ImportInventoryModal.tsx (NO EXISTE) =====
+
+
+===== src\pages\Inventory\Inventory.tsx (NO EXISTE) =====
+
+
+===== src\services\inventory.service.ts (NO EXISTE) =====
+
+
+===== src\services\api.ts (NO EXISTE) =====
+
+
+===== src-tauri\Cargo.toml (NO EXISTE) =====
+
+
+===== src-tauri\src\modules\inventory\import.rs (NO EXISTE) =====
+
+
+===== src-tauri\src\modules\inventory\handlers.rs (NO EXISTE) =====
+
+
+===== src-tauri\src\modules\inventory\router.rs (NO EXISTE) =====
+
+
+===== src-tauri\src\modules\inventory\service.rs (NO EXISTE) =====
+
+
+===== src-tauri\src\modules\inventory\repository.rs (NO EXISTE) =====
+
+
+===== src-tauri\src\modules\inventory\barcode.rs (NO EXISTE) =====
+
+
+===== src-tauri\src\modules\inventory\kardex.rs (NO EXISTE) =====
+
+
+===== src-tauri\src\modules\inventory\dto.rs (NO EXISTE) =====
+
+
+===== src-tauri\src\modules\inventory\models.rs (NO EXISTE) =====
+
+
+===== src-tauri\src\middleware\transaction.rs (NO EXISTE) =====
+
+
+===== src-tauri\src\middleware\audit.rs (NO EXISTE) =====
+
+
+===== src-tauri\src\db\connection.rs (NO EXISTE) =====
+
+
+===== src-tauri\src\db\schema.rs (NO EXISTE) =====
+

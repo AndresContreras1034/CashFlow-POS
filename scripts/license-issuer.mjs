@@ -1,4 +1,4 @@
-import { copyFile, mkdir, readFile, writeFile } from 'node:fs/promises';
+import { mkdir, readFile, writeFile } from 'node:fs/promises';
 import { createPrivateKey, generateKeyPairSync, randomUUID, sign } from 'node:crypto';
 import { homedir } from 'node:os';
 import path from 'node:path';

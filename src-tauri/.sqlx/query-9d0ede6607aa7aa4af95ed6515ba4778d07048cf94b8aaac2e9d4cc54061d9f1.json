@@ -1,0 +1,14 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "INSERT INTO license_state (id, installation_id)\n         VALUES (1, $1)\n         ON CONFLICT (id) DO NOTHING",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Text"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "9d0ede6607aa7aa4af95ed6515ba4778d07048cf94b8aaac2e9d4cc54061d9f1"
+}

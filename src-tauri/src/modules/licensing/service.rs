@@ -97,7 +97,9 @@ fn status_for(
 
     if let Some(last_seen_at) = last_seen_at {
         if now + CLOCK_SKEW < last_seen_at {
-            return invalid("Se detectó que el reloj del equipo retrocedió. Corrige la fecha y hora.");
+            return invalid(
+                "Se detectó que el reloj del equipo retrocedió. Corrige la fecha y hora.",
+            );
         }
     }
 
@@ -111,7 +113,8 @@ fn status_for(
                 kind: Some(payload.kind),
                 expires_at: payload.expires_at.clone(),
                 source_code_access: payload.source_code_access,
-                message: "La licencia de alquiler venció. Importa una licencia renovada.".to_string(),
+                message: "La licencia de alquiler venció. Importa una licencia renovada."
+                    .to_string(),
             };
         }
     }
@@ -149,12 +152,7 @@ pub async fn get_status(pool: &PgPool) -> Result<LicenseStatusDto, AppError> {
     };
 
     let status = match verify_signed_license(&file) {
-        Ok((_, payload)) => status_for(
-            &payload,
-            &state.installation_id,
-            state.last_seen_at,
-            now,
-        ),
+        Ok((_, payload)) => status_for(&payload, &state.installation_id, state.last_seen_at, now),
         Err(_) => LicenseStatusDto {
             installation_id: state.installation_id.clone(),
             status: LicenseStatusKind::Invalid,
@@ -167,7 +165,7 @@ pub async fn get_status(pool: &PgPool) -> Result<LicenseStatusDto, AppError> {
         },
     };
 
-    if !matches!(status.status, LicenseStatusKind::Invalid) {
+    if !matches!(&status.status, LicenseStatusKind::Invalid) {
         repository::update_last_seen(pool, now)
             .await
             .map_err(AppError::from)?;
@@ -179,8 +177,10 @@ pub async fn activate(pool: &PgPool, path: &str) -> Result<(), AppError> {
     let metadata = tokio::fs::metadata(path)
         .await
         .map_err(|error| AppError::validation(&format!("No se pudo leer el archivo: {error}")))?;
-    if metadata.len() as usize > MAX_LICENSE_FILE_BYTES {
-        return Err(AppError::validation("El archivo de licencia es demasiado grande"));
+    if metadata.len() > MAX_LICENSE_FILE_BYTES as u64 {
+        return Err(AppError::validation(
+            "El archivo de licencia es demasiado grande",
+        ));
     }
     let file = tokio::fs::read_to_string(path)
         .await
@@ -205,4 +205,79 @@ pub async fn activate(pool: &PgPool, path: &str) -> Result<(), AppError> {
     repository::update_last_seen(pool, now)
         .await
         .map_err(AppError::from)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn payload(kind: LicenseKind, expires_at: Option<String>) -> LicensePayload {
+        LicensePayload {
+            schema_version: 1,
+            license_id: "license-test".into(),
+            installation_id: "installation-test".into(),
+            licensee: "AFCM".into(),
+            kind,
+            issued_at: "2026-01-01T00:00:00Z".into(),
+            expires_at,
+            source_code_access: true,
+        }
+    }
+
+    #[test]
+    fn perpetual_purchase_is_active() {
+        let now = DateTime::parse_from_rfc3339("2026-10-06T00:00:00Z")
+            .unwrap()
+            .with_timezone(&Utc);
+        let result = status_for(
+            &payload(LicenseKind::Purchase, None),
+            "installation-test",
+            None,
+            now,
+        );
+        assert_eq!(result.status, LicenseStatusKind::Active);
+    }
+
+    #[test]
+    fn expired_rental_is_blocked() {
+        let now = DateTime::parse_from_rfc3339("2026-10-06T00:00:00Z")
+            .unwrap()
+            .with_timezone(&Utc);
+        let result = status_for(
+            &payload(LicenseKind::Rental, Some("2026-10-05T23:59:59Z".into())),
+            "installation-test",
+            None,
+            now,
+        );
+        assert_eq!(result.status, LicenseStatusKind::Expired);
+    }
+
+    #[test]
+    fn license_is_bound_to_its_installation() {
+        let now = Utc::now();
+        let result = status_for(
+            &payload(LicenseKind::Purchase, None),
+            "another-installation",
+            None,
+            now,
+        );
+        assert_eq!(result.status, LicenseStatusKind::Invalid);
+    }
+
+    #[test]
+    fn clock_rollback_invalidates_license_until_clock_is_corrected() {
+        let now = DateTime::parse_from_rfc3339("2026-10-05T00:00:00Z")
+            .unwrap()
+            .with_timezone(&Utc);
+        let last_seen = DateTime::parse_from_rfc3339("2026-10-06T00:00:00Z")
+            .unwrap()
+            .with_timezone(&Utc);
+        let result = status_for(
+            &payload(LicenseKind::Purchase, None),
+            "installation-test",
+            Some(last_seen),
+            now,
+        );
+        assert_eq!(result.status, LicenseStatusKind::Invalid);
+    }
 }

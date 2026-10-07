@@ -1,6 +1,6 @@
 {
   "db_name": "PostgreSQL",
-  "query": "SELECT * FROM app_settings WHERE id = 1",
+  "query": "UPDATE app_settings\n         SET business_name               = COALESCE($1, business_name),\n             tax_id                      = $2,\n             address                     = $3,\n             phone                       = $4,\n             email                       = $5,\n             currency                    = COALESCE($6, currency),\n             tax_rate_bps                = COALESCE($7, tax_rate_bps),\n             ticket_header               = $8,\n             ticket_footer               = $9,\n             low_stock_default_threshold = COALESCE($10, low_stock_default_threshold),\n             logo_url                    = $11,\n             currency_decimals           = COALESCE($12, currency_decimals),\n             tax_name                    = COALESCE($13, tax_name),\n             timezone                    = COALESCE($14, timezone),\n             show_logo                   = COALESCE($15, show_logo),\n             show_tax_id                 = COALESCE($16, show_tax_id),\n             show_address                = COALESCE($17, show_address),\n             show_phone                  = COALESCE($18, show_phone),\n             show_cashier                = COALESCE($19, show_cashier),\n             show_tax_breakdown          = COALESCE($20, show_tax_breakdown),\n             show_discounts              = COALESCE($21, show_discounts),\n             show_payment_method         = COALESCE($22, show_payment_method)\n         WHERE id = 1\n         RETURNING *",
   "describe": {
     "columns": [
       {
@@ -130,7 +130,30 @@
       }
     ],
     "parameters": {
-      "Left": []
+      "Left": [
+        "Varchar",
+        "Varchar",
+        "Text",
+        "Varchar",
+        "Varchar",
+        "Varchar",
+        "Int4",
+        "Text",
+        "Text",
+        "Int4",
+        "Text",
+        "Int2",
+        "Varchar",
+        "Varchar",
+        "Bool",
+        "Bool",
+        "Bool",
+        "Bool",
+        "Bool",
+        "Bool",
+        "Bool",
+        "Bool"
+      ]
     },
     "nullable": [
       false,
@@ -160,5 +183,5 @@
       false
     ]
   },
-  "hash": "686417cdc3908c80a48ba873840d76e1412b920fd7f0b6bc0b8129a804e9c06d"
+  "hash": "41989cdb37b6ea642bcb5baa3fa9cf150bc392acb480215079ddeaf578b0e8ab"
 }

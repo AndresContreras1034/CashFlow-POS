@@ -4,7 +4,7 @@
   height: 100vh;
   height: 100dvh;
   background: var(--sidebar-bg);
-  border-right: 1px solid var(--border-subtle);
+  border-right: 1px solid rgba(255, 255, 255, 0.1);
   display: flex;
   flex-direction: column;
   overflow: hidden;
@@ -15,11 +15,27 @@
   align-items: center;
   gap: 10px;
   padding: 20px 18px 16px;
-  border-bottom: 1px solid var(--border-subtle);
+  border-bottom: 1px solid rgba(255, 255, 255, 0.1);
 }
 
-.sidebar-logo-icon { width: 28px; height: 28px; object-fit: contain; flex-shrink: 0; }
 .sidebar-logo-text { font-size: 18px; font-weight: 700; letter-spacing: 0.08em; color: #FFFFFF; }
+
+.sidebar-date {
+  padding: 10px 16px 0;
+  color: rgba(255, 255, 255, 0.72);
+  font-size: 10.5px;
+  line-height: 1.45;
+  text-transform: capitalize;
+}
+
+.sidebar-clock {
+  padding: 1px 16px 4px;
+  color: rgba(255, 255, 255, 0.9);
+  font-size: 13px;
+  font-variant-numeric: tabular-nums;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+}
 
 .sidebar-nav {
   display: flex;
@@ -48,7 +64,6 @@
 .sidebar-link--active { background: rgba(255, 255, 255, 0.14); color: #FFFFFF; }
 .sidebar-link--active:hover { background: rgba(255, 255, 255, 0.14); color: #FFFFFF; }
 
-.sidebar-link-icon { width: 22px; height: 22px; object-fit: contain; flex-shrink: 0; }
 .sidebar-link-label { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 
 .sidebar-footer {
@@ -84,4 +99,62 @@
   color: rgba(255, 255, 255, 0.42);
   font-size: 10px;
   letter-spacing: 0.04em;
+}
+
+.sidebar-footer-license {
+  margin-top: 2px;
+  color: rgba(255, 255, 255, 0.72);
+  font-size: 10px;
+  line-height: 1.45;
+}
+
+.sidebar-terms-button {
+  align-self: flex-start;
+  margin-top: 3px;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  color: rgba(255, 255, 255, 0.8);
+  font: inherit;
+  font-size: 10px;
+  text-align: left;
+  text-decoration: underline;
+  text-underline-offset: 2px;
+  cursor: pointer;
+}
+
+.sidebar-terms-button:hover {
+  color: #FFFFFF;
+}
+
+.sidebar-terms-content {
+  display: flex;
+  flex-direction: column;
+  gap: 18px;
+  color: var(--text-secondary);
+  font-size: 13px;
+  line-height: 1.65;
+}
+
+.sidebar-terms-content section {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.sidebar-terms-content h3 {
+  color: var(--text-primary);
+  font-size: 14px;
+}
+
+.sidebar-terms-intro {
+  color: var(--text-primary);
+  font-weight: 500;
+}
+
+.sidebar-terms-note {
+  padding-top: 12px;
+  border-top: 1px solid var(--border-subtle);
+  color: var(--text-muted);
+  font-size: 12px;
 }

@@ -2,7 +2,7 @@ import { useEffect, useState, useCallback } from 'react';
 import type {
   CashSessionWithTotals,
   CashMovement,
-  CashMovementType,
+  ManualCashMovementType,
 } from '../../types';
 import {
   getCurrentCashSession,
@@ -12,6 +12,7 @@ import {
   listCashMovements,
 } from '../../services/cash.service';
 import { formatMoney, parseMoneyInput, moneyStep, MONEY_DEFAULTS } from '../../utils/format';
+import { getOperator, setOperator } from '../../utils/preferences';
 import './Cash.css';
 
 export default function Cash() {
@@ -19,13 +20,14 @@ export default function Cash() {
   const [movements, setMovements] = useState<CashMovement[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [operator, setOperatorName] = useState(() => getOperator());
 
   // Form: apertura
   const [openingAmount, setOpeningAmount] = useState('');
   const [openingNotes, setOpeningNotes] = useState('');
 
   // Form: movimiento manual
-  const [movementType, setMovementType] = useState<CashMovementType>('manual_in');
+  const [movementType, setMovementType] = useState<ManualCashMovementType>('manual_in');
   const [movementAmount, setMovementAmount] = useState('');
   const [movementNotes, setMovementNotes] = useState('');
 
@@ -66,9 +68,16 @@ export default function Cash() {
       return;
     }
     try {
+      const operatorName = operator.trim();
+      if (!operatorName) {
+        setError('Ingresa el nombre del operador');
+        return;
+      }
+      setOperator(operatorName);
       await openCashSession({
         opening_amount: amountCents,
         opening_notes: openingNotes || null,
+        opened_by: operatorName,
       });
       setOpeningAmount('');
       setOpeningNotes('');
@@ -88,10 +97,16 @@ export default function Cash() {
       return;
     }
     try {
+      const operatorName = operator.trim();
+      if (!operatorName) {
+        setError('Ingresa el nombre del operador');
+        return;
+      }
       await registerCashMovement(session.id, {
         movement_type: movementType,
         amount: amountCents,
         notes: movementNotes || null,
+        created_by: operatorName,
       });
       setMovementAmount('');
       setMovementNotes('');
@@ -111,9 +126,15 @@ export default function Cash() {
       return;
     }
     try {
+      const operatorName = operator.trim();
+      if (!operatorName) {
+        setError('Ingresa el nombre del operador');
+        return;
+      }
       await closeCashSession(session.id, {
         counted_amount: countedCents,
         closing_notes: closingNotes || null,
+        closed_by: operatorName,
       });
       setShowCloseForm(false);
       setCountedAmount('');
@@ -133,6 +154,29 @@ export default function Cash() {
       <h1>Caja</h1>
 
       {error && <div className="form-error">{error}</div>}
+
+      <div className="cash-card">
+        <div className="form-field">
+          <label htmlFor="cash-operator">Operador de caja</label>
+          <input
+            id="cash-operator"
+            className="form-input"
+            type="text"
+            value={operator}
+            onChange={(e) => {
+              const value = e.target.value;
+              setOperatorName(value);
+              try {
+                setOperator(value);
+              } catch (storageError) {
+                setError(`No se pudo guardar el operador en este equipo: ${String(storageError)}`);
+              }
+            }}
+            maxLength={100}
+            required
+          />
+        </div>
+      </div>
 
       {!session ? (
         <div className="cash-card">
@@ -242,7 +286,7 @@ export default function Cash() {
                 <select
                   className="form-input"
                   value={movementType}
-                  onChange={(e) => setMovementType(e.target.value as CashMovementType)}
+                  onChange={(e) => setMovementType(e.target.value as ManualCashMovementType)}
                 >
                   <option value="manual_in">Ingreso</option>
                   <option value="manual_out">Egreso</option>

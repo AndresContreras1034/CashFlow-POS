@@ -74,10 +74,11 @@ pub async fn create_sale(pool: &PgPool, dto: CreateSaleDto) -> Result<SaleDetail
         return Err(CreateSaleError::InvalidDiscount);
     }
 
-    let settings = sqlx::query!("SELECT currency, tax_rate_bps FROM app_settings WHERE id = 1")
-        .fetch_one(&mut *tx)
-        .await?;
-    let currency_decimals = if settings.currency == "COP" { 0 } else { 2 };
+    let settings =
+        sqlx::query!("SELECT tax_rate_bps, currency_decimals FROM app_settings WHERE id = 1")
+            .fetch_one(&mut *tx)
+            .await?;
+    let currency_decimals = settings.currency_decimals as u8;
 
     // 1. Precio server-side por cada ítem — nunca se confía en el precio del cliente
     struct LineItem {

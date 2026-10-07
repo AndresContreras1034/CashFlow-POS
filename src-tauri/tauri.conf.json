@@ -1,6 +1,6 @@
 {
   "$schema": "https://schema.tauri.app/config/2",
-  "productName": "pos",
+  "productName": "CashFlow POS",
   "version": "0.1.0",
   "identifier": "com.toonk.pos",
   "build": {
@@ -13,7 +13,7 @@
     "windows": [
       {
         "label": "main",
-        "title": "pos",
+        "title": "CashFlow POS",
         "width": 800,
         "height": 600,
         "visible": false

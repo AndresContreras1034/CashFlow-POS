@@ -19,13 +19,13 @@ pub struct LicensePayload {
     pub source_code_access: bool,
 }
 
-#[derive(Debug, Deserialize)]
+#[derive(Debug, Deserialize, Serialize)]
 pub struct SignedLicense {
     pub payload: String,
     pub signature: String,
 }
 
-#[derive(Debug, Clone, Serialize)]
+#[derive(Debug, Clone, Serialize, PartialEq, Eq)]
 #[serde(rename_all = "snake_case")]
 pub enum LicenseStatusKind {
     Unlicensed,

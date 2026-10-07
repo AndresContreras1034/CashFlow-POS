@@ -1,0 +1,14 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "UPDATE license_state\n         SET last_seen_at = $1\n         WHERE id = 1",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Timestamptz"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "1d20550fc3ebc0b4056ab0338912959614c87f9aa7d8629fa8dbcd37bd7487f2"
+}

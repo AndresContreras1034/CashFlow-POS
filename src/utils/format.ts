@@ -1,5 +1,15 @@
-/** Moneda por defecto hasta que Ajustes la provea vía contexto (Bloque 4). */
-export const MONEY_DEFAULTS = { currency: 'COP', decimals: 0 } as const;
+let moneyConfig = { currency: 'COP', decimals: 0 };
+
+/** Update the active money formatting config when application settings load. */
+export const setMoneyConfig = (config: { currency: string; decimals: number }): void => {
+  moneyConfig = { currency: config.currency, decimals: config.decimals };
+};
+
+/** Current currency settings provided by the application context. */
+export const MONEY_DEFAULTS = {
+  get currency(): string { return moneyConfig.currency; },
+  get decimals(): number { return moneyConfig.decimals; },
+};
 
 const clampDecimals = (decimals: number): number => Math.min(Math.max(decimals, 0), 2);
 

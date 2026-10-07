@@ -1,19 +1,9 @@
 import { useState, useRef, useCallback } from 'react';
-import type { CreateSalePaymentDto, PaymentMethod } from '../../types';
+import type { CreateSalePaymentDto, PaymentMethod, VariantWithProduct } from '../../types';
 import { findByBarcode, searchVariants } from '../../services/inventory.service';
 import { createSale } from '../../services/sales.service';
 import { formatMoney, parseMoneyInput, minorToInput, moneyStep } from '../../utils/format';
 import './Sales.css';
-
-interface VariantResult {
-  id: number;
-  product_name: string;
-  attributes: Record<string, string>;
-  barcode: string | null;
-  sku: string;
-  price: number;
-  stock: number;
-}
 
 interface CartLine {
   variant_id: number;
@@ -33,7 +23,7 @@ function attributesLabel(attrs: Record<string, string>) {
 
 export default function Sales() {
   const [scanValue, setScanValue] = useState('');
-  const [searchResults, setSearchResults] = useState<VariantResult[]>([]);
+  const [searchResults, setSearchResults] = useState<VariantWithProduct[]>([]);
   const [cart, setCart] = useState<CartLine[]>([]);
   const [error, setError] = useState<string | null>(null);
   const [confirming, setConfirming] = useState(false);
@@ -52,7 +42,7 @@ export default function Sales() {
   const paymentsTotal = payments.reduce((sum, p) => sum + (p.amount || 0), 0);
   const remaining = subtotal - paymentsTotal;
 
-  function addToCart(v: VariantResult) {
+  function addToCart(v: VariantWithProduct) {
     setCart((prev) => {
       const existing = prev.find((l) => l.variant_id === v.id);
       if (existing) {

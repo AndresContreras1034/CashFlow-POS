@@ -287,5 +287,7 @@ pub struct ImportSummaryDto {
     pub skipped: i32,
     pub errors: i32,
     pub rows: Vec<ImportRowResult>,
+    pub total_rows: usize,
+    pub rows_truncated: bool,
     pub can_execute: bool,
 }

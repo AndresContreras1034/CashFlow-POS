@@ -160,6 +160,12 @@ export const ImportInventoryModal: React.FC<Props> = ({ onClose, onImported, add
               </table>
             </div>
 
+            {summary.rows_truncated && (
+              <p className="import-blocked-note">
+                Mostrando {summary.rows.length} de {summary.total_rows} filas (errores y omitidas primero).
+              </p>
+            )}
+
             <div className="import-actions">
               <button className="btn btn-ghost" onClick={onClose}>
                 Cancelar
