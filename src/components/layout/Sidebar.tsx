@@ -46,5 +46,13 @@ export const Sidebar: React.FC = () => (
         </NavLink>
       ))}
     </nav>
+
+    <footer className="sidebar-footer">
+      <span className="sidebar-footer-credit">Desarrollado por <strong>AFCM</strong></span>
+      <a className="sidebar-footer-contact" href="tel:+573012249460">
+        Contacto: 301 224 9460
+      </a>
+      <span className="sidebar-footer-version">Versión 1.12</span>
+    </footer>
   </aside>
 );

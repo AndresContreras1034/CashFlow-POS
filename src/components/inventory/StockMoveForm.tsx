@@ -7,6 +7,7 @@ import type {
   MovementReason,
 } from '../../types';
 import { ALL_REASONS, INCREASE_REASONS, REASON_LABELS } from '../../utils/movementReasons';
+import { parseMoneyInput, moneyStep, MONEY_DEFAULTS } from '../../utils/format';
 import './ProductForm.css';
 
 interface StockMoveFormProps {
@@ -67,8 +68,8 @@ export const StockMoveForm: React.FC<StockMoveFormProps> = ({
       }
     }
 
-    if (mode === 'entry' && unitCost.trim() && Number(unitCost) < 0) {
-      errs.unitCost = 'El costo unitario no puede ser negativo';
+    if (mode === 'entry' && unitCost.trim() && parseMoneyInput(unitCost) === null) {
+      errs.unitCost = 'Ingresa un costo válido';
     }
 
     if (mode === 'adjustment') {
@@ -99,7 +100,7 @@ export const StockMoveForm: React.FC<StockMoveFormProps> = ({
       return {
         ...base,
         quantity: qty,
-        unit_cost: unitCost.trim() ? Number(unitCost) : undefined,
+        unit_cost: unitCost.trim() ? (parseMoneyInput(unitCost) ?? undefined) : undefined,
         notes: cleanNotes,
       };
     }
@@ -217,11 +218,12 @@ export const StockMoveForm: React.FC<StockMoveFormProps> = ({
 
       {mode === 'entry' && (
         <div className="form-field">
-          <label className="form-label">Costo unitario</label>
+          <label className="form-label">Costo unitario ({MONEY_DEFAULTS.currency})</label>
           <input
             className={`form-input ${errors.unitCost ? 'form-input--error' : ''}`}
             type="number"
             min="0"
+            step={moneyStep()}
             value={unitCost}
             onChange={e => {
               setUnitCost(e.target.value);

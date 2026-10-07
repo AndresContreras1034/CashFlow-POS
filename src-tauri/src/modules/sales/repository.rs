@@ -10,6 +10,7 @@ use crate::modules::sales::{
     dto::{CreateSaleDto, SaleFilterDto},
     models::{PaymentMethod, Sale, SaleDetail, SaleItem, SalePayment, SaleStatus},
 };
+use crate::types::money::tax_included_in;
 
 /// Errores de negocio propios de la confirmación de venta —
 /// se distinguen de sqlx::Error para poder dar mensajes claros en el service.
@@ -17,11 +18,39 @@ pub enum CreateSaleError {
     Db(sqlx::Error),
     NoOpenCashSession,
     PaymentMismatch,
+    InvalidDiscount,
+    AmountOverflow,
     InsufficientStock {
         variant_id: i32,
         available: i32,
         requested: i32,
     },
+}
+
+fn allocate_proportionally(amount: i64, weights: &[i64]) -> Vec<i64> {
+    let total_weight: i128 = weights.iter().map(|weight| (*weight).max(0) as i128).sum();
+    if amount <= 0 || total_weight == 0 {
+        return vec![0; weights.len()];
+    }
+
+    let mut shares = Vec::with_capacity(weights.len());
+    let mut remainders = Vec::with_capacity(weights.len());
+    let mut allocated = 0_i64;
+
+    for (index, weight) in weights.iter().enumerate() {
+        let numerator = amount as i128 * (*weight).max(0) as i128;
+        let share = (numerator / total_weight) as i64;
+        allocated += share;
+        shares.push(share);
+        remainders.push((index, numerator % total_weight));
+    }
+
+    remainders.sort_by(|left, right| right.1.cmp(&left.1).then_with(|| left.0.cmp(&right.0)));
+    for (index, _) in remainders.into_iter().take((amount - allocated) as usize) {
+        shares[index] += 1;
+    }
+
+    shares
 }
 
 impl From<sqlx::Error> for CreateSaleError {
@@ -41,6 +70,14 @@ pub async fn create_sale(pool: &PgPool, dto: CreateSaleDto) -> Result<SaleDetail
         .clone()
         .unwrap_or_else(|| "system".to_string());
     let global_discount = dto.discount.unwrap_or(0);
+    if global_discount < 0 {
+        return Err(CreateSaleError::InvalidDiscount);
+    }
+
+    let settings = sqlx::query!("SELECT currency, tax_rate_bps FROM app_settings WHERE id = 1")
+        .fetch_one(&mut *tx)
+        .await?;
+    let currency_decimals = if settings.currency == "COP" { 0 } else { 2 };
 
     // 1. Precio server-side por cada ítem — nunca se confía en el precio del cliente
     struct LineItem {
@@ -49,6 +86,7 @@ pub async fn create_sale(pool: &PgPool, dto: CreateSaleDto) -> Result<SaleDetail
         unit_price: i64,
         discount: i64,
         subtotal: i64,
+        tax: i64,
     }
     let mut lines = Vec::new();
     let mut subtotal_total: i64 = 0;
@@ -62,20 +100,54 @@ pub async fn create_sale(pool: &PgPool, dto: CreateSaleDto) -> Result<SaleDetail
         .await?;
 
         let discount = item.discount.unwrap_or(0);
-        let line_subtotal = price * item.quantity as i64 - discount;
+        let gross = price
+            .checked_mul(item.quantity as i64)
+            .ok_or(CreateSaleError::AmountOverflow)?;
+        if discount < 0 || discount > gross {
+            return Err(CreateSaleError::InvalidDiscount);
+        }
+        let line_subtotal = gross - discount;
 
-        subtotal_total += line_subtotal;
+        subtotal_total = subtotal_total
+            .checked_add(line_subtotal)
+            .ok_or(CreateSaleError::AmountOverflow)?;
         lines.push(LineItem {
             variant_id: item.variant_id,
             quantity: item.quantity,
             unit_price: price,
             discount,
             subtotal: line_subtotal,
+            tax: 0,
         });
     }
 
+    if global_discount > subtotal_total {
+        return Err(CreateSaleError::InvalidDiscount);
+    }
     let total = subtotal_total - global_discount;
-    let payments_total: i64 = dto.payments.iter().map(|p| p.amount).sum();
+    let total_tax = tax_included_in(total, settings.tax_rate_bps, currency_decimals);
+    let allocated_discounts = allocate_proportionally(
+        global_discount,
+        &lines.iter().map(|line| line.subtotal).collect::<Vec<_>>(),
+    );
+    let discounted_line_totals: Vec<i64> = lines
+        .iter()
+        .zip(allocated_discounts)
+        .map(|(line, discount)| line.subtotal - discount)
+        .collect();
+    let currency_step = 10_i64.pow(2_u32 - currency_decimals as u32);
+    let allocated_taxes =
+        allocate_proportionally(total_tax / currency_step, &discounted_line_totals)
+            .into_iter()
+            .map(|tax_units| tax_units * currency_step)
+            .collect::<Vec<_>>();
+    for (line, tax) in lines.iter_mut().zip(allocated_taxes) {
+        line.tax = tax;
+    }
+    let payments_total = dto.payments.iter().try_fold(0_i64, |sum, payment| {
+        sum.checked_add(payment.amount)
+            .ok_or(CreateSaleError::AmountOverflow)
+    })?;
 
     if payments_total != total {
         return Err(CreateSaleError::PaymentMismatch);
@@ -85,11 +157,12 @@ pub async fn create_sale(pool: &PgPool, dto: CreateSaleDto) -> Result<SaleDetail
     let sale = sqlx::query_as!(
         Sale,
         r#"INSERT INTO sales (customer_id, subtotal, tax, discount, total, status, notes, created_by)
-           VALUES ($1, $2, 0, $3, $4, 'completed', $5, $6)
+           VALUES ($1, $2, $3, $4, $5, 'completed', $6, $7)
            RETURNING id, customer_id, subtotal, tax, discount, total,
                      status AS "status: SaleStatus", notes, created_by, created_at"#,
         dto.customer_id,
         subtotal_total,
+        total_tax,
         global_discount,
         total,
         dto.notes,
@@ -104,13 +177,14 @@ pub async fn create_sale(pool: &PgPool, dto: CreateSaleDto) -> Result<SaleDetail
         let saved_item = sqlx::query_as!(
             SaleItem,
             "INSERT INTO sale_items (sale_id, variant_id, quantity, unit_price, discount, tax, subtotal)
-             VALUES ($1, $2, $3, $4, $5, 0, $6)
+             VALUES ($1, $2, $3, $4, $5, $6, $7)
              RETURNING *",
             sale.id,
             line.variant_id,
             line.quantity,
             line.unit_price,
             line.discount,
+            line.tax,
             line.subtotal
         )
         .fetch_one(&mut *tx)
@@ -286,4 +360,36 @@ pub async fn list_sales(
     .unwrap_or(0);
 
     Ok((rows, total))
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn proportional_allocation_preserves_amount_and_prioritizes_largest_remainders() {
+        assert_eq!(allocate_proportionally(10, &[1, 1, 1]), vec![4, 3, 3]);
+        assert_eq!(allocate_proportionally(19, &[100, 200]), vec![6, 13]);
+    }
+
+    #[test]
+    fn discounts_and_tax_allocations_reconcile_with_sale_total() {
+        let gross_lines = [10_001, 20_002];
+        let sale_discount = 3_000;
+        let discounts = allocate_proportionally(sale_discount, &gross_lines);
+        let after_discount: Vec<i64> = gross_lines
+            .iter()
+            .zip(discounts)
+            .map(|(gross, discount)| gross - discount)
+            .collect();
+        let sale_total: i64 = after_discount.iter().sum();
+        let tax_total = tax_included_in(sale_total, 1900, 0);
+        let line_taxes = allocate_proportionally(tax_total / 100, &after_discount)
+            .into_iter()
+            .map(|tax_units| tax_units * 100)
+            .collect::<Vec<_>>();
+
+        assert_eq!(line_taxes.iter().sum::<i64>(), tax_total);
+        assert!(line_taxes.iter().all(|tax| tax % 100 == 0));
+    }
 }

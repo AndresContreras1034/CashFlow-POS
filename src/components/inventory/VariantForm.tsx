@@ -1,7 +1,9 @@
 import React, { useEffect, useState } from 'react';
 import type { ProductVariant, CreateVariantDto, UpdateVariantDto } from '../../types';
 import { generateInternalBarcode } from '../../services/inventory.service';
-import { calcMargin, formatMargin } from '../../utils/format';
+import {
+  calcMargin, formatMargin, parseMoneyInput, minorToInput, moneyStep, MONEY_DEFAULTS,
+} from '../../utils/format';
 import './ProductForm.css';
 
 interface VariantFormProps {
@@ -55,8 +57,8 @@ export const VariantForm: React.FC<VariantFormProps> = ({
   const [form, setForm] = useState({
     sku: variant?.sku ?? '',
     barcode: variant?.barcode ?? '',
-    price: variant?.price.toString() ?? '0',
-    cost: variant?.cost.toString() ?? '0',
+    price: variant ? minorToInput(variant.price) : '0',
+    cost: variant ? minorToInput(variant.cost) : '0',
     stock: variant?.stock.toString() ?? '0',
     stock_min: variant?.stock_min.toString() ?? '1',
     allow_negative: variant?.allow_negative ?? false,
@@ -72,8 +74,8 @@ export const VariantForm: React.FC<VariantFormProps> = ({
       setForm({
         sku: variant.sku ?? '',
         barcode: variant.barcode ?? '',
-        price: variant.price.toString(),
-        cost: variant.cost.toString(),
+        price: minorToInput(variant.price),
+        cost: minorToInput(variant.cost),
         stock: variant.stock.toString(),
         stock_min: variant.stock_min.toString(),
         allow_negative: variant.allow_negative,
@@ -92,8 +94,10 @@ export const VariantForm: React.FC<VariantFormProps> = ({
 
   const validate = () => {
     const errs: Record<string, string> = {};
-    if (!form.price.trim() || Number(form.price) <= 0) errs.price = 'El precio debe ser mayor a 0';
-    if (form.cost.trim() && Number(form.cost) < 0) errs.cost = 'El costo no puede ser negativo';
+    const price = parseMoneyInput(form.price);
+    const cost = form.cost.trim() ? parseMoneyInput(form.cost) : null;
+    if (price === null || price <= 0) errs.price = 'Ingresa un precio válido mayor a 0';
+    if (form.cost.trim() && cost === null) errs.cost = 'Ingresa un costo válido';
     if (!form.stock.trim() || Number(form.stock) < 0) errs.stock = 'El stock no puede ser negativo';
     if (!form.stock_min.trim() || Number(form.stock_min) < 0) errs.stock_min = 'El stock mínimo no puede ser negativo';
 
@@ -118,8 +122,8 @@ export const VariantForm: React.FC<VariantFormProps> = ({
       attributes: parseAttributes(form.attributes),
       sku: form.sku.trim() || undefined,
       barcode: form.barcode.trim() || undefined,
-      price: Number(form.price),
-      cost: Number(form.cost) || 0,
+      price: parseMoneyInput(form.price) ?? 0,
+      cost: parseMoneyInput(form.cost) ?? 0,
       ...(!isEdit && { stock: Number(form.stock) }),
       stock_min: Number(form.stock_min),
       allow_negative: form.allow_negative,
@@ -143,7 +147,7 @@ export const VariantForm: React.FC<VariantFormProps> = ({
     }
   };
 
-  const margin = calcMargin(Number(form.price) || 0, Number(form.cost) || 0);
+  const margin = calcMargin(parseMoneyInput(form.price) ?? 0, parseMoneyInput(form.cost) ?? 0);
 
   return (
     <form className="product-form" onSubmit={handleSubmit} noValidate>
@@ -184,27 +188,29 @@ export const VariantForm: React.FC<VariantFormProps> = ({
 
       <div className="form-row">
         <div className="form-field">
-          <label className="form-label">Precio <span className="required">*</span></label>
+          <label className="form-label">Precio ({MONEY_DEFAULTS.currency}) <span className="required">*</span></label>
           <input
             className={`form-input ${errors.price ? 'form-input--error' : ''}`}
             type="number"
             min="0"
+            step={moneyStep()}
             value={form.price}
             onChange={setValue('price')}
-            placeholder="Ej: 2800000"
+            placeholder="Ej: 28000"
           />
           {errors.price && <span className="form-error">{errors.price}</span>}
         </div>
 
         <div className="form-field">
-          <label className="form-label">Costo</label>
+          <label className="form-label">Costo ({MONEY_DEFAULTS.currency})</label>
           <input
             className={`form-input ${errors.cost ? 'form-input--error' : ''}`}
             type="number"
             min="0"
+            step={moneyStep()}
             value={form.cost}
             onChange={setValue('cost')}
-            placeholder="Ej: 1500000"
+            placeholder="Ej: 15000"
           />
           {errors.cost && <span className="form-error">{errors.cost}</span>}
         </div>

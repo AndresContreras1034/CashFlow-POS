@@ -2,10 +2,8 @@ import { useEffect, useState, useCallback } from 'react';
 import type { Sale, SaleDetail, SaleFilterDto, SaleStatus } from '../../types';
 import { listSales, getSale } from '../../services/sales.service';
 import { printSaleTicket } from '../../services/billing.service';
+import { formatMoney } from '../../utils/format';
 import './SalesHistory.css';
-
-const formatMoney = (cents: number) =>
-  (cents / 100).toLocaleString('es-CO', { style: 'currency', currency: 'COP' });
 
 const statusLabel: Record<SaleStatus, string> = {
   completed: 'Completada',

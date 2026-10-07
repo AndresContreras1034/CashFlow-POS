@@ -1,13 +1,52 @@
-/** Centavos → "$1.234" en pesos colombianos */
-export const formatMoney = (cents: number): string => {
-  const pesos = cents / 100;
+/** Moneda por defecto hasta que Ajustes la provea vía contexto (Bloque 4). */
+export const MONEY_DEFAULTS = { currency: 'COP', decimals: 0 } as const;
+
+const clampDecimals = (decimals: number): number => Math.min(Math.max(decimals, 0), 2);
+
+/** Centésimas -> importe formateado. Todo importe se guarda en centésimas. */
+export const formatMoney = (
+  minor: number,
+  currency: string = MONEY_DEFAULTS.currency,
+  decimals: number = MONEY_DEFAULTS.decimals,
+): string => {
+  const precision = clampDecimals(decimals);
   return new Intl.NumberFormat('es-CO', {
     style: 'currency',
-    currency: 'COP',
-    minimumFractionDigits: 0,
-    maximumFractionDigits: 0,
-  }).format(pesos);
+    currency,
+    minimumFractionDigits: precision,
+    maximumFractionDigits: precision,
+  }).format(minor / 100);
 };
+
+/**
+ * Texto tecleado por el usuario en unidades principales -> centésimas.
+ * Rechaza negativos, texto y precisión superior a la moneda.
+ */
+export const parseMoneyInput = (
+  raw: string,
+  decimals: number = MONEY_DEFAULTS.decimals,
+): number | null => {
+  const text = raw.trim();
+  const precision = clampDecimals(decimals);
+  const pattern = precision > 0
+    ? new RegExp(`^\\d+(\\.\\d{1,${precision}})?$`)
+    : /^\d+$/;
+  if (!pattern.test(text)) return null;
+
+  const [whole, fraction = ''] = text.split('.');
+  const minor = Number(whole) * 100 + Number(fraction.padEnd(2, '0'));
+  return Number.isSafeInteger(minor) ? minor : null;
+};
+
+/** Centésimas -> texto en unidades principales para un input. */
+export const minorToInput = (
+  minor: number,
+  decimals: number = MONEY_DEFAULTS.decimals,
+): string => (minor / 100).toFixed(clampDecimals(decimals));
+
+/** Valor step de un input de dinero. */
+export const moneyStep = (decimals: number = MONEY_DEFAULTS.decimals): string =>
+  decimals > 0 ? '0.01' : '1';
 
 export type MarginResult =
   | { kind: 'ok'; percent: number }

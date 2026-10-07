@@ -10,6 +10,7 @@ use db::init_db;
 use modules::billing::router::*;
 use modules::cash::router::*;
 use modules::inventory::router::*;
+use modules::licensing::router::*;
 use modules::sales::router::*;
 use modules::settings::router::*;
 use modules::stocktake::router::*;
@@ -103,6 +104,11 @@ pub fn run() {
             export_inventory,
             export_inventory_template,
             print_variant_labels,
+            // =================================================
+            // Licencias offline
+            // =================================================
+            get_license_status,
+            activate_license,
             // =================================================
             // Stocktake
             // =================================================

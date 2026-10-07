@@ -11,10 +11,8 @@ import {
   registerCashMovement,
   listCashMovements,
 } from '../../services/cash.service';
+import { formatMoney, parseMoneyInput, moneyStep, MONEY_DEFAULTS } from '../../utils/format';
 import './Cash.css';
-
-const formatMoney = (cents: number) =>
-  (cents / 100).toLocaleString('es-CO', { style: 'currency', currency: 'COP' });
 
 export default function Cash() {
   const [session, setSession] = useState<CashSessionWithTotals | null>(null);
@@ -62,8 +60,12 @@ export default function Cash() {
   async function handleOpenSession(e: React.FormEvent) {
     e.preventDefault();
     setError(null);
+    const amountCents = parseMoneyInput(openingAmount);
+    if (amountCents === null) {
+      setError('Ingresa un monto inicial válido');
+      return;
+    }
     try {
-      const amountCents = Math.round(parseFloat(openingAmount || '0') * 100);
       await openCashSession({
         opening_amount: amountCents,
         opening_notes: openingNotes || null,
@@ -80,8 +82,12 @@ export default function Cash() {
     e.preventDefault();
     if (!session) return;
     setError(null);
+    const amountCents = parseMoneyInput(movementAmount);
+    if (amountCents === null || amountCents <= 0) {
+      setError('Ingresa un monto válido mayor a 0');
+      return;
+    }
     try {
-      const amountCents = Math.round(parseFloat(movementAmount || '0') * 100);
       await registerCashMovement(session.id, {
         movement_type: movementType,
         amount: amountCents,
@@ -99,8 +105,12 @@ export default function Cash() {
     e.preventDefault();
     if (!session) return;
     setError(null);
+    const countedCents = parseMoneyInput(countedAmount);
+    if (countedCents === null) {
+      setError('Ingresa un monto contado válido');
+      return;
+    }
     try {
-      const countedCents = Math.round(parseFloat(countedAmount || '0') * 100);
       await closeCashSession(session.id, {
         counted_amount: countedCents,
         closing_notes: closingNotes || null,
@@ -129,16 +139,16 @@ export default function Cash() {
           <h2>No hay un turno abierto</h2>
           <form onSubmit={handleOpenSession} className="cash-form">
             <div className="form-field">
-              <label>Monto inicial</label>
+              <label>Monto inicial ({MONEY_DEFAULTS.currency})</label>
               <input
                 className="form-input"
                 type="number"
-                step="0.01"
+                step={moneyStep()}
                 min="0"
                 required
                 value={openingAmount}
                 onChange={(e) => setOpeningAmount(e.target.value)}
-                placeholder="0.00"
+                placeholder="0"
               />
             </div>
             <div className="form-field">
@@ -196,16 +206,16 @@ export default function Cash() {
               <h2>Arqueo de cierre</h2>
               <form onSubmit={handleCloseSession} className="cash-form">
                 <div className="form-field">
-                  <label>Monto contado</label>
+                  <label>Monto contado ({MONEY_DEFAULTS.currency})</label>
                   <input
                     className="form-input"
                     type="number"
-                    step="0.01"
+                    step={moneyStep()}
                     min="0"
                     required
                     value={countedAmount}
                     onChange={(e) => setCountedAmount(e.target.value)}
-                    placeholder="0.00"
+                    placeholder="0"
                   />
                 </div>
                 <div className="form-field">
@@ -239,16 +249,16 @@ export default function Cash() {
                 </select>
               </div>
               <div className="form-field">
-                <label>Monto</label>
+                <label>Monto ({MONEY_DEFAULTS.currency})</label>
                 <input
                   className="form-input"
                   type="number"
-                  step="0.01"
+                  step={moneyStep()}
                   min="0"
                   required
                   value={movementAmount}
                   onChange={(e) => setMovementAmount(e.target.value)}
-                  placeholder="0.00"
+                  placeholder="0"
                 />
               </div>
               <div className="form-field">

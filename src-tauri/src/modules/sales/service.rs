@@ -35,6 +35,12 @@ pub async fn create_sale(pool: &PgPool, dto: CreateSaleDto) -> Result<SaleDetail
             CreateSaleError::PaymentMismatch => {
                 AppError::validation("El total de los pagos no coincide con el total de la venta")
             }
+            CreateSaleError::InvalidDiscount => AppError::validation(
+                "El descuento no puede ser negativo ni superar el subtotal de la venta",
+            ),
+            CreateSaleError::AmountOverflow => {
+                AppError::validation("El importe de la venta supera el rango permitido")
+            }
             CreateSaleError::InsufficientStock {
                 variant_id,
                 available,

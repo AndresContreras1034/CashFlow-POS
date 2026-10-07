@@ -2,6 +2,7 @@ import { useState, useRef, useCallback } from 'react';
 import type { CreateSalePaymentDto, PaymentMethod } from '../../types';
 import { findByBarcode, searchVariants } from '../../services/inventory.service';
 import { createSale } from '../../services/sales.service';
+import { formatMoney, parseMoneyInput, minorToInput, moneyStep } from '../../utils/format';
 import './Sales.css';
 
 interface VariantResult {
@@ -23,9 +24,6 @@ interface CartLine {
   discount: number;
   stock: number; // referencia visual, la validación real es del backend
 }
-
-const formatMoney = (cents: number) =>
-  (cents / 100).toLocaleString('es-CO', { style: 'currency', currency: 'COP' });
 
 function attributesLabel(attrs: Record<string, string>) {
   const entries = Object.entries(attrs || {});
@@ -112,8 +110,9 @@ export default function Sales() {
     );
   }
 
-  function updateDiscount(variantId: number, discountPesos: string) {
-    const cents = Math.round(parseFloat(discountPesos || '0') * 100);
+  function updateDiscount(variantId: number, pesos: string) {
+    const cents = pesos.trim() === '' ? 0 : parseMoneyInput(pesos);
+    if (cents === null) return;
     setCart((prev) =>
       prev.map((l) => (l.variant_id === variantId ? { ...l, discount: cents } : l))
     );
@@ -128,7 +127,8 @@ export default function Sales() {
   }
 
   function updatePaymentAmount(index: number, pesos: string) {
-    const cents = Math.round(parseFloat(pesos || '0') * 100);
+    const cents = pesos.trim() === '' ? 0 : parseMoneyInput(pesos);
+    if (cents === null) return;
     setPayments((prev) => prev.map((p, i) => (i === index ? { ...p, amount: cents } : p)));
   }
 
@@ -276,8 +276,8 @@ export default function Sales() {
                       className="form-input sales-qty-input"
                       type="number"
                       min={0}
-                      step="0.01"
-                      value={line.discount / 100}
+                      step={moneyStep()}
+                      value={minorToInput(line.discount)}
                       onChange={(e) => updateDiscount(line.variant_id, e.target.value)}
                     />
                   </td>
@@ -320,9 +320,9 @@ export default function Sales() {
                 className="form-input"
                 type="number"
                 min={0}
-                step="0.01"
-                placeholder="0.00"
-                value={p.amount / 100 || ''}
+                step={moneyStep()}
+                placeholder="0"
+                value={p.amount ? minorToInput(p.amount) : ''}
                 onChange={(e) => updatePaymentAmount(i, e.target.value)}
               />
               {payments.length > 1 && (
