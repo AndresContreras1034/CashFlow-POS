@@ -3,6 +3,7 @@ import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
 
 import { AppLayout } from '../components/layout/AppLayout';
 import { LicenseGate } from '../components/licensing/LicenseGate';
+import { Audit } from '../pages/Audit/Audit';
 import { Inventory } from '../pages/Inventory/Inventory';
 import { ProductDetail } from '../pages/ProductDetail/ProductDetail';
 import { Settings } from '../pages/Settings/Settings';
@@ -73,6 +74,9 @@ export const AppRouter: React.FC = () => (
           path="/reports"
           element={<Placeholder name="Reportes" />}
         />
+
+        {/* Auditoría */}
+        <Route path="/audit" element={<Audit />} />
 
         {/* Configuración */}
         <Route path="/settings" element={<Settings />} />

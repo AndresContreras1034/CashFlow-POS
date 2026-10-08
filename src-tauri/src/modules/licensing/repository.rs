@@ -1,5 +1,5 @@
 use chrono::{DateTime, Utc};
-use sqlx::PgPool;
+use sqlx::{PgConnection, PgPool};
 use uuid::Uuid;
 
 pub struct LicenseState {
@@ -34,12 +34,12 @@ pub async fn get_state(pool: &PgPool) -> Result<LicenseState, sqlx::Error> {
     })
 }
 
-pub async fn save_license(pool: &PgPool, license_file: &str) -> Result<(), sqlx::Error> {
+pub async fn save_license(conn: &mut PgConnection, license_file: &str) -> Result<(), sqlx::Error> {
     sqlx::query!(
         "UPDATE license_state SET license_file = $1 WHERE id = 1",
         license_file
     )
-    .execute(pool)
+    .execute(&mut *conn)
     .await?;
     Ok(())
 }

@@ -1,4 +1,4 @@
-use sqlx::{postgres::PgPoolOptions, PgPool};
+use sqlx::{postgres::PgPoolOptions, Connection, PgConnection, PgPool};
 use std::time::Duration;
 
 /// Tipo central del pool — se comparte via tauri State<DbPool>
@@ -8,10 +8,16 @@ pub type DbPool = PgPool;
 /// Se llama una sola vez al arrancar la app en `lib.rs`.
 pub async fn init_db() -> Result<DbPool, sqlx::Error> {
     // Leer DATABASE_URL desde .env o variable de entorno del sistema
-    let database_url = std::env::var("DATABASE_URL")
-        .expect("DATABASE_URL no está definida. Crea un archivo .env en src-tauri/");
+    let database_url = std::env::var("DATABASE_URL").map_err(|_| {
+        sqlx::Error::Configuration(
+            "DATABASE_URL no está definida. Crea un archivo .env en src-tauri/".into(),
+        )
+    })?;
 
     tracing::info!("Conectando a PostgreSQL...");
+
+    // Sonda previa: expone el error real antes de crear el pool.
+    PgConnection::connect(&database_url).await?.close().await?;
 
     let pool = PgPoolOptions::new()
         .max_connections(10)
@@ -21,12 +27,12 @@ pub async fn init_db() -> Result<DbPool, sqlx::Error> {
         .connect(&database_url)
         .await?;
 
-    tracing::info!("Pool creado. Corriendo migraciones...");
+    tracing::info!(ok = true, "Pool de conexiones creado");
 
-    // Corre automáticamente todos los archivos en src-tauri/migrations/
+    tracing::info!("Ejecutando migraciones...");
     sqlx::migrate!("./migrations").run(&pool).await?;
 
-    tracing::info!("Migraciones aplicadas correctamente.");
+    tracing::info!(ok = true, "Migraciones aplicadas");
 
     Ok(pool)
 }

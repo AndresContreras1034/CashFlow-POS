@@ -3,6 +3,7 @@ import type { CreateSalePaymentDto, PaymentMethod, VariantWithProduct } from '..
 import { findByBarcode, searchVariants } from '../../services/inventory.service';
 import { createSale } from '../../services/sales.service';
 import { formatMoney, parseMoneyInput, minorToInput, moneyStep } from '../../utils/format';
+import { actorField } from '../../utils/preferences';
 import './Sales.css';
 
 interface CartLine {
@@ -170,6 +171,7 @@ export default function Sales() {
           discount: l.discount || null,
         })),
         payments: payments.filter((p) => p.amount > 0),
+        ...actorField('created_by'),
       });
       setLastSaleId(sale.id);
       setCart([]);

@@ -558,6 +558,65 @@ export interface StocktakeSummaryDto {
   moved_during_count: number;
 }
 
+// ============================================================
+// AUDITORÍA
+// ============================================================
+
+export type AuditCategory = 'business' | 'error';
+export type AuditOutcome = 'success' | 'failure';
+export type AuditModule =
+  | 'sales'
+  | 'inventory'
+  | 'cash'
+  | 'stocktake'
+  | 'settings'
+  | 'import'
+  | 'licensing'
+  | 'billing'
+  | 'system';
+
+/** Un campo que cambió: solo aparecen los campos modificados. */
+export interface AuditChange {
+  from: unknown;
+  to: unknown;
+}
+
+export interface AuditEvent {
+  id: number;
+  /** ISO-8601 UTC */
+  created_at: string;
+  correlation_id: string | null;
+  category: AuditCategory;
+  module: AuditModule;
+  action: string;
+  outcome: AuditOutcome;
+  actor: string | null;
+  entity_type: string | null;
+  entity_id: string | null;
+  summary: string;
+  changes: Record<string, AuditChange> | null;
+  metadata: Record<string, unknown> | null;
+  error_message: string | null;
+}
+
+export interface AuditFilterDto {
+  module?: AuditModule;
+  category?: AuditCategory;
+  outcome?: AuditOutcome;
+  action?: string;
+  entity_type?: string;
+  entity_id?: string;
+  correlation_id?: string;
+  search?: string;
+  /** 'YYYY-MM-DD', inclusivo */
+  date_from?: string;
+  /** 'YYYY-MM-DD', inclusivo */
+  date_to?: string;
+  sort_dir?: 'asc' | 'desc';
+  page?: number;
+  page_size?: number;
+}
+
 export interface StocktakeReviewDto {
   stocktake: Stocktake;
   summary: StocktakeSummaryDto;

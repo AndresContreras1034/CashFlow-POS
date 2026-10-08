@@ -18,6 +18,7 @@ import {
   StockAdjustmentDto,
 } from '../../types';
 import { calcMargin, formatMargin, formatMoney } from '../../utils/format';
+import { actorField } from '../../utils/preferences';
 import {
   getProduct,
   listVariants,
@@ -140,13 +141,14 @@ export const ProductDetail: React.FC = () => {
     if (!stockModal) return;
     setSaving(true);
     try {
+      const dto = { ...data, ...actorField('created_by') };
       let updatedVariant: ProductVariant;
       if (stockModal.mode === 'entry') {
-        updatedVariant = await registerManualEntry(data as StockEntryDto);
+        updatedVariant = await registerManualEntry(dto as StockEntryDto);
       } else if (stockModal.mode === 'out') {
-        updatedVariant = await registerManualOut(data as StockOutDto);
+        updatedVariant = await registerManualOut(dto as StockOutDto);
       } else {
-        updatedVariant = await adjustStock(data as StockAdjustmentDto);
+        updatedVariant = await adjustStock(dto as StockAdjustmentDto);
       }
 
       setVariants(prev => prev.map(v => v.id === updatedVariant.id ? updatedVariant : v));

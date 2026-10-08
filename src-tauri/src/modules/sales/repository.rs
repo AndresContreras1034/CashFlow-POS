@@ -1,4 +1,13 @@
+use serde_json::json;
 use sqlx::PgPool;
+use uuid::Uuid;
+
+use crate::modules::audit::{
+    actor::declared_actor,
+    dto::NewAuditEvent,
+    models::{AuditCategory, AuditModule, AuditOutcome},
+    repository as audit_repo,
+};
 
 use crate::modules::cash::{
     dto::CreateMovementDto, models::CashMovementType, repository as cash_repo,
@@ -69,6 +78,7 @@ pub async fn create_sale(pool: &PgPool, dto: CreateSaleDto) -> Result<SaleDetail
         .created_by
         .clone()
         .unwrap_or_else(|| "system".to_string());
+    let actor = declared_actor(&dto.created_by);
     let global_discount = dto.discount.unwrap_or(0);
     if global_discount < 0 {
         return Err(CreateSaleError::InvalidDiscount);
@@ -247,6 +257,7 @@ pub async fn create_sale(pool: &PgPool, dto: CreateSaleDto) -> Result<SaleDetail
         .filter(|p| p.method == PaymentMethod::Cash)
         .map(|p| p.amount)
         .sum();
+    let mut cash_session_id: Option<i32> = None;
 
     if cash_amount > 0 {
         let session_id = sqlx::query_scalar!("SELECT id FROM cash_sessions WHERE status = 'open'")
@@ -256,8 +267,9 @@ pub async fn create_sale(pool: &PgPool, dto: CreateSaleDto) -> Result<SaleDetail
         let Some(session_id) = session_id else {
             return Err(CreateSaleError::NoOpenCashSession);
         };
+        cash_session_id = Some(session_id);
 
-        cash_repo::create_movement(
+        let movement = cash_repo::create_movement(
             &mut tx,
             session_id,
             CreateMovementDto {
@@ -269,7 +281,49 @@ pub async fn create_sale(pool: &PgPool, dto: CreateSaleDto) -> Result<SaleDetail
             },
         )
         .await?;
+
+        // El turno se cerró entre la lectura y el lock: sin movimiento de
+        // caja no hay venta en efectivo. Se revierte todo al soltar `tx`.
+        if movement.is_none() {
+            return Err(CreateSaleError::NoOpenCashSession);
+        }
     }
+
+    // El detalle por ítem vive en sale_items; este evento conserva el resumen.
+    audit_repo::insert_event(
+        &mut *tx,
+        NewAuditEvent {
+            correlation_id: Some(Uuid::new_v4()),
+            category: AuditCategory::Business,
+            module: AuditModule::Sales,
+            action: "create".to_string(),
+            outcome: AuditOutcome::Success,
+            actor,
+            entity_type: Some("sale".to_string()),
+            entity_id: Some(sale.id.to_string()),
+            summary: format!("Venta #{} registrada", sale.id),
+            changes: None,
+            metadata: Some(json!({
+                "subtotal": sale.subtotal,
+                "discount": sale.discount,
+                "tax": sale.tax,
+                "total": sale.total,
+                "item_count": items.len(),
+                "units": items.iter().map(|item| item.quantity as i64).sum::<i64>(),
+                "payments": payments
+                    .iter()
+                    .map(|payment| json!({
+                        "method": payment.method,
+                        "amount": payment.amount,
+                    }))
+                    .collect::<Vec<_>>(),
+                "customer_id": sale.customer_id,
+                "cash_session_id": cash_session_id,
+            })),
+            error_message: None,
+        },
+    )
+    .await?;
 
     tx.commit().await?;
     Ok(SaleDetail {

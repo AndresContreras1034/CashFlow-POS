@@ -1,13 +1,21 @@
+use serde_json::json;
 use sqlx::PgPool;
+use uuid::Uuid;
 
 use crate::errors::app_error::AppError;
+use crate::modules::audit::{
+    actor::declared_actor,
+    dto::NewAuditEvent,
+    models::{AuditCategory, AuditModule, AuditOutcome},
+    repository as audit_repo,
+};
 use crate::modules::cash::{
     dto::{
         CashMovementFilterDto, CashSessionFilterDto, CloseSessionDto, CreateMovementDto,
         OpenSessionDto, PaginatedResponse,
     },
-    models::{CashMovement, CashSession, CashSessionWithTotals},
-    repository,
+    models::{CashMovement, CashMovementType, CashSession, CashSessionWithTotals},
+    repository::{self, CloseSessionError},
 };
 
 // ============================================================
@@ -78,7 +86,10 @@ pub async fn close_session(
 
     repository::close_session(pool, id, dto)
         .await
-        .map_err(AppError::from)?
+        .map_err(|e| match e {
+            CloseSessionError::Db(err) => AppError::from(err),
+            CloseSessionError::AlreadyClosed => AppError::validation("Este turno ya está cerrado"),
+        })?
         .ok_or_else(|| AppError::not_found("Turno de caja no encontrado"))
 }
 
@@ -110,6 +121,9 @@ pub async fn register_manual_movement(
         return Err(AppError::validation("El monto debe ser mayor a cero"));
     }
 
+    // `dto` se consume en create_movement: el actor se toma antes.
+    let actor = declared_actor(&dto.created_by);
+
     // Abrimos la transacción aquí.
     let mut tx = pool.begin().await.map_err(AppError::from)?;
 
@@ -120,6 +134,37 @@ pub async fn register_manual_movement(
         .ok_or_else(|| {
             AppError::validation("No hay un turno de caja abierto para registrar el movimiento")
         })?;
+
+    let label = if movement.movement_type == CashMovementType::ManualIn {
+        "Ingreso manual"
+    } else {
+        "Egreso manual"
+    };
+
+    audit_repo::insert_event(
+        &mut *tx,
+        NewAuditEvent {
+            correlation_id: Some(Uuid::new_v4()),
+            category: AuditCategory::Business,
+            module: AuditModule::Cash,
+            action: "create".to_string(),
+            outcome: AuditOutcome::Success,
+            actor,
+            entity_type: Some("cash_movement".to_string()),
+            entity_id: Some(movement.id.to_string()),
+            summary: format!("{} de caja en el turno #{}", label, movement.session_id),
+            changes: None,
+            metadata: Some(json!({
+                "movement_type": movement.movement_type,
+                "amount": movement.amount,
+                "session_id": movement.session_id,
+                "notes": movement.notes,
+            })),
+            error_message: None,
+        },
+    )
+    .await
+    .map_err(AppError::from)?;
 
     // Si todo salió bien, confirmamos.
     tx.commit().await.map_err(AppError::from)?;

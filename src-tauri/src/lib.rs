@@ -1,12 +1,14 @@
 pub mod config;
 pub mod db;
 pub mod errors;
+pub mod logging;
 pub mod middleware;
 pub mod modules;
 pub mod router;
 pub mod types;
 
 use db::init_db;
+use modules::audit::router::*;
 use modules::billing::router::*;
 use modules::cash::router::*;
 use modules::inventory::router::*;
@@ -20,12 +22,7 @@ use tauri::Manager;
 pub fn run() {
     dotenvy::dotenv().ok();
 
-    tracing_subscriber::fmt()
-        .with_env_filter(
-            tracing_subscriber::EnvFilter::try_from_default_env()
-                .unwrap_or_else(|_| "pos=debug,sqlx=warn".into()),
-        )
-        .init();
+    logging::init();
 
     tauri::Builder::default()
         // =====================================================
@@ -40,16 +37,23 @@ pub fn run() {
             let handle = app.handle().clone();
 
             tauri::async_runtime::spawn(async move {
-                let pool = init_db()
-                    .await
-                    .expect("Error al inicializar la base de datos");
+                match init_db().await {
+                    Ok(pool) => {
+                        handle.manage(pool);
 
-                handle.manage(pool);
+                        tracing::info!(ok = true, "Base de datos lista");
 
-                tracing::info!("Base de datos lista.");
-
-                if let Some(window) = handle.get_webview_window("main") {
-                    window.show().ok();
+                        if let Some(window) = handle.get_webview_window("main") {
+                            window.show().ok();
+                        }
+                    }
+                    Err(error) => {
+                        tracing::error!(
+                            error = %error,
+                            "No se pudo inicializar la base de datos"
+                        );
+                        handle.exit(1);
+                    }
                 }
             });
 
@@ -146,6 +150,12 @@ pub fn run() {
             // Billing / Printer
             // =================================================
             print_sale_ticket,
+            // =================================================
+            // Audit
+            // =================================================
+            list_audit_events,
+            get_audit_event,
+            list_audit_events_by_correlation,
         ])
         // =====================================================
         // Ejecutar aplicación
@@ -153,3 +163,5 @@ pub fn run() {
         .run(tauri::generate_context!())
         .expect("Error al iniciar la aplicación Tauri");
 }
+
+

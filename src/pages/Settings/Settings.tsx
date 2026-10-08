@@ -4,6 +4,7 @@ import { useSettings } from '../../context/AppContext';
 import { updateSettings } from '../../services/settings.service';
 import type { AppSettings, UpdateSettingsDto } from '../../types';
 import { formatMoney } from '../../utils/format';
+import { getOperatorOrNull, setOperator } from '../../utils/preferences';
 import {
   formatShortcutKey,
   isSupportedShortcut,
@@ -232,6 +233,8 @@ export const Settings: React.FC = () => {
   const [saving, setSaving] = useState(false);
   const [dirty, setDirty] = useState(false);
   const [toasts, setToasts] = useState<ToastData[]>([]);
+  const [savedOperator, setSavedOperator] = useState(() => getOperatorOrNull() ?? '');
+  const [operator, setOperatorInput] = useState(savedOperator);
 
   const addToast = useCallback((message: string, type: ToastData['type']) => {
     setToasts(current => [
@@ -243,6 +246,25 @@ export const Settings: React.FC = () => {
   const dismissToast = useCallback((id: string) => {
     setToasts(current => current.filter(toast => toast.id !== id));
   }, []);
+
+  const operatorDirty = operator.trim() !== savedOperator;
+
+  const saveOperator = () => {
+    const next = operator.trim();
+    try {
+      setOperator(next);
+      setSavedOperator(next);
+      setOperatorInput(next);
+      addToast(next ? 'Operador guardado en este equipo' : 'Operador borrado', 'success');
+    } catch (error) {
+      addToast(
+        error instanceof Error
+          ? `No se pudo guardar el operador: ${error.message}`
+          : 'No se pudo guardar el operador',
+        'error',
+      );
+    }
+  };
 
   useEffect(() => {
     if (!pendingToast) return;
@@ -576,6 +598,40 @@ export const Settings: React.FC = () => {
                 onChange={set('logo_url')}
                 placeholder="https://..."
               />
+            </div>
+
+            <div className="form-field">
+              <label className="form-label" htmlFor="settings-operator">Operador</label>
+              <div style={{ display: 'flex', gap: 8 }}>
+                <input
+                  id="settings-operator"
+                  className="form-input"
+                  type="text"
+                  maxLength={100}
+                  value={operator}
+                  onChange={event => setOperatorInput(event.target.value)}
+                  onKeyDown={event => {
+                    if (event.key === 'Enter') {
+                      event.preventDefault();
+                      if (operatorDirty) saveOperator();
+                    }
+                  }}
+                  placeholder="Nombre de quien opera la caja"
+                />
+                <button
+                  type="button"
+                  className="btn btn-ghost"
+                  onClick={saveOperator}
+                  disabled={!operatorDirty}
+                >
+                  Guardar operador
+                </button>
+              </div>
+              <span className="settings-hint">
+                Se guarda solo en este equipo, no en el servidor. Se registra como autor en la
+                auditoría. Déjalo vacío para no registrar autor. Cuando exista inicio de sesión,
+                este campo dejará de usarse.
+              </span>
             </div>
           </section>
         )}

@@ -5,9 +5,15 @@ use rsa::{
     signature::Verifier,
     RsaPublicKey,
 };
+use serde_json::json;
 use sha2::Sha256;
 use sqlx::PgPool;
 
+use crate::modules::audit::{
+    dto::NewAuditEvent,
+    models::{AuditCategory, AuditModule, AuditOutcome},
+    repository as audit_repo,
+};
 use crate::{errors::app_error::AppError, modules::licensing::models::*};
 
 use super::{public_key, repository};
@@ -199,9 +205,51 @@ pub async fn activate(pool: &PgPool, path: &str) -> Result<(), AppError> {
 
     let stored = serde_json::to_string(&signed)
         .map_err(|error| AppError::internal(&format!("No se pudo guardar la licencia: {error}")))?;
-    repository::save_license(pool, &stored)
+
+    let replaced_license_id = state
+        .license_file
+        .as_deref()
+        .and_then(|old| verify_signed_license(old).ok())
+        .map(|(_, old_payload)| old_payload.license_id);
+
+    let mut tx = pool.begin().await.map_err(AppError::from)?;
+
+    repository::save_license(&mut *tx, &stored)
         .await
         .map_err(AppError::from)?;
+
+    audit_repo::insert_event(
+        &mut *tx,
+        NewAuditEvent {
+            correlation_id: Some(uuid::Uuid::new_v4()),
+            category: AuditCategory::Business,
+            module: AuditModule::Licensing,
+            action: "activate".to_string(),
+            outcome: AuditOutcome::Success,
+            actor: None,
+            entity_type: Some("license".to_string()),
+            entity_id: Some(payload.license_id.clone()),
+            summary: format!(
+                "Licencia {} activada para {}",
+                payload.license_id, payload.licensee
+            ),
+            changes: None,
+            metadata: Some(json!({
+                "license_id": payload.license_id,
+                "licensee": payload.licensee,
+                "kind": payload.kind,
+                "issued_at": payload.issued_at,
+                "expires_at": payload.expires_at,
+                "replaced_license_id": replaced_license_id,
+            })),
+            error_message: None,
+        },
+    )
+    .await
+    .map_err(AppError::from)?;
+
+    tx.commit().await.map_err(AppError::from)?;
+
     repository::update_last_seen(pool, now)
         .await
         .map_err(AppError::from)

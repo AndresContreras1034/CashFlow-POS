@@ -40,8 +40,11 @@ export const setStocktakeCount = (
 export const getStocktakeReview = (stocktakeId: number): Promise<StocktakeReviewDto> =>
   invoke('get_stocktake_review', { stocktakeId });
 
-export const applyStocktake = (stocktakeId: number): Promise<StocktakeApplyResultDto> =>
-  invoke('apply_stocktake', { stocktakeId, createdBy: null });
+export const applyStocktake = (
+  stocktakeId: number,
+  createdBy?: string
+): Promise<StocktakeApplyResultDto> =>
+  invoke('apply_stocktake', { stocktakeId, createdBy: createdBy ?? null });
 
 export const cancelStocktake = (stocktakeId: number): Promise<void> =>
   invoke('cancel_stocktake', { stocktakeId });

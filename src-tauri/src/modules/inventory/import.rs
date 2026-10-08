@@ -1,10 +1,16 @@
 use std::collections::{HashMap, HashSet};
 
 use calamine::{open_workbook, Data, DataType, Reader, Xlsx};
-use serde_json::{Map, Value as JsonValue};
+use serde_json::{json, Map, Value as JsonValue};
 use sqlx::{PgConnection, PgPool};
+use uuid::Uuid;
 
 use crate::errors::app_error::AppError;
+use crate::modules::audit::{
+    dto::NewAuditEvent,
+    models::{AuditCategory, AuditModule, AuditOutcome},
+    repository as audit_repo,
+};
 use crate::modules::inventory::dto::{ImportRowResult, ImportSummaryDto};
 use crate::modules::inventory::export::IMPORT_HEADERS;
 
@@ -636,6 +642,44 @@ async fn run_import(
             &accepted,
         )
         .await?;
+
+        let file_name = std::path::Path::new(path)
+            .file_name()
+            .and_then(|name| name.to_str())
+            .map(str::to_string);
+
+        audit_repo::insert_event(
+            &mut *tx,
+            NewAuditEvent {
+                correlation_id: Some(Uuid::new_v4()),
+                category: AuditCategory::Business,
+                module: AuditModule::Import,
+                action: "execute".to_string(),
+                outcome: AuditOutcome::Success,
+                actor: None,
+                entity_type: Some("inventory_import".to_string()),
+                entity_id: None,
+                summary: format!(
+                    "Importación masiva: {} filas, {} productos y {} variantes nuevas",
+                    result_rows.len(),
+                    new_products,
+                    new_variants
+                ),
+                changes: None,
+                metadata: Some(json!({
+                    "file_name": file_name,
+                    "total_rows": result_rows.len(),
+                    "new_categories": new_categories,
+                    "new_products": new_products,
+                    "new_variants": new_variants,
+                    "skipped": skipped,
+                    "errors": errors,
+                })),
+                error_message: None,
+            },
+        )
+        .await
+        .map_err(AppError::from)?;
     }
 
     if dry_run || errors > 0 {

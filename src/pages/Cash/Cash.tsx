@@ -12,7 +12,7 @@ import {
   listCashMovements,
 } from '../../services/cash.service';
 import { formatMoney, parseMoneyInput, moneyStep, MONEY_DEFAULTS } from '../../utils/format';
-import { getOperator, setOperator } from '../../utils/preferences';
+import { getOperatorOrNull, setOperator } from '../../utils/preferences';
 import './Cash.css';
 
 export default function Cash() {
@@ -20,7 +20,7 @@ export default function Cash() {
   const [movements, setMovements] = useState<CashMovement[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-  const [operator, setOperatorName] = useState(() => getOperator());
+  const [operator, setOperatorName] = useState(() => getOperatorOrNull() ?? '');
 
   // Form: apertura
   const [openingAmount, setOpeningAmount] = useState('');
@@ -69,15 +69,10 @@ export default function Cash() {
     }
     try {
       const operatorName = operator.trim();
-      if (!operatorName) {
-        setError('Ingresa el nombre del operador');
-        return;
-      }
-      setOperator(operatorName);
       await openCashSession({
         opening_amount: amountCents,
         opening_notes: openingNotes || null,
-        opened_by: operatorName,
+        ...(operatorName ? { opened_by: operatorName } : {}),
       });
       setOpeningAmount('');
       setOpeningNotes('');
@@ -98,15 +93,11 @@ export default function Cash() {
     }
     try {
       const operatorName = operator.trim();
-      if (!operatorName) {
-        setError('Ingresa el nombre del operador');
-        return;
-      }
       await registerCashMovement(session.id, {
         movement_type: movementType,
         amount: amountCents,
         notes: movementNotes || null,
-        created_by: operatorName,
+        ...(operatorName ? { created_by: operatorName } : {}),
       });
       setMovementAmount('');
       setMovementNotes('');
@@ -127,14 +118,10 @@ export default function Cash() {
     }
     try {
       const operatorName = operator.trim();
-      if (!operatorName) {
-        setError('Ingresa el nombre del operador');
-        return;
-      }
       await closeCashSession(session.id, {
         counted_amount: countedCents,
         closing_notes: closingNotes || null,
-        closed_by: operatorName,
+        ...(operatorName ? { closed_by: operatorName } : {}),
       });
       setShowCloseForm(false);
       setCountedAmount('');
@@ -157,7 +144,7 @@ export default function Cash() {
 
       <div className="cash-card">
         <div className="form-field">
-          <label htmlFor="cash-operator">Operador de caja</label>
+          <label htmlFor="cash-operator">Operador de caja (opcional)</label>
           <input
             id="cash-operator"
             className="form-input"
@@ -173,7 +160,6 @@ export default function Cash() {
               }
             }}
             maxLength={100}
-            required
           />
         </div>
       </div>

@@ -88,10 +88,7 @@ pub fn build_sale_ticket(data: &TicketData) -> Vec<u8> {
 
     // ---- Productos ----
     for line in &data.lines {
-        push_line(
-            &mut b,
-            &format_item_line(line, data.currency_decimals),
-        );
+        push_line(&mut b, &format_item_line(line, data.currency_decimals));
     }
 
     push_line(&mut b, &"-".repeat(CHARS_PER_LINE));

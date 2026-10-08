@@ -9,6 +9,7 @@ import type {
   StocktakeReviewDto,
 } from '../../types';
 import { formatAttributes, formatDate } from '../../utils/format';
+import { actorField, getOperatorOrNull } from '../../utils/preferences';
 import { listCategories } from '../../services/inventory.service';
 import {
   applyStocktake,
@@ -147,6 +148,7 @@ export const StocktakePage: React.FC = () => {
       const created = await startStocktake({
         category_id: startCategory === '' ? null : startCategory,
         notes: startNotes.trim() || null,
+        ...actorField('created_by'),
       });
       setSession(created);
       setView('count');
@@ -283,7 +285,7 @@ export const StocktakePage: React.FC = () => {
     if (sessionId === null) return;
     setBusy(true);
     try {
-      const applied = await applyStocktake(sessionId);
+      const applied = await applyStocktake(sessionId, getOperatorOrNull() ?? undefined);
       setConfirmApply(false);
       setResult(applied);
       setSession(null);

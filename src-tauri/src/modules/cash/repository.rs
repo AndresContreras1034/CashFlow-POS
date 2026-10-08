@@ -1,4 +1,13 @@
+use serde_json::json;
 use sqlx::{PgConnection, PgPool};
+use uuid::Uuid;
+
+use crate::modules::audit::{
+    actor::declared_actor,
+    dto::NewAuditEvent,
+    models::{AuditCategory, AuditModule, AuditOutcome},
+    repository as audit_repo,
+};
 
 use crate::modules::cash::{
     dto::{
@@ -7,6 +16,20 @@ use crate::modules::cash::{
     },
     models::{CashMovement, CashMovementType, CashSession, CashSessionWithTotals},
 };
+
+/// Errores de negocio propios del cierre de turno — se distinguen de
+/// sqlx::Error para que el service pueda dar un mensaje claro.
+pub enum CloseSessionError {
+    Db(sqlx::Error),
+    /// El turno ya estaba cerrado cuando se obtuvo el lock de la fila.
+    AlreadyClosed,
+}
+
+impl From<sqlx::Error> for CloseSessionError {
+    fn from(e: sqlx::Error) -> Self {
+        CloseSessionError::Db(e)
+    }
+}
 
 // ============================================================
 // SESIONES DE CAJA
@@ -97,9 +120,11 @@ pub async fn list_sessions(
 
     Ok((rows, total))
 }
-
 pub async fn open_session(pool: &PgPool, dto: OpenSessionDto) -> Result<CashSession, sqlx::Error> {
-    sqlx::query_as!(
+    let actor = declared_actor(&dto.opened_by);
+    let mut tx = pool.begin().await?;
+
+    let session = sqlx::query_as!(
         CashSession,
         "INSERT INTO cash_sessions (opening_amount, opening_notes, opened_by)
          VALUES ($1, $2, $3)
@@ -108,17 +133,43 @@ pub async fn open_session(pool: &PgPool, dto: OpenSessionDto) -> Result<CashSess
         dto.opening_notes,
         dto.opened_by.unwrap_or_else(|| "system".to_string())
     )
-    .fetch_one(pool)
-    .await
+    .fetch_one(&mut *tx)
+    .await?;
+
+    audit_repo::insert_event(
+        &mut *tx,
+        NewAuditEvent {
+            correlation_id: Some(Uuid::new_v4()),
+            category: AuditCategory::Business,
+            module: AuditModule::Cash,
+            action: "open".to_string(),
+            outcome: AuditOutcome::Success,
+            actor,
+            entity_type: Some("cash_session".to_string()),
+            entity_id: Some(session.id.to_string()),
+            summary: format!("Turno de caja #{} abierto", session.id),
+            changes: None,
+            metadata: Some(json!({
+                "opening_amount": session.opening_amount,
+                "opening_notes": session.opening_notes,
+            })),
+            error_message: None,
+        },
+    )
+    .await?;
+
+    tx.commit().await?;
+
+    Ok(session)
 }
 
-/// Cierra el turno: bloquea la sesión, calcula el monto esperado a partir de
-/// los movimientos ya registrados, y guarda el arqueo junto con la diferencia.
+/// Cierra el turno dentro de una transacción y registra el evento de auditoría.
 pub async fn close_session(
     pool: &PgPool,
     id: i32,
     dto: CloseSessionDto,
-) -> Result<Option<CashSession>, sqlx::Error> {
+) -> Result<Option<CashSession>, CloseSessionError> {
+    let actor = declared_actor(&dto.closed_by);
     let mut tx = pool.begin().await?;
 
     let session = sqlx::query_as!(
@@ -132,6 +183,10 @@ pub async fn close_session(
     let Some(session) = session else {
         return Ok(None);
     };
+
+    if !session.is_open() {
+        return Err(CloseSessionError::AlreadyClosed);
+    }
 
     let total_in = sqlx::query_scalar!(
         r#"SELECT COALESCE(SUM(amount), 0)::BIGINT AS "total!"
@@ -176,6 +231,33 @@ pub async fn close_session(
         id
     )
     .fetch_one(&mut *tx)
+    .await?;
+
+    audit_repo::insert_event(
+        &mut *tx,
+        NewAuditEvent {
+            correlation_id: Some(Uuid::new_v4()),
+            category: AuditCategory::Business,
+            module: AuditModule::Cash,
+            action: "close".to_string(),
+            outcome: AuditOutcome::Success,
+            actor,
+            entity_type: Some("cash_session".to_string()),
+            entity_id: Some(updated.id.to_string()),
+            summary: format!("Turno de caja #{} cerrado", updated.id),
+            changes: Some(json!({
+                "status": { "from": "open", "to": "closed" },
+            })),
+            metadata: Some(json!({
+                "opening_amount": updated.opening_amount,
+                "expected_amount": updated.expected_amount,
+                "counted_amount": updated.counted_amount,
+                "difference": updated.difference,
+                "closing_notes": updated.closing_notes,
+            })),
+            error_message: None,
+        },
+    )
     .await?;
 
     tx.commit().await?;

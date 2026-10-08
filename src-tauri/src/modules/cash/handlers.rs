@@ -2,6 +2,11 @@ use tauri::State;
 
 use crate::db::DbPool;
 use crate::errors::app_error::AppError;
+use crate::modules::audit::{
+    actor::declared_actor,
+    failure::{finish, FailureContext},
+    models::AuditModule,
+};
 use crate::modules::cash::{
     dto::{
         CashMovementFilterDto, CashSessionFilterDto, CloseSessionDto, CreateMovementDto,
@@ -16,9 +21,14 @@ pub async fn open_cash_session(
     pool: State<'_, DbPool>,
     dto: OpenSessionDto,
 ) -> Result<CashSession, String> {
-    service::open_session(&pool, dto)
-        .await
-        .map_err(|e: AppError| e.to_string())
+    let ctx = FailureContext {
+        module: AuditModule::Cash,
+        action: "open",
+        entity_type: Some("cash_session"),
+        entity_id: None,
+        actor: declared_actor(&dto.opened_by),
+    };
+    finish(&pool, ctx, service::open_session(&pool, dto).await).await
 }
 
 #[tauri::command]
@@ -27,9 +37,14 @@ pub async fn close_cash_session(
     id: i32,
     dto: CloseSessionDto,
 ) -> Result<CashSession, String> {
-    service::close_session(&pool, id, dto)
-        .await
-        .map_err(|e: AppError| e.to_string())
+    let ctx = FailureContext {
+        module: AuditModule::Cash,
+        action: "close",
+        entity_type: Some("cash_session"),
+        entity_id: Some(id.to_string()),
+        actor: declared_actor(&dto.closed_by),
+    };
+    finish(&pool, ctx, service::close_session(&pool, id, dto).await).await
 }
 
 #[tauri::command]
@@ -67,9 +82,19 @@ pub async fn register_cash_movement(
     session_id: i32,
     dto: CreateMovementDto,
 ) -> Result<CashMovement, String> {
-    service::register_manual_movement(&pool, session_id, dto)
-        .await
-        .map_err(|e: AppError| e.to_string())
+    let ctx = FailureContext {
+        module: AuditModule::Cash,
+        action: "create",
+        entity_type: Some("cash_movement"),
+        entity_id: None,
+        actor: declared_actor(&dto.created_by),
+    };
+    finish(
+        &pool,
+        ctx,
+        service::register_manual_movement(&pool, session_id, dto).await,
+    )
+    .await
 }
 
 #[tauri::command]

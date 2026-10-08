@@ -1,4 +1,49 @@
+use serde_json::{json, Map, Value as JsonValue};
 use sqlx::{PgConnection, PgPool};
+use uuid::Uuid;
+
+use crate::modules::audit::{
+    changes::changed_fields,
+    dto::NewAuditEvent,
+    models::{AuditCategory, AuditModule, AuditOutcome},
+    repository as audit_repo,
+};
+
+/// Campos de fila que no representan cambios de negocio.
+const AUDIT_IGNORED_FIELDS: [&str; 3] = ["id", "created_at", "updated_at"];
+
+/// Construye eventos de catálogo de inventario sin actor mientras no exista login.
+fn inventory_event(
+    action: &str,
+    entity_type: &str,
+    entity_id: i32,
+    summary: String,
+    changes: Option<JsonValue>,
+    metadata: Option<JsonValue>,
+) -> NewAuditEvent {
+    NewAuditEvent {
+        correlation_id: Some(Uuid::new_v4()),
+        category: AuditCategory::Business,
+        module: AuditModule::Inventory,
+        action: action.to_string(),
+        outcome: AuditOutcome::Success,
+        actor: None,
+        entity_type: Some(entity_type.to_string()),
+        entity_id: Some(entity_id.to_string()),
+        summary,
+        changes,
+        metadata,
+        error_message: None,
+    }
+}
+
+fn field_list(changes: &Map<String, JsonValue>) -> String {
+    changes
+        .keys()
+        .map(String::as_str)
+        .collect::<Vec<_>>()
+        .join(", ")
+}
 
 use crate::modules::inventory::{
     dto::{
@@ -36,7 +81,9 @@ pub async fn create_category(
     pool: &PgPool,
     dto: CreateCategoryDto,
 ) -> Result<Category, sqlx::Error> {
-    sqlx::query_as!(
+    let mut tx = pool.begin().await?;
+
+    let category = sqlx::query_as!(
         Category,
         "INSERT INTO categories (name, description)
          VALUES ($1, $2)
@@ -44,8 +91,27 @@ pub async fn create_category(
         dto.name,
         dto.description
     )
-    .fetch_one(pool)
-    .await
+    .fetch_one(&mut *tx)
+    .await?;
+
+    audit_repo::insert_event(
+        &mut *tx,
+        inventory_event(
+            "create",
+            "category",
+            category.id,
+            format!("Categoría #{} creada: {}", category.id, category.name),
+            None,
+            Some(json!({
+                "name": category.name,
+                "description": category.description,
+            })),
+        ),
+    )
+    .await?;
+
+    tx.commit().await?;
+    Ok(category)
 }
 
 pub async fn update_category(
@@ -53,7 +119,21 @@ pub async fn update_category(
     id: i32,
     dto: UpdateCategoryDto,
 ) -> Result<Option<Category>, sqlx::Error> {
-    sqlx::query_as!(
+    let mut tx = pool.begin().await?;
+
+    let before = sqlx::query_as!(
+        Category,
+        "SELECT * FROM categories WHERE id = $1 FOR UPDATE",
+        id
+    )
+    .fetch_optional(&mut *tx)
+    .await?;
+
+    let Some(before) = before else {
+        return Ok(None);
+    };
+
+    let after = sqlx::query_as!(
         Category,
         "UPDATE categories
          SET name        = COALESCE($1, name),
@@ -66,8 +146,32 @@ pub async fn update_category(
         dto.is_active,
         id
     )
-    .fetch_optional(pool)
-    .await
+    .fetch_one(&mut *tx)
+    .await?;
+
+    let changes = changed_fields(&before, &after, &AUDIT_IGNORED_FIELDS);
+    if !changes.is_empty() {
+        let summary = format!(
+            "Categoría #{} actualizada: {}",
+            after.id,
+            field_list(&changes)
+        );
+        audit_repo::insert_event(
+            &mut *tx,
+            inventory_event(
+                "update",
+                "category",
+                after.id,
+                summary,
+                Some(JsonValue::Object(changes)),
+                None,
+            ),
+        )
+        .await?;
+    }
+
+    tx.commit().await?;
+    Ok(Some(after))
 }
 
 // ============================================================
@@ -206,7 +310,9 @@ pub async fn get_product_by_id(
 }
 
 pub async fn create_product(pool: &PgPool, dto: CreateProductDto) -> Result<Product, sqlx::Error> {
-    sqlx::query_as!(
+    let mut tx = pool.begin().await?;
+
+    let product = sqlx::query_as!(
         Product,
         "INSERT INTO products (category_id, name, description, brand, image_url)
          VALUES ($1, $2, $3, $4, $5)
@@ -217,8 +323,28 @@ pub async fn create_product(pool: &PgPool, dto: CreateProductDto) -> Result<Prod
         dto.brand,
         dto.image_url
     )
-    .fetch_one(pool)
-    .await
+    .fetch_one(&mut *tx)
+    .await?;
+
+    audit_repo::insert_event(
+        &mut *tx,
+        inventory_event(
+            "create",
+            "product",
+            product.id,
+            format!("Producto #{} creado: {}", product.id, product.name),
+            None,
+            Some(json!({
+                "category_id": product.category_id,
+                "name": product.name,
+                "brand": product.brand,
+            })),
+        ),
+    )
+    .await?;
+
+    tx.commit().await?;
+    Ok(product)
 }
 
 pub async fn update_product(
@@ -226,7 +352,21 @@ pub async fn update_product(
     id: i32,
     dto: UpdateProductDto,
 ) -> Result<Option<Product>, sqlx::Error> {
-    sqlx::query_as!(
+    let mut tx = pool.begin().await?;
+
+    let before = sqlx::query_as!(
+        Product,
+        "SELECT * FROM products WHERE id = $1 FOR UPDATE",
+        id
+    )
+    .fetch_optional(&mut *tx)
+    .await?;
+
+    let Some(before) = before else {
+        return Ok(None);
+    };
+
+    let after = sqlx::query_as!(
         Product,
         "UPDATE products
          SET category_id = COALESCE($1, category_id),
@@ -245,8 +385,32 @@ pub async fn update_product(
         dto.is_active,
         id
     )
-    .fetch_optional(pool)
-    .await
+    .fetch_one(&mut *tx)
+    .await?;
+
+    let changes = changed_fields(&before, &after, &AUDIT_IGNORED_FIELDS);
+    if !changes.is_empty() {
+        let summary = format!(
+            "Producto #{} actualizado: {}",
+            after.id,
+            field_list(&changes)
+        );
+        audit_repo::insert_event(
+            &mut *tx,
+            inventory_event(
+                "update",
+                "product",
+                after.id,
+                summary,
+                Some(JsonValue::Object(changes)),
+                None,
+            ),
+        )
+        .await?;
+    }
+
+    tx.commit().await?;
+    Ok(Some(after))
 }
 
 // ============================================================
@@ -401,16 +565,91 @@ pub async fn create_variant(
         .await?;
     }
 
+    audit_repo::insert_event(
+        &mut *tx,
+        inventory_event(
+            "create",
+            "variant",
+            variant.id,
+            format!(
+                "Variante #{} creada (producto #{})",
+                variant.id, variant.product_id
+            ),
+            None,
+            Some(json!({
+                "product_id": variant.product_id,
+                "attributes": variant.attributes,
+                "sku": variant.sku,
+                "barcode": variant.barcode,
+                "price": variant.price,
+                "cost": variant.cost,
+                "stock": variant.stock,
+                "stock_min": variant.stock_min,
+                "allow_negative": variant.allow_negative,
+            })),
+        ),
+    )
+    .await?;
+
     tx.commit().await?;
     Ok(variant)
 }
 
+/// Campos de la variante que se auditan: los que `update_variant` puede
+/// modificar. `stock` no entra (su historial es `inventory_movements`) ni
+/// los timestamps. Devuelve solo los campos que cambiaron, como
+/// `{"campo": {"from": .., "to": ..}}`; vacío si no cambió nada.
+fn variant_changes(before: &ProductVariant, after: &ProductVariant) -> Map<String, JsonValue> {
+    let mut changes = Map::new();
+    let mut track = |field: &str, from: JsonValue, to: JsonValue| {
+        if from != to {
+            changes.insert(field.to_string(), json!({ "from": from, "to": to }));
+        }
+    };
+
+    track(
+        "attributes",
+        before.attributes.clone(),
+        after.attributes.clone(),
+    );
+    track("sku", json!(before.sku), json!(after.sku));
+    track("barcode", json!(before.barcode), json!(after.barcode));
+    track("price", json!(before.price), json!(after.price));
+    track("cost", json!(before.cost), json!(after.cost));
+    track("stock_min", json!(before.stock_min), json!(after.stock_min));
+    track(
+        "allow_negative",
+        json!(before.allow_negative),
+        json!(after.allow_negative),
+    );
+    track("is_active", json!(before.is_active), json!(after.is_active));
+
+    changes
+}
+
+/// Actualiza la variante. Lee la fila con lock, aplica el UPDATE, compara
+/// antes/después y, si algo cambió, registra el evento de auditoría en la
+/// misma transacción. Si el evento falla, el cambio no se confirma.
 pub async fn update_variant(
     pool: &PgPool,
     id: i32,
     dto: UpdateVariantDto,
 ) -> Result<Option<ProductVariant>, sqlx::Error> {
-    sqlx::query_as!(
+    let mut tx = pool.begin().await?;
+
+    let before = sqlx::query_as!(
+        ProductVariant,
+        "SELECT * FROM product_variants WHERE id = $1 FOR UPDATE",
+        id
+    )
+    .fetch_optional(&mut *tx)
+    .await?;
+
+    let Some(before) = before else {
+        return Ok(None);
+    };
+
+    let after = sqlx::query_as!(
         ProductVariant,
         "UPDATE product_variants
          SET attributes     = COALESCE($1, attributes),
@@ -433,34 +672,62 @@ pub async fn update_variant(
         dto.is_active,
         id
     )
-    .fetch_optional(pool)
-    .await
+    .fetch_one(&mut *tx)
+    .await?;
+
+    let changes = variant_changes(&before, &after);
+    if !changes.is_empty() {
+        let fields = changes
+            .keys()
+            .map(String::as_str)
+            .collect::<Vec<_>>()
+            .join(", ");
+
+        audit_repo::insert_event(
+            &mut *tx,
+            NewAuditEvent {
+                correlation_id: Some(Uuid::new_v4()),
+                category: AuditCategory::Business,
+                module: AuditModule::Inventory,
+                action: "update".to_string(),
+                outcome: AuditOutcome::Success,
+                actor: None,
+                entity_type: Some("variant".to_string()),
+                entity_id: Some(after.id.to_string()),
+                summary: format!("Variante #{} actualizada: {}", after.id, fields),
+                changes: Some(JsonValue::Object(changes)),
+                metadata: Some(json!({ "product_id": after.product_id })),
+                error_message: None,
+            },
+        )
+        .await?;
+    }
+
+    tx.commit().await?;
+
+    Ok(Some(after))
 }
 
 // ============================================================
 // STOCK — operaciones atómicas con movimiento incluido
 // ============================================================
 
-/// Aplica entrada de stock y registra movimiento.
-/// Esta operación mantiene su propia transacción porque
-/// actualmente se utiliza de forma independiente.
+/// Aplica entrada de stock y registra movimiento usando la
+/// conexión/transacción del llamador. NO abre ni hace COMMIT.
 pub async fn apply_stock_entry(
-    pool: &PgPool,
+    conn: &mut PgConnection,
     dto: StockEntryDto,
     movement_type: MovementType,
 ) -> Result<ProductVariant, sqlx::Error> {
-    let mut tx = pool.begin().await?;
-
     // 1. Leer stock actual con lock para evitar race conditions
-    let current = sqlx::query_scalar!(
+    let stock_before = sqlx::query_scalar!(
         "SELECT stock FROM product_variants WHERE id = $1 FOR UPDATE",
         dto.variant_id
     )
-    .fetch_one(&mut *tx)
+    .fetch_one(&mut *conn)
     .await?;
 
-    let stock_before = current;
-    let stock_after = current + dto.quantity;
+    let stock_after = stock_before + dto.quantity;
 
     // 2. Actualizar stock
     let variant = sqlx::query_as!(
@@ -469,7 +736,7 @@ pub async fn apply_stock_entry(
         stock_after,
         dto.variant_id
     )
-    .fetch_one(&mut *tx)
+    .fetch_one(&mut *conn)
     .await?;
 
     // 3. Registrar movimiento
@@ -486,10 +753,8 @@ pub async fn apply_stock_entry(
         dto.notes,
         dto.created_by.as_deref().unwrap_or("system")
     )
-    .execute(&mut *tx)
+    .execute(&mut *conn)
     .await?;
-
-    tx.commit().await?;
 
     Ok(variant)
 }
@@ -610,6 +875,19 @@ pub async fn apply_stock_adjustment(
     }
 
     Ok(variant)
+}
+
+/// Stock actual con lock de fila, dentro de la transacción del llamador.
+pub async fn lock_variant_stock(
+    conn: &mut PgConnection,
+    variant_id: i32,
+) -> Result<i32, sqlx::Error> {
+    sqlx::query_scalar!(
+        "SELECT stock FROM product_variants WHERE id = $1 FOR UPDATE",
+        variant_id
+    )
+    .fetch_one(&mut *conn)
+    .await
 }
 
 pub async fn next_barcode_seq(pool: &PgPool) -> Result<i64, sqlx::Error> {
@@ -791,4 +1069,77 @@ pub async fn get_export_rows(pool: &PgPool) -> Result<Vec<ExportVariantRow>, sql
     )
     .fetch_all(pool)
     .await
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use chrono::Utc;
+
+    fn variant() -> ProductVariant {
+        ProductVariant {
+            id: 1,
+            product_id: 7,
+            attributes: json!({ "talla": "M" }),
+            sku: Some("A1".to_string()),
+            barcode: None,
+            price: 4_500_000,
+            cost: 2_000_000,
+            stock: 3,
+            stock_min: 1,
+            allow_negative: false,
+            is_active: true,
+            created_at: Utc::now(),
+            updated_at: Utc::now(),
+        }
+    }
+
+    #[test]
+    fn identical_variants_have_no_changes() {
+        assert!(variant_changes(&variant(), &variant()).is_empty());
+    }
+
+    #[test]
+    fn only_changed_fields_are_reported_with_before_and_after() {
+        let before = variant();
+        let mut after = variant();
+        after.price = 4_800_000;
+        after.is_active = false;
+        after.sku = None;
+
+        let changes = variant_changes(&before, &after);
+
+        assert_eq!(changes.len(), 3);
+        assert_eq!(
+            changes["price"],
+            json!({ "from": 4_500_000, "to": 4_800_000 })
+        );
+        assert_eq!(changes["is_active"], json!({ "from": true, "to": false }));
+        assert_eq!(changes["sku"], json!({ "from": "A1", "to": null }));
+    }
+
+    #[test]
+    fn attributes_change_is_detected() {
+        let before = variant();
+        let mut after = variant();
+        after.attributes = json!({ "talla": "L" });
+
+        let changes = variant_changes(&before, &after);
+
+        assert_eq!(changes.len(), 1);
+        assert_eq!(
+            changes["attributes"],
+            json!({ "from": { "talla": "M" }, "to": { "talla": "L" } })
+        );
+    }
+
+    #[test]
+    fn stock_and_timestamps_are_not_audited_here() {
+        let before = variant();
+        let mut after = variant();
+        after.stock = 99;
+        after.updated_at = Utc::now() + chrono::Duration::seconds(5);
+
+        assert!(variant_changes(&before, &after).is_empty());
+    }
 }

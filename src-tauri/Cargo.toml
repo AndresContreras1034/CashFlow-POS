@@ -112,7 +112,11 @@ features = [
     "winnt",
     "minwindef",
     "handleapi",
-    "errhandlingapi"
+    "errhandlingapi",
+    "consoleapi",
+    "processenv",
+    "winbase",
+    "wincon"
 ]
 }
 

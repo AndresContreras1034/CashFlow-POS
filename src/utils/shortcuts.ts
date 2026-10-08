@@ -8,6 +8,7 @@ export const NAVIGATION_SHORTCUTS = [
   { path: '/debts', label: 'Deudas' },
   { path: '/suppliers', label: 'Proveedores' },
   { path: '/reports', label: 'Reportes' },
+  { path: '/audit', label: 'Auditoría' },
   { path: '/settings', label: 'Ajustes' },
 ] as const;
 

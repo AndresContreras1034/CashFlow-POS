@@ -1,4 +1,13 @@
+use serde_json::{json, Value as JsonValue};
 use sqlx::PgPool;
+use uuid::Uuid;
+
+use crate::modules::audit::{
+    actor::declared_actor,
+    dto::NewAuditEvent,
+    models::{AuditCategory, AuditModule, AuditOutcome},
+    repository as audit_repo,
+};
 
 use crate::modules::inventory::{
     dto::{
@@ -251,6 +260,77 @@ pub async fn update_variant(
 // MOVIMIENTOS DE STOCK
 // ============================================================
 
+/// Evento de stock sobre una variante: `changes = {"stock": {from, to}}`.
+fn stock_event(
+    action: &str,
+    variant: &ProductVariant,
+    stock_before: i32,
+    actor: Option<String>,
+    summary: String,
+    metadata: JsonValue,
+) -> NewAuditEvent {
+    NewAuditEvent {
+        correlation_id: Some(Uuid::new_v4()),
+        category: AuditCategory::Business,
+        module: AuditModule::Inventory,
+        action: action.to_string(),
+        outcome: AuditOutcome::Success,
+        actor,
+        entity_type: Some("variant".to_string()),
+        entity_id: Some(variant.id.to_string()),
+        summary,
+        changes: Some(json!({ "stock": { "from": stock_before, "to": variant.stock } })),
+        metadata: Some(metadata),
+        error_message: None,
+    }
+}
+
+/// Entrada de stock y evento de auditoría en una sola transacción.
+async fn record_stock_entry(
+    pool: &PgPool,
+    dto: StockEntryDto,
+    movement_type: MovementType,
+) -> Result<ProductVariant, AppError> {
+    let actor = declared_actor(&dto.created_by);
+    let quantity = dto.quantity;
+    let unit_cost = dto.unit_cost;
+    let notes = dto.notes.clone();
+    let movement = movement_type.clone();
+
+    let mut tx = pool.begin().await.map_err(AppError::from)?;
+
+    let variant = repository::apply_stock_entry(&mut tx, dto, movement_type)
+        .await
+        .map_err(AppError::from)?;
+    let stock_before = variant.stock - quantity;
+
+    audit_repo::insert_event(
+        &mut *tx,
+        stock_event(
+            "stock_in",
+            &variant,
+            stock_before,
+            actor,
+            format!(
+                "Entrada de stock en variante #{}: {} → {}",
+                variant.id, stock_before, variant.stock
+            ),
+            json!({
+                "movement_type": movement,
+                "quantity": quantity,
+                "unit_cost": unit_cost,
+                "notes": notes,
+                "product_id": variant.product_id,
+            }),
+        ),
+    )
+    .await
+    .map_err(AppError::from)?;
+
+    tx.commit().await.map_err(AppError::from)?;
+    Ok(variant)
+}
+
 pub async fn register_stock_entry(
     pool: &PgPool,
     dto: StockEntryDto,
@@ -262,9 +342,7 @@ pub async fn register_stock_entry(
     // Verificar que la variante existe
     get_variant(pool, dto.variant_id).await?;
 
-    repository::apply_stock_entry(pool, dto, MovementType::Purchase)
-        .await
-        .map_err(AppError::from)
+    record_stock_entry(pool, dto, MovementType::Purchase).await
 }
 
 pub async fn register_initial_stock(
@@ -277,9 +355,7 @@ pub async fn register_initial_stock(
 
     get_variant(pool, dto.variant_id).await?;
 
-    repository::apply_stock_entry(pool, dto, MovementType::InitialStock)
-        .await
-        .map_err(AppError::from)
+    record_stock_entry(pool, dto, MovementType::InitialStock).await
 }
 
 pub async fn register_manual_entry(
@@ -292,9 +368,7 @@ pub async fn register_manual_entry(
 
     get_variant(pool, dto.variant_id).await?;
 
-    repository::apply_stock_entry(pool, dto, MovementType::ManualIn)
-        .await
-        .map_err(AppError::from)
+    record_stock_entry(pool, dto, MovementType::ManualIn).await
 }
 
 pub async fn register_manual_out(
@@ -327,11 +401,41 @@ pub async fn register_manual_out(
     // Por eso este servicio debe abrirla.
     //
 
+    let actor = declared_actor(&dto.created_by);
+    let quantity = dto.quantity;
+    let reason = dto.reason;
+    let notes = dto.notes.clone();
+
     let mut tx = pool.begin().await.map_err(AppError::from)?;
 
     let updated_variant = repository::apply_stock_out(&mut tx, dto, MovementType::ManualOut)
         .await
         .map_err(AppError::from)?;
+
+    let stock_before = updated_variant.stock + quantity;
+
+    audit_repo::insert_event(
+        &mut *tx,
+        stock_event(
+            "stock_out",
+            &updated_variant,
+            stock_before,
+            actor,
+            format!(
+                "Salida de stock en variante #{}: {} → {}",
+                updated_variant.id, stock_before, updated_variant.stock
+            ),
+            json!({
+                "movement_type": MovementType::ManualOut,
+                "quantity": quantity,
+                "reason": reason,
+                "notes": notes,
+                "product_id": updated_variant.product_id,
+            }),
+        ),
+    )
+    .await
+    .map_err(AppError::from)?;
 
     tx.commit().await.map_err(AppError::from)?;
 
@@ -365,10 +469,45 @@ pub async fn adjust_stock(
         ));
     }
 
+    let actor = declared_actor(&dto.created_by);
+    let reason = dto.reason;
+    let notes = dto.notes.clone();
+
     let mut tx = pool.begin().await.map_err(AppError::from)?;
+
+    // Stock "antes" leído dentro de la transacción, con lock.
+    let stock_before = repository::lock_variant_stock(&mut tx, dto.variant_id)
+        .await
+        .map_err(AppError::from)?;
     let updated = repository::apply_stock_adjustment(&mut tx, dto)
         .await
         .map_err(AppError::from)?;
+
+    if stock_before != updated.stock {
+        audit_repo::insert_event(
+            &mut *tx,
+            stock_event(
+                "stock_adjust",
+                &updated,
+                stock_before,
+                actor,
+                format!(
+                    "Ajuste de stock en variante #{}: {} → {}",
+                    updated.id, stock_before, updated.stock
+                ),
+                json!({
+                    "movement_type": MovementType::Adjustment,
+                    "difference": updated.stock - stock_before,
+                    "reason": reason,
+                    "notes": notes,
+                    "product_id": updated.product_id,
+                }),
+            ),
+        )
+        .await
+        .map_err(AppError::from)?;
+    }
+
     tx.commit().await.map_err(AppError::from)?;
     Ok(updated)
 }

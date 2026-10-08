@@ -1,5 +1,12 @@
 use sqlx::PgPool;
+use uuid::Uuid;
 
+use crate::modules::audit::{
+    changes::changed_fields,
+    dto::NewAuditEvent,
+    models::{AuditCategory, AuditModule, AuditOutcome},
+    repository as audit_repo,
+};
 use crate::modules::settings::{dto::UpdateSettingsDto, models::AppSettings};
 
 pub async fn get_settings(pool: &PgPool) -> Result<Option<AppSettings>, sqlx::Error> {
@@ -12,7 +19,20 @@ pub async fn update_settings(
     pool: &PgPool,
     dto: UpdateSettingsDto,
 ) -> Result<Option<AppSettings>, sqlx::Error> {
-    sqlx::query_as!(
+    let mut tx = pool.begin().await?;
+
+    let before = sqlx::query_as!(
+        AppSettings,
+        "SELECT * FROM app_settings WHERE id = 1 FOR UPDATE"
+    )
+    .fetch_optional(&mut *tx)
+    .await?;
+
+    let Some(before) = before else {
+        return Ok(None);
+    };
+
+    let after = sqlx::query_as!(
         AppSettings,
         "UPDATE app_settings
          SET business_name               = COALESCE($1, business_name),
@@ -62,8 +82,39 @@ pub async fn update_settings(
         dto.show_discounts,
         dto.show_payment_method
     )
-    .fetch_optional(pool)
-    .await
+    .fetch_one(&mut *tx)
+    .await?;
+
+    let changes = changed_fields(&before, &after, &["id", "created_at", "updated_at"]);
+    if !changes.is_empty() {
+        let fields = changes
+            .keys()
+            .map(String::as_str)
+            .collect::<Vec<_>>()
+            .join(", ");
+
+        audit_repo::insert_event(
+            &mut *tx,
+            NewAuditEvent {
+                correlation_id: Some(Uuid::new_v4()),
+                category: AuditCategory::Business,
+                module: AuditModule::Settings,
+                action: "update".to_string(),
+                outcome: AuditOutcome::Success,
+                actor: None,
+                entity_type: Some("app_settings".to_string()),
+                entity_id: Some("1".to_string()),
+                summary: format!("Ajustes actualizados: {}", fields),
+                changes: Some(serde_json::Value::Object(changes)),
+                metadata: None,
+                error_message: None,
+            },
+        )
+        .await?;
+    }
+
+    tx.commit().await?;
+    Ok(Some(after))
 }
 
 /// Validate against PostgreSQL, which also uses the timezone for day grouping.

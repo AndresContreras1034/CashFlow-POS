@@ -2,6 +2,11 @@ use tauri::State;
 
 use crate::db::DbPool;
 use crate::errors::app_error::AppError;
+use crate::modules::audit::{
+    actor::declared_actor,
+    failure::{finish, FailureContext},
+    models::AuditModule,
+};
 use crate::modules::sales::{
     dto::{CreateSaleDto, PaginatedResponse, SaleFilterDto},
     models::{Sale, SaleDetail},
@@ -13,9 +18,14 @@ pub async fn create_sale(
     pool: State<'_, DbPool>,
     dto: CreateSaleDto,
 ) -> Result<SaleDetail, String> {
-    service::create_sale(&pool, dto)
-        .await
-        .map_err(|e: AppError| e.to_string())
+    let ctx = FailureContext {
+        module: AuditModule::Sales,
+        action: "create",
+        entity_type: Some("sale"),
+        entity_id: None,
+        actor: declared_actor(&dto.created_by),
+    };
+    finish(&pool, ctx, service::create_sale(&pool, dto).await).await
 }
 
 #[tauri::command]
