@@ -12,7 +12,6 @@ const GS: u8 = 0x1D;
 // ESC/POS raster (GS v 0) — ver /mnt/skills o el script de conversión que
 // se usó para generarlos si algún día hay que regenerarlos con otro logo.
 const LOGO_HEADER: &[u8] = include_bytes!("../../../assets/logo_header.bin");
-const LOGO_FOOTER: &[u8] = include_bytes!("../../../assets/logo_footer.bin");
 
 pub fn build_sale_ticket(data: &TicketData) -> Vec<u8> {
     let mut b = Vec::new();
@@ -157,9 +156,6 @@ pub fn build_sale_ticket(data: &TicketData) -> Vec<u8> {
     }
 
     push_line(&mut b, &"=".repeat(CHARS_PER_LINE));
-
-    // ---- Logo (abajo) ----
-    //print_logo(&mut b, LOGO_FOOTER);
 
     b.extend_from_slice(b"\n\n\n");
     b.extend_from_slice(&[GS, b'V', 0x00]); // corte total

@@ -7,10 +7,12 @@ pub mod modules;
 pub mod router;
 pub mod types;
 
+use db::connection::probe_health;
 use db::init_db;
 use modules::audit::router::*;
 use modules::billing::router::*;
 use modules::cash::router::*;
+use modules::developer::router::*;
 use modules::inventory::router::*;
 use modules::licensing::router::*;
 use modules::sales::router::*;
@@ -20,9 +22,11 @@ use tauri::Manager;
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
+    let started = std::time::Instant::now();
     dotenvy::dotenv().ok();
 
-    logging::init();
+    let developer_state = modules::developer::state::shared();
+    logging::init(developer_state.clone());
 
     tauri::Builder::default()
         // =====================================================
@@ -33,19 +37,42 @@ pub fn run() {
         // =====================================================
         // Inicialización
         // =====================================================
-        .setup(|app| {
+        .manage(developer_state)
+        .setup(move |app| {
             let handle = app.handle().clone();
 
             tauri::async_runtime::spawn(async move {
                 match init_db().await {
                     Ok(pool) => {
+                        let health_pool = pool.clone();
                         handle.manage(pool);
 
                         tracing::info!(ok = true, "Base de datos lista");
+                        let startup = started.elapsed();
 
                         if let Some(window) = handle.get_webview_window("main") {
                             window.show().ok();
                         }
+
+                        let db = probe_health(&health_pool)
+                            .await
+                            .map_err(|error| error.to_string());
+                        logging::print_startup_panel(&logging::StartupInfo {
+                            app_version: env!("CARGO_PKG_VERSION"),
+                            profile: if cfg!(debug_assertions) {
+                                "debug"
+                            } else {
+                                "release"
+                            },
+                            log_filter: logging::effective_filter(
+                                std::env::var("RUST_LOG").ok().as_deref(),
+                            ),
+                            db,
+                            pool_size: health_pool.size(),
+                            pool_idle: health_pool.num_idle(),
+                            pool_max: health_pool.options().get_max_connections(),
+                            startup,
+                        });
                     }
                     Err(error) => {
                         tracing::error!(
@@ -156,6 +183,12 @@ pub fn run() {
             list_audit_events,
             get_audit_event,
             list_audit_events_by_correlation,
+            // Developer Mode
+            set_developer_mode,
+            get_developer_status,
+            get_developer_events,
+            clear_developer_events,
+            get_health,
         ])
         // =====================================================
         // Ejecutar aplicación
@@ -163,5 +196,3 @@ pub fn run() {
         .run(tauri::generate_context!())
         .expect("Error al iniciar la aplicación Tauri");
 }
-
-

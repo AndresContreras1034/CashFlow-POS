@@ -37,8 +37,8 @@ pub struct NewAuditEvent {
 /// Filtros del listado de eventos (futuro Audit Explorer).
 ///
 /// - `search` busca (ILIKE) en summary, action, entity_id y error_message.
-/// - `date_from` / `date_to` son días inclusivos, con la misma semántica
-///   que el resto del repositorio (día según la zona de la sesión de BD).
+/// - `date_from` / `date_to` son días inclusivos según la zona horaria de
+///   Ajustes (`app_settings.timezone`), no la de la sesión de BD.
 /// - `sort_dir` ordena por fecha; por defecto `desc` (más reciente primero).
 #[derive(Debug, Deserialize, Default)]
 pub struct AuditEventFilterDto {

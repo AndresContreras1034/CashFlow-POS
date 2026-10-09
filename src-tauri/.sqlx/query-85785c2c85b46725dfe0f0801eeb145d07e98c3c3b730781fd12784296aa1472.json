@@ -1,0 +1,185 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "INSERT INTO audit_events\n\t\t\t   (correlation_id, category, module, action, outcome, actor,\n\t\t\t\tentity_type, entity_id, summary, changes, metadata, error_message)\n\t\t   VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12)\n\t\t   RETURNING\n\t\t\t   id, created_at, correlation_id,\n\t\t\t   category AS \"category: AuditCategory\",\n\t\t\t   module   AS \"module: AuditModule\",\n\t\t\t   action,\n\t\t\t   outcome  AS \"outcome: AuditOutcome\",\n\t\t\t   actor, entity_type, entity_id, summary,\n\t\t\t   changes, metadata, error_message",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "id",
+        "type_info": "Int8"
+      },
+      {
+        "ordinal": 1,
+        "name": "created_at",
+        "type_info": "Timestamptz"
+      },
+      {
+        "ordinal": 2,
+        "name": "correlation_id",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 3,
+        "name": "category: AuditCategory",
+        "type_info": {
+          "Custom": {
+            "name": "audit_category",
+            "kind": {
+              "Enum": [
+                "business",
+                "error"
+              ]
+            }
+          }
+        }
+      },
+      {
+        "ordinal": 4,
+        "name": "module: AuditModule",
+        "type_info": {
+          "Custom": {
+            "name": "audit_module",
+            "kind": {
+              "Enum": [
+                "sales",
+                "inventory",
+                "cash",
+                "stocktake",
+                "settings",
+                "import",
+                "licensing",
+                "billing",
+                "system"
+              ]
+            }
+          }
+        }
+      },
+      {
+        "ordinal": 5,
+        "name": "action",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 6,
+        "name": "outcome: AuditOutcome",
+        "type_info": {
+          "Custom": {
+            "name": "audit_outcome",
+            "kind": {
+              "Enum": [
+                "success",
+                "failure"
+              ]
+            }
+          }
+        }
+      },
+      {
+        "ordinal": 7,
+        "name": "actor",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 8,
+        "name": "entity_type",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 9,
+        "name": "entity_id",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 10,
+        "name": "summary",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 11,
+        "name": "changes",
+        "type_info": "Jsonb"
+      },
+      {
+        "ordinal": 12,
+        "name": "metadata",
+        "type_info": "Jsonb"
+      },
+      {
+        "ordinal": 13,
+        "name": "error_message",
+        "type_info": "Text"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        {
+          "Custom": {
+            "name": "audit_category",
+            "kind": {
+              "Enum": [
+                "business",
+                "error"
+              ]
+            }
+          }
+        },
+        {
+          "Custom": {
+            "name": "audit_module",
+            "kind": {
+              "Enum": [
+                "sales",
+                "inventory",
+                "cash",
+                "stocktake",
+                "settings",
+                "import",
+                "licensing",
+                "billing",
+                "system"
+              ]
+            }
+          }
+        },
+        "Text",
+        {
+          "Custom": {
+            "name": "audit_outcome",
+            "kind": {
+              "Enum": [
+                "success",
+                "failure"
+              ]
+            }
+          }
+        },
+        "Text",
+        "Text",
+        "Text",
+        "Text",
+        "Jsonb",
+        "Jsonb",
+        "Text"
+      ]
+    },
+    "nullable": [
+      false,
+      false,
+      true,
+      false,
+      false,
+      false,
+      false,
+      true,
+      true,
+      true,
+      false,
+      true,
+      true,
+      true
+    ]
+  },
+  "hash": "85785c2c85b46725dfe0f0801eeb145d07e98c3c3b730781fd12784296aa1472"
+}

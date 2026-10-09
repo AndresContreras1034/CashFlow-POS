@@ -1,0 +1,186 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "SELECT\n\t\t\t\t\t   id, created_at, correlation_id,\n\t\t\t\t\t   category AS \"category: AuditCategory\",\n\t\t\t\t\t   module   AS \"module: AuditModule\",\n\t\t\t\t\t   action,\n\t\t\t\t\t   outcome  AS \"outcome: AuditOutcome\",\n\t\t\t\t\t   actor, entity_type, entity_id, summary,\n\t\t\t\t\t   changes, metadata, error_message\n\t\t\t\t   FROM audit_events\n\t\t\t\t   WHERE ($1::audit_module   IS NULL OR module = $1)\n\t\t\t\t\t AND ($2::audit_category IS NULL OR category = $2)\n\t\t\t\t\t AND ($3::audit_outcome  IS NULL OR outcome = $3)\n\t\t\t\t\t AND ($4::TEXT IS NULL OR action = $4)\n\t\t\t\t\t AND ($5::TEXT IS NULL OR entity_type = $5)\n\t\t\t\t\t AND ($6::TEXT IS NULL OR entity_id = $6)\n\t\t\t\t\t AND ($7::UUID IS NULL OR correlation_id = $7)\n\t\t\t\t\t AND ($8::TEXT IS NULL\n\t\t\t\t\t\t  OR summary ILIKE $8 OR action ILIKE $8\n\t\t\t\t\t\t  OR entity_id ILIKE $8 OR error_message ILIKE $8)\n                     AND ($9::DATE  IS NULL OR created_at >= ($9::DATE)::timestamp AT TIME ZONE $13)\n                     AND ($10::DATE IS NULL OR created_at <  ($10::DATE + 1)::timestamp AT TIME ZONE $13)\n\t\t\t\t   ORDER BY created_at ASC, id ASC\n\t\t\t\t   LIMIT $11 OFFSET $12",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "id",
+        "type_info": "Int8"
+      },
+      {
+        "ordinal": 1,
+        "name": "created_at",
+        "type_info": "Timestamptz"
+      },
+      {
+        "ordinal": 2,
+        "name": "correlation_id",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 3,
+        "name": "category: AuditCategory",
+        "type_info": {
+          "Custom": {
+            "name": "audit_category",
+            "kind": {
+              "Enum": [
+                "business",
+                "error"
+              ]
+            }
+          }
+        }
+      },
+      {
+        "ordinal": 4,
+        "name": "module: AuditModule",
+        "type_info": {
+          "Custom": {
+            "name": "audit_module",
+            "kind": {
+              "Enum": [
+                "sales",
+                "inventory",
+                "cash",
+                "stocktake",
+                "settings",
+                "import",
+                "licensing",
+                "billing",
+                "system"
+              ]
+            }
+          }
+        }
+      },
+      {
+        "ordinal": 5,
+        "name": "action",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 6,
+        "name": "outcome: AuditOutcome",
+        "type_info": {
+          "Custom": {
+            "name": "audit_outcome",
+            "kind": {
+              "Enum": [
+                "success",
+                "failure"
+              ]
+            }
+          }
+        }
+      },
+      {
+        "ordinal": 7,
+        "name": "actor",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 8,
+        "name": "entity_type",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 9,
+        "name": "entity_id",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 10,
+        "name": "summary",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 11,
+        "name": "changes",
+        "type_info": "Jsonb"
+      },
+      {
+        "ordinal": 12,
+        "name": "metadata",
+        "type_info": "Jsonb"
+      },
+      {
+        "ordinal": 13,
+        "name": "error_message",
+        "type_info": "Text"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        {
+          "Custom": {
+            "name": "audit_module",
+            "kind": {
+              "Enum": [
+                "sales",
+                "inventory",
+                "cash",
+                "stocktake",
+                "settings",
+                "import",
+                "licensing",
+                "billing",
+                "system"
+              ]
+            }
+          }
+        },
+        {
+          "Custom": {
+            "name": "audit_category",
+            "kind": {
+              "Enum": [
+                "business",
+                "error"
+              ]
+            }
+          }
+        },
+        {
+          "Custom": {
+            "name": "audit_outcome",
+            "kind": {
+              "Enum": [
+                "success",
+                "failure"
+              ]
+            }
+          }
+        },
+        "Text",
+        "Text",
+        "Text",
+        "Uuid",
+        "Text",
+        "Date",
+        "Date",
+        "Int8",
+        "Int8",
+        "Text"
+      ]
+    },
+    "nullable": [
+      false,
+      false,
+      true,
+      false,
+      false,
+      false,
+      false,
+      true,
+      true,
+      true,
+      false,
+      true,
+      true,
+      true
+    ]
+  },
+  "hash": "45daf479b102811a2283ac8362d00fa6d1b78fde0d49c1dc38ad22e7ae37a086"
+}

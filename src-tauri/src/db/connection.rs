@@ -1,5 +1,5 @@
 use sqlx::{postgres::PgPoolOptions, Connection, PgConnection, PgPool};
-use std::time::Duration;
+use std::time::{Duration, Instant};
 
 /// Tipo central del pool — se comparte via tauri State<DbPool>
 pub type DbPool = PgPool;
@@ -35,4 +35,27 @@ pub async fn init_db() -> Result<DbPool, sqlx::Error> {
     tracing::info!(ok = true, "Migraciones aplicadas");
 
     Ok(pool)
+}
+
+/// Foto de salud tomada una vez al arrancar (solo para el panel de desarrollo).
+#[derive(Debug, Clone)]
+pub struct DbHealth {
+    pub database: String,
+    /// Texto completo de `version()`; el panel lo acorta.
+    pub server_version: String,
+    pub latency: Duration,
+}
+
+/// Consulta ligera con latencia medida. No toca datos de negocio.
+pub async fn probe_health(pool: &DbPool) -> Result<DbHealth, sqlx::Error> {
+    let started = Instant::now();
+    let (database, server_version): (String, String) =
+        sqlx::query_as("SELECT current_database(), version()")
+            .fetch_one(pool)
+            .await?;
+    Ok(DbHealth {
+        database,
+        server_version,
+        latency: started.elapsed(),
+    })
 }

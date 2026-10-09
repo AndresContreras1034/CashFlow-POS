@@ -1,4 +1,5 @@
 import React, { useCallback, useEffect, useState } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { ToastContainer, ToastData } from '../../components/ui/Toast';
 import { useSettings } from '../../context/AppContext';
 import { updateSettings } from '../../services/settings.service';
@@ -15,9 +16,10 @@ import {
   type NavigationShortcuts,
 } from '../../utils/shortcuts';
 import { APP_THEMES, applyTheme, loadSavedTheme, type AppTheme } from '../../utils/theme';
+import { applyDeveloperMode, readDeveloperMode } from '../../utils/developerMode';
 import './Settings.css';
 
-type Section = 'business' | 'money' | 'regional' | 'inventory' | 'ticket' | 'appearance' | 'shortcuts';
+type Section = 'business' | 'money' | 'regional' | 'inventory' | 'ticket' | 'appearance' | 'shortcuts' | 'developer';
 
 const SECTIONS: { id: Section; label: string }[] = [
   { id: 'business', label: 'Negocio' },
@@ -27,6 +29,7 @@ const SECTIONS: { id: Section; label: string }[] = [
   { id: 'ticket', label: 'Ticket' },
   { id: 'appearance', label: 'Temas' },
   { id: 'shortcuts', label: 'Atajos' },
+  { id: 'developer', label: 'Desarrollador' },
 ];
 
 const TICKET_TOGGLES = [
@@ -224,6 +227,7 @@ let rememberedSection: Section = 'business';
 
 export const Settings: React.FC = () => {
   const { settings, applySettings } = useSettings();
+  const navigate = useNavigate();
   const [section, setSection] = useState<Section>(rememberedSection);
   const [theme, setTheme] = useState<AppTheme>(() => loadSavedTheme());
   const [shortcuts, setShortcuts] = useState<NavigationShortcuts>({});
@@ -235,6 +239,7 @@ export const Settings: React.FC = () => {
   const [toasts, setToasts] = useState<ToastData[]>([]);
   const [savedOperator, setSavedOperator] = useState(() => getOperatorOrNull() ?? '');
   const [operator, setOperatorInput] = useState(savedOperator);
+  const [developerMode, setDeveloperModeState] = useState(() => readDeveloperMode());
 
   const addToast = useCallback((message: string, type: ToastData['type']) => {
     setToasts(current => [
@@ -319,6 +324,23 @@ export const Settings: React.FC = () => {
     } catch (error) {
       addToast(
         error instanceof Error ? `No se pudo guardar el tema: ${error.message}` : 'No se pudo guardar el tema',
+        'error',
+      );
+    }
+  };
+
+  const toggleDeveloperMode = async (event: React.ChangeEvent<HTMLInputElement>) => {
+    const enabled = event.target.checked;
+    try {
+      await applyDeveloperMode(enabled);
+      setDeveloperModeState(enabled);
+    } catch (error) {
+      addToast(
+        typeof error === 'string'
+          ? error
+          : error instanceof Error
+            ? `No se pudo cambiar el modo desarrollador: ${error.message}`
+            : 'No se pudo cambiar el modo desarrollador',
         'error',
       );
     }
@@ -913,6 +935,35 @@ export const Settings: React.FC = () => {
                 </div>
               ))}
             </div>
+          </section>
+        )}
+
+        {section === 'developer' && (
+          <section className="settings-section">
+            <h2 className="settings-section-title">Desarrollador</h2>
+            <div className="settings-switch-list">
+              <label className="settings-switch">
+                <span>Modo desarrollador</span>
+                <input
+                  type="checkbox"
+                  checked={developerMode}
+                  onChange={toggleDeveloperMode}
+                />
+                <span className="settings-switch-track" />
+              </label>
+            </div>
+            <span className="settings-hint">
+              Se guarda solo en este equipo. Captura eventos técnicos temporales (máximo 500, solo
+              en memoria, se pierden al cerrar la aplicación). No registra datos del negocio,
+              credenciales ni consultas SQL, y no reemplaza a la auditoría.
+            </span>
+            {developerMode && (
+              <div>
+                <button type="button" className="btn btn-ghost" onClick={() => navigate('/developer')}>
+                  Abrir Developer Mode
+                </button>
+              </div>
+            )}
           </section>
         )}
 

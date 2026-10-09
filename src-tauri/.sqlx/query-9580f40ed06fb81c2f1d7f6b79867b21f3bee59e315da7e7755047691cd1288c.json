@@ -1,0 +1,69 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "SELECT COUNT(*) FROM audit_events\n\t\t   WHERE ($1::audit_module   IS NULL OR module = $1)\n\t\t\t AND ($2::audit_category IS NULL OR category = $2)\n\t\t\t AND ($3::audit_outcome  IS NULL OR outcome = $3)\n\t\t\t AND ($4::TEXT IS NULL OR action = $4)\n\t\t\t AND ($5::TEXT IS NULL OR entity_type = $5)\n\t\t\t AND ($6::TEXT IS NULL OR entity_id = $6)\n\t\t\t AND ($7::UUID IS NULL OR correlation_id = $7)\n\t\t\t AND ($8::TEXT IS NULL\n\t\t\t\t  OR summary ILIKE $8 OR action ILIKE $8\n\t\t\t\t  OR entity_id ILIKE $8 OR error_message ILIKE $8)\n             AND ($9::DATE  IS NULL OR created_at >= ($9::DATE)::timestamp AT TIME ZONE $11)\n             AND ($10::DATE IS NULL OR created_at <  ($10::DATE + 1)::timestamp AT TIME ZONE $11)",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "count",
+        "type_info": "Int8"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        {
+          "Custom": {
+            "name": "audit_module",
+            "kind": {
+              "Enum": [
+                "sales",
+                "inventory",
+                "cash",
+                "stocktake",
+                "settings",
+                "import",
+                "licensing",
+                "billing",
+                "system"
+              ]
+            }
+          }
+        },
+        {
+          "Custom": {
+            "name": "audit_category",
+            "kind": {
+              "Enum": [
+                "business",
+                "error"
+              ]
+            }
+          }
+        },
+        {
+          "Custom": {
+            "name": "audit_outcome",
+            "kind": {
+              "Enum": [
+                "success",
+                "failure"
+              ]
+            }
+          }
+        },
+        "Text",
+        "Text",
+        "Text",
+        "Uuid",
+        "Text",
+        "Date",
+        "Date",
+        "Text"
+      ]
+    },
+    "nullable": [
+      null
+    ]
+  },
+  "hash": "9580f40ed06fb81c2f1d7f6b79867b21f3bee59e315da7e7755047691cd1288c"
+}

@@ -3,6 +3,7 @@ pub mod billing;
 pub mod cash;
 pub mod customers;
 pub mod debts;
+pub mod developer;
 pub mod inventory;
 pub mod licensing;
 pub mod reports;

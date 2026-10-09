@@ -1,0 +1,20 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "SELECT COALESCE(\n               (SELECT timezone FROM app_settings WHERE id = 1),\n               current_setting('TimeZone')\n           ) AS \"tz!\"",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "tz!",
+        "type_info": "Varchar"
+      }
+    ],
+    "parameters": {
+      "Left": []
+    },
+    "nullable": [
+      null
+    ]
+  },
+  "hash": "423ee58d66e2861cfcbfd1d7bd4650793c5a708421f15d27b20a6343f43406ce"
+}

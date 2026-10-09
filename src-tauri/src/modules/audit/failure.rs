@@ -8,6 +8,7 @@ use crate::modules::audit::{
     models::{AuditCategory, AuditModule, AuditOutcome},
     repository,
 };
+use crate::modules::developer;
 
 const MAX_MESSAGE_CHARS: usize = 500;
 
@@ -43,13 +44,13 @@ fn technical_details(error: &AppError) -> Option<(&'static str, String)> {
     }
 }
 
-/// Registra el fallo en una conexión aparte (sobrevive al rollback de la
-/// operación). Nunca propaga errores: si no se puede auditar, solo se loguea.
-async fn record_failure(pool: &PgPool, ctx: &FailureContext<'_>, error: &AppError) {
-    let Some((kind, message)) = technical_details(error) else {
-        return;
-    };
-
+async fn write_audit_event(
+    pool: &PgPool,
+    ctx: &FailureContext<'_>,
+    kind: &'static str,
+    message: &str,
+    correlation_id: Uuid,
+) -> bool {
     let mut conn = match pool.acquire().await {
         Ok(conn) => conn,
         Err(acquire_error) => {
@@ -58,12 +59,12 @@ async fn record_failure(pool: &PgPool, ctx: &FailureContext<'_>, error: &AppErro
                 ctx.action,
                 acquire_error
             );
-            return;
+            return false;
         }
     };
 
     let event = NewAuditEvent {
-        correlation_id: Some(Uuid::new_v4()),
+        correlation_id: Some(correlation_id),
         category: AuditCategory::Error,
         module: ctx.module,
         action: ctx.action.to_string(),
@@ -74,16 +75,38 @@ async fn record_failure(pool: &PgPool, ctx: &FailureContext<'_>, error: &AppErro
         summary: format!("Falló la operación «{}»", ctx.action),
         changes: None,
         metadata: Some(json!({ "error_kind": kind })),
-        error_message: Some(message),
+        error_message: Some(message.to_string()),
     };
 
-    if let Err(insert_error) = repository::insert_event(&mut *conn, event).await {
-        tracing::error!(
-            "No se pudo auditar el fallo de {}: {}",
-            ctx.action,
-            insert_error
-        );
+    match repository::insert_event(&mut *conn, event).await {
+        Ok(_) => true,
+        Err(insert_error) => {
+            tracing::error!(
+                "No se pudo auditar el fallo de {}: {}",
+                ctx.action,
+                insert_error
+            );
+            false
+        }
     }
+}
+
+async fn record_failure(pool: &PgPool, ctx: &FailureContext<'_>, error: &AppError) {
+    let Some((kind, message)) = technical_details(error) else {
+        return;
+    };
+
+    let correlation_id = Uuid::new_v4();
+    let audited = write_audit_event(pool, ctx, kind, &message, correlation_id).await;
+
+    // Mismo Uuid que Audit solo si el evento de Audit realmente se insertó.
+    developer::capture_failure(
+        &format!("{:?}", ctx.module).to_lowercase(),
+        ctx.action,
+        kind,
+        &message,
+        audited.then_some(correlation_id),
+    );
 }
 
 /// Envuelve el resultado de un service en un handler: audita el fallo

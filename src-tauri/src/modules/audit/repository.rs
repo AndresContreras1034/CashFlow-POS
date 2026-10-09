@@ -51,7 +51,7 @@ pub async fn insert_event(
     conn: &mut PgConnection,
     event: NewAuditEvent,
 ) -> Result<AuditEvent, sqlx::Error> {
-    sqlx::query_as!(
+    let inserted = sqlx::query_as!(
         AuditEvent,
         r#"INSERT INTO audit_events
 			   (correlation_id, category, module, action, outcome, actor,
@@ -79,7 +79,28 @@ pub async fn insert_event(
         event.error_message
     )
     .fetch_one(&mut *conn)
-    .await
+    .await?;
+
+    log_feed(&inserted);
+    Ok(inserted)
+}
+
+/// Texto de una línea del feed: `summary (actor)`, o solo `summary` sin actor.
+fn feed_message(summary: &str, actor: Option<&str>) -> String {
+    match actor.map(str::trim).filter(|name| !name.is_empty()) {
+        Some(name) => format!("{summary} ({name})"),
+        None => summary.to_string(),
+    }
+}
+
+/// Línea en el CMD por cada evento de negocio guardado.
+/// Los fallos técnicos no se imprimen aquí: ya los captura Developer Mode.
+fn log_feed(event: &AuditEvent) {
+    if matches!(event.outcome, AuditOutcome::Failure) {
+        return;
+    }
+    let message = feed_message(&event.summary, event.actor.as_deref());
+    tracing::info!(target: "pos_lib::audit", ok = true, "{}", message);
 }
 
 // ============================================================
@@ -150,6 +171,16 @@ pub async fn list_events(
     let entity_id = clean(&filter.entity_id);
     let search = search_pattern(&filter.search);
 
+    // Zona de Ajustes: define dónde empieza y termina cada día del filtro.
+    let tz: String = sqlx::query_scalar!(
+        r#"SELECT COALESCE(
+               (SELECT timezone FROM app_settings WHERE id = 1),
+               current_setting('TimeZone')
+           ) AS "tz!""#
+    )
+    .fetch_one(pool)
+    .await?;
+
     let rows = match filter.sort_dir.unwrap_or(SortDir::Desc) {
         SortDir::Desc => {
             sqlx::query_as!(
@@ -173,8 +204,8 @@ pub async fn list_events(
 					 AND ($8::TEXT IS NULL
 						  OR summary ILIKE $8 OR action ILIKE $8
 						  OR entity_id ILIKE $8 OR error_message ILIKE $8)
-					 AND ($9::DATE  IS NULL OR created_at >= $9::DATE)
-					 AND ($10::DATE IS NULL OR created_at <  $10::DATE + 1)
+                     AND ($9::DATE  IS NULL OR created_at >= ($9::DATE)::timestamp AT TIME ZONE $13)
+                     AND ($10::DATE IS NULL OR created_at <  ($10::DATE + 1)::timestamp AT TIME ZONE $13)
 				   ORDER BY created_at DESC, id DESC
 				   LIMIT $11 OFFSET $12"#,
                 filter.module as Option<AuditModule>,
@@ -188,7 +219,8 @@ pub async fn list_events(
                 filter.date_from,
                 filter.date_to,
                 page_size,
-                offset
+                offset,
+                tz
             )
             .fetch_all(pool)
             .await?
@@ -215,8 +247,8 @@ pub async fn list_events(
 					 AND ($8::TEXT IS NULL
 						  OR summary ILIKE $8 OR action ILIKE $8
 						  OR entity_id ILIKE $8 OR error_message ILIKE $8)
-					 AND ($9::DATE  IS NULL OR created_at >= $9::DATE)
-					 AND ($10::DATE IS NULL OR created_at <  $10::DATE + 1)
+                     AND ($9::DATE  IS NULL OR created_at >= ($9::DATE)::timestamp AT TIME ZONE $13)
+                     AND ($10::DATE IS NULL OR created_at <  ($10::DATE + 1)::timestamp AT TIME ZONE $13)
 				   ORDER BY created_at ASC, id ASC
 				   LIMIT $11 OFFSET $12"#,
                 filter.module as Option<AuditModule>,
@@ -230,7 +262,8 @@ pub async fn list_events(
                 filter.date_from,
                 filter.date_to,
                 page_size,
-                offset
+                offset,
+                tz
             )
             .fetch_all(pool)
             .await?
@@ -249,8 +282,8 @@ pub async fn list_events(
 			 AND ($8::TEXT IS NULL
 				  OR summary ILIKE $8 OR action ILIKE $8
 				  OR entity_id ILIKE $8 OR error_message ILIKE $8)
-			 AND ($9::DATE  IS NULL OR created_at >= $9::DATE)
-			 AND ($10::DATE IS NULL OR created_at <  $10::DATE + 1)"#,
+             AND ($9::DATE  IS NULL OR created_at >= ($9::DATE)::timestamp AT TIME ZONE $11)
+             AND ($10::DATE IS NULL OR created_at <  ($10::DATE + 1)::timestamp AT TIME ZONE $11)"#,
         filter.module as Option<AuditModule>,
         filter.category as Option<AuditCategory>,
         filter.outcome as Option<AuditOutcome>,
@@ -260,7 +293,8 @@ pub async fn list_events(
         filter.correlation_id,
         search,
         filter.date_from,
-        filter.date_to
+        filter.date_to,
+        tz
     )
     .fetch_one(pool)
     .await?
@@ -288,6 +322,19 @@ mod tests {
         assert_eq!(
             search_pattern(&Some("caja".to_string())),
             Some("%caja%".to_string())
+        );
+    }
+
+    #[test]
+    fn feed_message_appends_actor_only_when_present() {
+        assert_eq!(
+            feed_message("Venta #8 creada", Some("Ana")),
+            "Venta #8 creada (Ana)"
+        );
+        assert_eq!(feed_message("Venta #8 creada", None), "Venta #8 creada");
+        assert_eq!(
+            feed_message("Venta #8 creada", Some("  ")),
+            "Venta #8 creada"
         );
     }
 }
