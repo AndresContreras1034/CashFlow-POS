@@ -1,3 +1,112 @@
+============================================
+1. PAGINA DE DEUDAS
+============================================
+
+
+============================================
+2. COMPONENTES DE DEUDAS Y PAGOS
+============================================
+
+
+============================================
+3. SERVICIO FRONTEND DE DEUDAS
+============================================
+
+
+============================================
+4. BACKEND DE DEUDAS
+============================================
+
+
+
+============================================
+5. ESQUEMA Y CONEXION DE BASE DE DATOS
+============================================
+
+use sqlx::{postgres::PgPoolOptions, Connection, PgConnection, PgPool};
+use std::time::{Duration, Instant};
+
+/// Tipo central del pool — se comparte via tauri State<DbPool>
+pub type DbPool = PgPool;
+
+/// Inicializa el pool de conexiones y corre las migraciones automáticamente.
+/// Se llama una sola vez al arrancar la app en `lib.rs`.
+pub async fn init_db() -> Result<DbPool, sqlx::Error> {
+    // Leer DATABASE_URL desde .env o variable de entorno del sistema
+    let database_url = std::env::var("DATABASE_URL").map_err(|_| {
+        sqlx::Error::Configuration(
+            "DATABASE_URL no está definida. Crea un archivo .env en src-tauri/".into(),
+        )
+    })?;
+
+    tracing::info!("Conectando a PostgreSQL...");
+
+    // Sonda previa: expone el error real antes de crear el pool.
+    PgConnection::connect(&database_url).await?.close().await?;
+
+    let pool = PgPoolOptions::new()
+        .max_connections(10)
+        .min_connections(2)
+        .acquire_timeout(Duration::from_secs(5))
+        .idle_timeout(Duration::from_secs(300))
+        .connect(&database_url)
+        .await?;
+
+    tracing::info!(ok = true, "Pool de conexiones creado");
+
+    tracing::info!("Ejecutando migraciones...");
+    sqlx::migrate!("./migrations").run(&pool).await?;
+
+    tracing::info!(ok = true, "Migraciones aplicadas");
+
+    Ok(pool)
+}
+
+/// Foto de salud tomada una vez al arrancar (solo para el panel de desarrollo).
+#[derive(Debug, Clone)]
+pub struct DbHealth {
+    pub database: String,
+    /// Texto completo de `version()`; el panel lo acorta.
+    pub server_version: String,
+    pub latency: Duration,
+}
+
+/// Consulta ligera con latencia medida. No toca datos de negocio.
+pub async fn probe_health(pool: &DbPool) -> Result<DbHealth, sqlx::Error> {
+    let started = Instant::now();
+    let (database, server_version): (String, String) =
+        sqlx::query_as("SELECT current_database(), version()")
+            .fetch_one(pool)
+            .await?;
+    Ok(DbHealth {
+        database,
+        server_version,
+        latency: started.elapsed(),
+    })
+}
+
+============================================
+6. MIGRACIONES EXISTENTES
+============================================
+
+001_categories.sql
+002_products.sql
+003_inventory_movements.sql
+004_settings.sql
+005_cash.sql
+006_sales.sql
+007_movement_reason.sql
+008_barcode_sequence.sql
+009_stocktake.sql
+010_licensing.sql
+011_settings_extended.sql
+012_audit.sql
+
+============================================
+7. REGISTRO DEL MODULO
+============================================
+
+
 pub mod config;
 pub mod db;
 pub mod errors;
@@ -20,41 +129,6 @@ use modules::settings::router::*;
 use modules::stocktake::router::*;
 use tauri::Manager;
 
-fn load_runtime_environment(app: &tauri::AppHandle) -> Result<(), String> {
-    if std::env::var_os("DATABASE_URL").is_some() {
-        return Ok(());
-    }
-
-    let config_file = app
-        .path()
-        .app_config_dir()
-        .map_err(|error| format!("No se pudo resolver la configuración de la aplicación: {error}"))?
-        .join(".env");
-
-    if config_file.exists() {
-        dotenvy::from_path(&config_file).map_err(|error| {
-            format!("No se pudo leer la configuración de la aplicación: {error}")
-        })?;
-        return Ok(());
-    }
-
-    #[cfg(debug_assertions)]
-    {
-        let development_file = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join(".env");
-        if development_file.exists() {
-            dotenvy::from_path(&development_file).map_err(|error| {
-                format!("No se pudo leer la configuración de desarrollo: {error}")
-            })?;
-            return Ok(());
-        }
-    }
-
-    Err(format!(
-        "No se encontró DATABASE_URL. Configura {}",
-        config_file.display()
-    ))
-}
-
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
     let started = std::time::Instant::now();
@@ -76,16 +150,6 @@ pub fn run() {
         .setup(move |app| {
             let handle = app.handle().clone();
 
-            if let Some(window) = handle.get_webview_window("main") {
-                window.show().ok();
-            }
-
-            if let Err(error) = load_runtime_environment(&handle) {
-                tracing::error!("{error}");
-                handle.exit(1);
-                return Ok(());
-            }
-
             tauri::async_runtime::spawn(async move {
                 match init_db().await {
                     Ok(pool) => {
@@ -94,6 +158,10 @@ pub fn run() {
 
                         tracing::info!(ok = true, "Base de datos lista");
                         let startup = started.elapsed();
+
+                        if let Some(window) = handle.get_webview_window("main") {
+                            window.show().ok();
+                        }
 
                         let db = probe_health(&health_pool)
                             .await

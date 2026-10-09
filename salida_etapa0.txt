@@ -1,0 +1,5327 @@
+==== GIT ====
+?? auditoria_deudas_completa.txt
+?? auditoria_ventas_archivos.txt
+?? auditoria_ventas_fase0.txt
+?? resultado_build.txt
+?? resultado_cargo_lib.txt
+?? resultado_inventory_integration.txt
+?? resultado_sales_integration.txt
+?? resultado_vitest.txt
+?? revision_deudas.txt
+?? salida_etapa0.txt
+?? src-tauri/auditoria_ventas_archivos.txt
+main
+c4f987b Docs: Improve README Documentation, ADD LICENCE
+e1af4fb feat: modulo developer y mejoras de auditoria
+37a8d51 arreglo errores, log, auditoria
+7cf5655 mejora de rendimiento
+005bb9f settings: bloque 2 - dinero e IVA incluido
+36cc833 settings: bloque 1 - campos opcionales nulables
+599e83c feat: expand POS modules and settings
+b181295 se quita mock en el area de inventario al realizar la inyeccion
+7b8e23b se sube panel de inventario backend+front, aunque tiene zonas mock
+e726994 Initial commit POS system
+==== CONFIG ====
+{
+  "name": "pos",
+  "private": true,
+  "version": "0.1.0",
+  "type": "module",
+  "scripts": {
+    "dev": "vite",
+    "build": "tsc && vite build",
+    "preview": "vite preview",
+    "tauri": "node scripts/tauri-dev-window.cjs",
+    "test": "vitest run"
+  },
+  "dependencies": {
+    "@tauri-apps/api": "^2.11.0",
+    "@tauri-apps/plugin-dialog": "^2.7.3",
+    "@tauri-apps/plugin-opener": "^2",
+    "react": "^19.1.0",
+    "react-dom": "^19.1.0",
+    "react-router-dom": "^7.17.0"
+  },
+  "devDependencies": {
+    "@tauri-apps/cli": "^2",
+    "@types/react": "^19.1.8",
+    "@types/react-dom": "^19.1.6",
+    "@vitejs/plugin-react": "^4.6.0",
+    "typescript": "~5.8.3",
+    "vite": "^7.0.4",
+    "vitest": "^5.0.3"
+  }
+}
+[package]
+name = "pos"
+version = "0.1.0"
+description = "A Tauri App"
+authors = ["you"]
+edition = "2021"
+
+[lib]
+name = "pos_lib"
+crate-type = ["staticlib", "cdylib", "rlib"]
+
+[build-dependencies]
+tauri-build = { version = "2", features = [] }
+
+[dependencies]
+tauri = { version = "2", features = [] }
+tauri-plugin-opener = "2"
+tauri-plugin-dialog = "2"
+
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+
+# ==========================================
+# Base de datos
+# ==========================================
+
+sqlx = {
+    version = "0.8",
+    features = [
+        "postgres",
+        "runtime-tokio",
+        "macros",
+        "migrate",
+        "chrono",
+        "uuid",
+        "json"
+    ]
+}
+
+tokio = { version = "1", features = ["full"] }
+
+# ==========================================
+# Utilidades
+# ==========================================
+
+chrono = { version = "0.4", features = ["serde"] }
+
+uuid = {
+    version = "1",
+    features = ["v4", "serde"]
+}
+
+thiserror = "1"
+anyhow = "1"
+
+rust_decimal = {
+    version = "1",
+    features = ["serde-with-str"]
+}
+rsa = { version = "0.9", features = ["sha2"] }
+sha2 = { version = "0.10", features = ["oid"] }
+
+# ==========================================
+# Configuración
+# ==========================================
+
+dotenvy = "0.15"
+
+# ==========================================
+# Logging
+# ==========================================
+
+tracing = "0.1"
+
+tracing-subscriber = {
+    version = "0.3",
+    features = ["env-filter"]
+}
+
+# ==========================================
+# Excel / Importación masiva
+# ==========================================
+
+calamine = "0.26"
+
+# ==========================================
+# Logo / imágenes para ESC/POS
+# ==========================================
+#
+# Se utiliza únicamente para leer el JPG del
+# logo y convertirlo a bitmap monocromático.
+#
+
+image = {
+    version = "0.25",
+    default-features = false,
+    features = ["jpeg"]
+}
+rust_xlsxwriter = "0.99.1"
+
+# ==========================================
+# Impresión térmica ESC/POS
+# Windows Spooler
+# ==========================================
+
+[target.'cfg(windows)'.dependencies]
+
+winapi = {
+    version = "0.3",
+features = [
+    "winspool",
+    "winnt",
+    "minwindef",
+    "handleapi",
+    "errhandlingapi",
+    "consoleapi",
+    "processenv",
+    "winbase",
+    "wincon"
+]
+}
+
+[profile.dev.package."*"]
+opt-level = 3
+{
+  "$schema": "https://schema.tauri.app/config/2",
+  "productName": "CashFlow POS",
+  "version": "0.1.0",
+  "identifier": "com.toonk.pos",
+  "build": {
+    "beforeDevCommand": "npm run dev",
+    "devUrl": "http://localhost:5173",
+    "beforeBuildCommand": "npm run build",
+    "frontendDist": "../dist"
+  },
+  "app": {
+    "windows": [
+      {
+        "label": "main",
+        "title": "CashFlow POS",
+        "width": 800,
+        "height": 600,
+        "visible": false
+      }
+    ],
+    "security": {
+      "csp": null
+    }
+  },
+  "bundle": {
+    "active": true,
+    "targets": "all",
+    "icon": [
+      "icons/32x32.png",
+      "icons/128x128.png",
+      "icons/128x128@2x.png",
+      "icons/icon.icns",
+      "icons/icon.ico"
+    ]
+  }
+}default.json
+C:\Users\AndresContreras\Downloads\CashFlow-POS\src-tauri\tests\audit_integration.rs
+C:\Users\AndresContreras\Downloads\CashFlow-POS\src-tauri\tests\inventory_integration.rs
+C:\Users\AndresContreras\Downloads\CashFlow-POS\src-tauri\tests\inventory_test.rs
+C:\Users\AndresContreras\Downloads\CashFlow-POS\src-tauri\tests\sales_integration.rs
+query-00520791340025e4edb57b2dc0191302854011bc05a698a532b32791b8526707.json
+query-073cc5d077d9163df9419ee24a1477f2d534511ff037eb8a09a1d0cb0170258b.json
+query-07d5431b934060e3a7f73df6bc245b00b25de7533500741412dbcfade3600c0c.json
+query-0a05ec8a1687fab012877b2a2193aeec6da3d8808f9322bf5088de980dc0858b.json
+query-0ac8baa43eed56627bff647bea1d4242177f49ed259fe6008b34f80db15c3d27.json
+query-0b12edeb6b74540a3b225f6b5ef7332c414773545e31f21f417c6c00e66a144f.json
+query-0c97dbad4e8db35f19dc9320d4108c1dff3e0ab50b9f42c488a574246cfcaa64.json
+query-0caf264197618f11e65fa0724a0095ef6d94ddf0dc6a7f082a8bb695f4375cb9.json
+query-156b9a3ee3a12007c67947d227c8477c9bbe0d4dad8810015a0eb649f3b8df48.json
+query-18a29f34ec8df6250772b90a632432a528a1e9e8d691fa5b41bf06376534167a.json
+query-1d20550fc3ebc0b4056ab0338912959614c87f9aa7d8629fa8dbcd37bd7487f2.json
+query-1e6899085ac5547f1e9a3145a77fe53f71d958fb6461e2b076e34724b60350a8.json
+query-1f87b55c564a812e2f7813bb77dfdfbfc96858f0517174c64e8e09b66797ef9e.json
+query-2210a0fe471a0a43da71aa98243664de594290cd1c3126b646ad837c847bbd67.json
+query-28ade5e1f1b8d965e41ea9412fdf8e3c8a565f41885d81731856e37185e4b2c4.json
+query-2982cdd30b05919e9a8d41049312725014a3cbf9ed17f7916cfd6098481b059c.json
+query-2c22a51bf17609d670d815afc066b6bedfafdb3e5c05d5c34fab5e544bb0ad83.json
+query-2c412cf3f229de5e3d70772c910d66d1a16abf4014140350ba831d3b1255e7a6.json
+query-31317a4ff4481be0e204722bc71ecf6368aebd5d7ebcfb8e32e3eed53a00122f.json
+query-324efba4e9b07f2083023c8c8e845a51867cc576d9bb4e350d9d11f336603ccc.json
+query-32b8a03b7466fc3c8d4bcb3d5966b4f9010febbd8703b57edb64f72b7aae3383.json
+query-350f333f7c20d9ca5be22ee9662e90fbe6393abbcd2c19d5753ba620c53b7954.json
+query-355f4b59958c21155415b2e0f62e3d3c810a0921e7cbe1414cfd85ec46d51824.json
+query-36b6a6771a9c8cf68ec0f7f0d2504e7e1e041e0b71bb63c9c2e11a4d908f5aeb.json
+query-36c625b35c6f9904ca28fcf401176d0ef21802846c7dfb025b6f6a0245eb1199.json
+query-375201c0120f117f1f47b41d14b2ad37644c4df8942f3b6b00eac3239c5ec3e5.json
+query-37e296447939e3617d1fe713a9928057e6d8e0513b088d84e0a750bd259d12f2.json
+query-3867b87c7a12760ffb2763099dc1e0d8650c95643c5169049fe393db6277c27b.json
+query-3e12fe8af94fa16f303e5dddc242835410352f13ccad6605ce70ec94eef10672.json
+query-3e22166028f576b823b235c89db63ab71dab9c6cd597562c037919dac7e435e5.json
+query-41989cdb37b6ea642bcb5baa3fa9cf150bc392acb480215079ddeaf578b0e8ab.json
+query-423ee58d66e2861cfcbfd1d7bd4650793c5a708421f15d27b20a6343f43406ce.json
+query-425394eb5ee81f916dc8cb6760a24a50605d6237f7804b587224a01a8c36fc3a.json
+query-437355b9fb15b956284cdfdbccd508817456863d42a8d5a382ddf2dce663d390.json
+query-4403a5656eb9deb86fc7256bb371f12ad6ca633934881675db4e7bc6b38e3944.json
+query-45daf479b102811a2283ac8362d00fa6d1b78fde0d49c1dc38ad22e7ae37a086.json
+query-46e3309373285f91c20e8d222a598a891e1d55aa7986ac90c99f471167fdf3db.json
+query-48e146d93294f172543f7500e36c6073c283f3aeb81eb97002d06209653e83e4.json
+query-4f5906668d8cb3866ad28f63b6c4b4ed9f1171c3e643441b0afffa9b608701ce.json
+query-4fee968fa5188687b917f6701d7239db4088c3c1e9027893cb834edc30fe2df2.json
+query-51d33d5980c4347cb6d654ea5c9e7fb21f131026bad42fa86dc816dbc6b63579.json
+query-59179f0851b8c62a6178059272de0da96b2811cc8f63463f4edc7cbfe2ef8153.json
+query-5b15b00ab82848bb529dbc49861683ad951cc61ffc5fdb9045920127f7301b19.json
+query-61de64ed39978eb4e81d84606b721e4e0c5912d90303dd5dc43c6f9cad92eabb.json
+query-6828799f44f563f539c00e2516155a1587b4436e7cb603c128d2ae82a8fd1d71.json
+query-686417cdc3908c80a48ba873840d76e1412b920fd7f0b6bc0b8129a804e9c06d.json
+query-6bb7f6f7c6c99b178d151b215817e709264ae6d56ba5588d2a4005093e48d157.json
+query-7c13644bb10ccbfdf740cce33a466fe635426784c59bc3e8e23c2344014ffaf3.json
+query-7e128815af1b84f1ee70bdc0614956358b1ba0b7b1a532c80f214f00ea4fbab4.json
+query-7e34a4e40363c89643273aae80a15f5239c2418fce695e92ce2afe6d6bd25995.json
+query-80b6ab4ff4ae7abde233d30033ccd5dc73dd1f164d262cde8b93a52e7d4d4317.json
+query-81245befad97a3be493e3a2c63dd2ec56be44436d577391f4758e5388ea98ae0.json
+query-835ebbb162f372c1f507f6b8b4f4727e3660d19f9001ca6cd926af1ba0900e6d.json
+query-85785c2c85b46725dfe0f0801eeb145d07e98c3c3b730781fd12784296aa1472.json
+query-87979fdf40a6cbbf2536a7a689540ee8f451d2a122a6b25525dfa88d52fbb270.json
+query-88cb6ca4e1b9e96daad8923372664de67732ed2e2d89c941753978db8265eb9f.json
+query-8ba0b9e6ec2528a357f28471b0d98bcd905c4bfd6e9c775745148d5b7cbfdaad.json
+query-8cd8bfb6cc638055f8640f8f1f4a486eaabe89fda4fbee7cfcffc3a3724b5195.json
+query-8e4235dd914cf621de9b3ad13bae6eedc8d1158b1b24affdd7ba707a84a4e596.json
+query-8fcb897f99f8dc4cfb7a708dc6bd5ab63605826552d3645e6387e17089aa0b0f.json
+query-9056fa47c5b7cdcc7468eec0c55fb19979e4839267f6a499e3da0e6c2dfea388.json
+query-941e363530dc248078651eb76b89b15fdedf4660ff66de515af99a135ebe33f7.json
+query-9580f40ed06fb81c2f1d7f6b79867b21f3bee59e315da7e7755047691cd1288c.json
+query-97fc1feb1f4fc5cb592491be0b288cfa1ce12bd90e12b717742886b887326c4a.json
+query-9811b309a7a75f0500fda586678d7fe85c626331495d7963768c14eb22d0ec09.json
+query-9a9cea9b170a9b081f7aa3dbd3eb25beeee2a1b2b54062a8027a6406208c464f.json
+query-9b22f9be3761d6a58c816fb4d54f2d63b2f5c25d4bb68f3afd92f59cd562f752.json
+query-9d0ede6607aa7aa4af95ed6515ba4778d07048cf94b8aaac2e9d4cc54061d9f1.json
+query-9f18f1b5f2a283a6912e59b49fb9de80fa5303d620f30c0134e4448d769ba905.json
+query-9f5630c7869e767865ce5817cfc37814afdc608af1b754132879fc573713459c.json
+query-a2e528da612d305ed6ebaf2204fcb9913723a55af17085d4004a30ab542d850f.json
+query-a3e5c38d5cff3418b38448e84bda4125c88c18ec8f454dbb98f6756134dd349b.json
+query-a414f1ff9aeda4242982cd96461de388ab024fec2b9b00f19112679b0264dc00.json
+query-a93a8a6161a70fd38d096c1ba497fb6e8018dbdc5ae5a48e8c74a3a549699aa9.json
+query-aaace060e8475981c81461115cb76e99ba50499ee79774c1daf8fcf66237c406.json
+query-ac782168b2b03343a9e3c0250a7087bd0bc87e5cae53f767cf4ca8edb8f65598.json
+query-ae09f39543caea7f803e83c29d65a4a04de82e052f7b1e76d59d4fdf37464f29.json
+query-afeff6b8544015d0277612c7bd325ff88be30caa37b43361a878307ee625c244.json
+query-b6d6eafb5bd2138d4ace4efd46fac28cde1c3bef48b7c25aa16280d35c8733b4.json
+query-be26db38c15b28792ae431900496710365a830d553e3d498730873000f27d2f7.json
+query-bffef4f5f989eeccad46547bdacfa67ccac89521d79103241a1b97890ab16560.json
+query-c0fc41bc8e1913bbe26c3868d7d0f212399688b55d48d488c72034a8ac56b022.json
+query-c3fc75529cf29ee893c8d0947998d3f4d8a533e1eaeb2c23643782a287ba17e3.json
+query-dac6d1fa1505d270becda11cdd2cee9befe69080460451065c0ebc77a874f2e1.json
+query-e38ad0dd067834fe7da09108001c521405b81e854e71aa0afc787b2bb2f4e424.json
+query-e6237ee96363f6cb787efcbfc51333126b80ee0a819d25d626767b2734d1eebd.json
+query-e651391b8bd07eccd89cb811995b481adf968997e634e989e742270d1318e378.json
+query-eec580ccc5c483e5d6ef6fbb520106884b457f650037f48da3251ae4e861b9b3.json
+query-f0a4d3d0b19120e900f111537bda13289e8694f26cc86acb7d0afc3e6d37109a.json
+query-f11486c893ab4ae0834377f6d80c5b9aed9c01c8f695810ccc1c3b323c493884.json
+query-f98f1326d895a353073306e567b4cc3096701930c861f8059a3f6e0d15775265.json
+query-fdb4bde99b8171d78e6afdd364f85909075b0b591f7ef51ae32129864da450d0.json
+query-feec191a2e94a3577b51d43435941a89f7b1763931cb70d14d82ad5387dae1e0.json
+==== BACKEND BASE ====
+// Prevents additional console window on Windows in release, DO NOT REMOVE!!
+#![cfg_attr(not(debug_assertions), windows_subsystem = "windows")]
+
+fn main() {
+    pos_lib::run()
+}
+pub mod audit;
+pub mod billing;
+pub mod cash;
+pub mod customers;
+pub mod debts;
+pub mod developer;
+pub mod inventory;
+pub mod licensing;
+pub mod reports;
+pub mod sales;
+pub mod settings; // ← agregar esta línea
+pub mod stocktake;
+pub mod suppliers;
+
+pub mod connection;
+pub use connection::{init_db, DbPool};
+pub mod app_error;
+
+pub use app_error::AppError;
+use thiserror::Error;
+
+#[derive(Debug, Error)]
+pub enum AppError {
+    #[error("{0}")]
+    NotFound(String),
+
+    #[error("{0}")]
+    Validation(String),
+
+    #[error("Error de base de datos: {0}")]
+    Database(#[from] sqlx::Error),
+
+    #[error("Error interno: {0}")]
+    Internal(String),
+}
+
+impl AppError {
+    pub fn not_found(msg: &str) -> Self {
+        Self::NotFound(msg.to_string())
+    }
+
+    pub fn validation(msg: &str) -> Self {
+        Self::Validation(msg.to_string())
+    }
+
+    pub fn internal(msg: &str) -> Self {
+        Self::Internal(msg.to_string())
+    }
+}
+
+impl serde::Serialize for AppError {
+    fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
+    where
+        S: serde::Serializer,
+    {
+        serializer.serialize_str(&self.to_string())
+    }
+}
+pub mod money;
+pub mod pagination;
+//! Política de dinero:
+//! - Todo importe se guarda como i64 en centésimas de la unidad principal.
+//! - `decimals` (0..=2) es la precisión visible de la moneda: COP = 0, USD = 2.
+//! - Los importes calculados se redondean a esa precisión al calcularlos.
+
+fn step(decimals: u8) -> i128 {
+    10_i128.pow(2 - decimals.min(2) as u32)
+}
+
+fn clamp_i128(value: i128) -> i64 {
+    value.clamp(i64::MIN as i128, i64::MAX as i128) as i64
+}
+
+fn round_ratio_to_currency(numerator: i128, denominator: i128, decimals: u8) -> i64 {
+    let unit = step(decimals);
+    let scaled_denominator = denominator * unit;
+    let magnitude = numerator.abs();
+    let rounded = (magnitude + scaled_denominator / 2) / scaled_denominator;
+    let result = rounded * unit;
+    clamp_i128(if numerator < 0 { -result } else { result })
+}
+
+/// Redondea un importe en centésimas a la precisión de la moneda
+/// (mitad hacia afuera de cero).
+pub fn round_to_currency(amount: i64, decimals: u8) -> i64 {
+    round_ratio_to_currency(amount as i128, 1, decimals)
+}
+
+/// IVA sobre una base neta, redondeado una sola vez a la precisión de la moneda.
+/// `bps`: basis points (1900 = 19 %), entre 0 y 10000.
+pub fn tax_on_net(net: i64, bps: i32, decimals: u8) -> i64 {
+    round_ratio_to_currency(net as i128 * bps as i128, 10_000, decimals)
+}
+
+/// IVA contenido en un importe que ya lo incluye (precios con IVA incluido).
+/// `bps` debe estar entre 0 y 10000.
+pub fn tax_included_in(gross: i64, bps: i32, decimals: u8) -> i64 {
+    round_ratio_to_currency(gross as i128 * bps as i128, 10_000 + bps as i128, decimals)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn cop_rounds_to_whole_pesos() {
+        assert_eq!(round_to_currency(19_019, 0), 19_000);
+        assert_eq!(round_to_currency(19_050, 0), 19_100);
+        assert_eq!(round_to_currency(19_019, 2), 19_019);
+        assert_eq!(round_to_currency(-19_050, 0), -19_100);
+    }
+
+    #[test]
+    fn tax_is_rounded_once_to_currency_precision() {
+        assert_eq!(tax_on_net(100_100, 1900, 0), 19_000);
+        assert_eq!(tax_on_net(100_100, 1900, 2), 19_019);
+        assert_eq!(tax_on_net(260, 1900, 0), 0);
+    }
+
+    #[test]
+    fn tax_included_in_gross_is_rounded_once() {
+        assert_eq!(tax_included_in(11_900, 1900, 2), 1_900);
+        assert_eq!(tax_included_in(11_900, 1900, 0), 1_900);
+    }
+}
+
+
+==== MIGRACIONES ====
+-- ============================================================
+-- MIGRACIÓN 001: Categorías
+-- ============================================================
+
+CREATE TABLE IF NOT EXISTS categories (
+    id          SERIAL PRIMARY KEY,
+    name        VARCHAR(100) NOT NULL UNIQUE,
+    description TEXT,
+    is_active   BOOLEAN NOT NULL DEFAULT TRUE,
+    created_at  TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    updated_at  TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+
+-- Categorías base para una tienda de detalles
+INSERT INTO categories (name, description) VALUES
+    ('Perfumes y Fragancias', 'Colonias, perfumes y desodorantes'),
+    ('Joyería y Accesorios',  'Aretes, collares, pulseras, anillos'),
+    ('Juguetes',              'Juguetes para niños de todas las edades'),
+    ('Ropa',                  'Prendas de vestir para adultos y niños'),
+    ('Detalles y Regalos',    'Artículos de regalo y decoración'),
+    ('Bisutería',             'Accesorios de moda a bajo costo'),
+    ('Cosméticos',            'Maquillaje y cuidado personal'),
+    ('Sin categoría',         'Productos sin categoría asignada')
+ON CONFLICT (name) DO NOTHING;-- ============================================================
+-- MIGRACIÓN 004: Ajustes del negocio (fila única / singleton)
+-- ============================================================
+
+CREATE TABLE IF NOT EXISTS app_settings (
+    id                          SMALLINT PRIMARY KEY DEFAULT 1 CHECK (id = 1),
+
+    business_name               VARCHAR(200) NOT NULL DEFAULT 'Mi Negocio',
+    tax_id                      VARCHAR(50),
+    address                     TEXT,
+    phone                       VARCHAR(50),
+    email                       VARCHAR(150),
+
+    currency                    VARCHAR(3) NOT NULL DEFAULT 'COP',
+
+    -- IVA en basis points: 1900 = 19.00%
+    tax_rate_bps                INT NOT NULL DEFAULT 1900
+                                CHECK (tax_rate_bps BETWEEN 0 AND 10000),
+
+    ticket_header               TEXT,
+    ticket_footer               TEXT,
+
+    low_stock_default_threshold INT NOT NULL DEFAULT 5
+                                CHECK (low_stock_default_threshold >= 0),
+
+    logo_url                    TEXT,
+
+    created_at                  TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    updated_at                  TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+
+-- Si el trigger ya existe porque la migración fue ejecutada
+-- manualmente anteriormente, lo eliminamos antes de crearlo.
+DROP TRIGGER IF EXISTS trg_settings_updated_at ON app_settings;
+
+CREATE TRIGGER trg_settings_updated_at
+    BEFORE UPDATE ON app_settings
+    FOR EACH ROW
+    EXECUTE FUNCTION update_updated_at();
+
+-- Sembrar la única fila que va a existir
+INSERT INTO app_settings (id)
+VALUES (1)
+ON CONFLICT (id) DO NOTHING;-- ============================================================
+-- MIGRACIÓN 005: Caja (sesiones de turno + movimientos)
+-- ============================================================
+
+CREATE TYPE cash_movement_type AS ENUM ('manual_in', 'manual_out', 'sale_in', 'sale_out');
+
+CREATE TABLE cash_sessions (
+    id               SERIAL PRIMARY KEY,
+    opening_amount   BIGINT NOT NULL CHECK (opening_amount >= 0),
+    expected_amount  BIGINT,               -- se calcula al cerrar
+    counted_amount   BIGINT,               -- arqueo físico al cerrar
+    difference       BIGINT,               -- counted - expected
+    status           VARCHAR(10) NOT NULL DEFAULT 'open'
+                     CHECK (status IN ('open', 'closed')),
+    opened_by        VARCHAR(100) NOT NULL DEFAULT 'system',
+    closed_by        VARCHAR(100),
+    opening_notes    TEXT,
+    closing_notes    TEXT,
+    opened_at        TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    closed_at        TIMESTAMPTZ
+);
+
+-- Solo una sesión abierta a la vez (constraint real, no solo validación en Rust)
+CREATE UNIQUE INDEX uq_one_open_session
+    ON cash_sessions (status)
+    WHERE (status = 'open');
+
+CREATE TABLE cash_movements (
+    id             SERIAL PRIMARY KEY,
+    session_id     INT NOT NULL REFERENCES cash_sessions(id) ON DELETE RESTRICT,
+    movement_type  cash_movement_type NOT NULL,
+    amount         BIGINT NOT NULL CHECK (amount > 0),
+    sale_id        INT,          -- FK futura cuando exista modules::sales
+    notes          TEXT,
+    created_by     VARCHAR(100) NOT NULL DEFAULT 'system',
+    created_at     TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+
+CREATE INDEX idx_cash_movements_session ON cash_movements (session_id);
+CREATE INDEX idx_cash_sessions_status   ON cash_sessions (status);-- ============================================================
+-- MIGRACIÓN 006: Ventas (venta + ítems + pagos mixtos)
+-- ============================================================
+
+CREATE TYPE payment_method AS ENUM ('cash', 'card', 'transfer');
+CREATE TYPE sale_status    AS ENUM ('completed', 'cancelled', 'refunded');
+
+CREATE TABLE sales (
+    id           SERIAL PRIMARY KEY,
+
+    -- FK futura cuando exista modules::customers (mismo criterio que
+    -- inventory_movements.sale_id quedó reservado antes de que sales existiera).
+    customer_id  INT,
+
+    subtotal     BIGINT NOT NULL CHECK (subtotal >= 0),
+    tax          BIGINT NOT NULL DEFAULT 0 CHECK (tax >= 0),
+    discount     BIGINT NOT NULL DEFAULT 0 CHECK (discount >= 0),
+    total        BIGINT NOT NULL CHECK (total >= 0),
+
+    status       sale_status NOT NULL DEFAULT 'completed',
+    notes        TEXT,
+    created_by   VARCHAR(100) NOT NULL DEFAULT 'system',
+    created_at   TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+
+CREATE TABLE sale_items (
+    id          SERIAL PRIMARY KEY,
+    sale_id     INT NOT NULL REFERENCES sales(id) ON DELETE RESTRICT,
+    variant_id  INT NOT NULL REFERENCES product_variants(id) ON DELETE RESTRICT,
+
+    quantity    INT NOT NULL CHECK (quantity > 0),
+    unit_price  BIGINT NOT NULL CHECK (unit_price >= 0),
+    discount    BIGINT NOT NULL DEFAULT 0 CHECK (discount >= 0),
+    tax         BIGINT NOT NULL DEFAULT 0 CHECK (tax >= 0),
+    subtotal    BIGINT NOT NULL CHECK (subtotal >= 0)
+);
+
+CREATE TABLE sale_payments (
+    id       SERIAL PRIMARY KEY,
+    sale_id  INT NOT NULL REFERENCES sales(id) ON DELETE RESTRICT,
+    method   payment_method NOT NULL,
+    amount   BIGINT NOT NULL CHECK (amount > 0)
+);
+
+CREATE INDEX idx_sale_items_sale      ON sale_items (sale_id);
+CREATE INDEX idx_sale_items_variant   ON sale_items (variant_id);
+CREATE INDEX idx_sale_payments_sale   ON sale_payments (sale_id);
+CREATE INDEX idx_sales_status         ON sales (status);
+CREATE INDEX idx_sales_created_at     ON sales (created_at);
+
+-- Ahora que sales existe, cerramos las FKs que quedaron reservadas
+-- como columnas sueltas en migraciones anteriores.
+ALTER TABLE inventory_movements
+    ADD CONSTRAINT fk_inventory_movements_sale
+    FOREIGN KEY (sale_id) REFERENCES sales(id);
+
+ALTER TABLE cash_movements
+    ADD CONSTRAINT fk_cash_movements_sale
+    FOREIGN KEY (sale_id) REFERENCES sales(id);CREATE TYPE movement_reason AS ENUM (
+    'damaged',
+    'lost',
+    'expired',
+    'theft',
+    'internal_use',
+    'count_correction',
+    'other'
+);
+
+ALTER TABLE inventory_movements
+    ADD COLUMN reason movement_reason;
+-- Extend business settings for currency, tax labels, timezone, and ticket output.
+ALTER TABLE app_settings
+    ADD COLUMN currency_decimals   SMALLINT    NOT NULL DEFAULT 0
+                                   CHECK (currency_decimals IN (0, 2)),
+    ADD COLUMN tax_name            VARCHAR(30) NOT NULL DEFAULT 'IVA'
+                                   CHECK (char_length(btrim(tax_name)) > 0),
+    ADD COLUMN timezone            VARCHAR(64) NOT NULL DEFAULT 'America/Bogota',
+    ADD COLUMN show_logo           BOOLEAN     NOT NULL DEFAULT TRUE,
+    ADD COLUMN show_tax_id         BOOLEAN     NOT NULL DEFAULT TRUE,
+    ADD COLUMN show_address        BOOLEAN     NOT NULL DEFAULT TRUE,
+    ADD COLUMN show_phone          BOOLEAN     NOT NULL DEFAULT TRUE,
+    ADD COLUMN show_cashier        BOOLEAN     NOT NULL DEFAULT TRUE,
+    ADD COLUMN show_tax_breakdown  BOOLEAN     NOT NULL DEFAULT TRUE,
+    ADD COLUMN show_discounts      BOOLEAN     NOT NULL DEFAULT TRUE,
+    ADD COLUMN show_payment_method BOOLEAN     NOT NULL DEFAULT TRUE;
+
+UPDATE app_settings
+SET currency_decimals = CASE WHEN currency = 'COP' THEN 0 ELSE 2 END
+WHERE id = 1;
+-- ============================================================
+-- MIGRACIÓN 012: Auditoría (eventos append-only)
+-- ============================================================
+--
+-- Una sola tabla para auditoría de negocio y errores registrados,
+-- diferenciados por `category`. Los logs técnicos (debug, trazas)
+-- siguen en `tracing` y NO se guardan aquí.
+--
+-- Decisiones:
+--   * Sin FK hacia ventas, productos, caja, etc.: el evento debe
+--     sobrevivir aunque la entidad cambie o se archive.
+--   * `actor` es NULL mientras no exista login/cajeros. Sin FK.
+--   * `entity_id` es TEXT para no atarlo a INT.
+--   * `correlation_id` lo genera Rust (Uuid::new_v4()); agrupa los
+--     eventos de una misma operación ("Ver operación completa").
+--   * La tabla es append-only: INSERT sí; UPDATE, DELETE y TRUNCATE
+--     se bloquean con triggers.
+-- ============================================================
+
+CREATE TYPE audit_category AS ENUM (
+    'business',     -- acción de negocio (venta, cambio de precio, cierre de caja)
+    'error'         -- error registrado (falló algo que el usuario intentó)
+);
+
+CREATE TYPE audit_module AS ENUM (
+    'sales',
+    'inventory',
+    'cash',
+    'stocktake',
+    'settings',
+    'import',
+    'licensing',
+    'billing',      -- impresión de tickets y etiquetas
+    'system'        -- errores que no pertenecen a un módulo concreto
+);
+
+CREATE TYPE audit_outcome AS ENUM (
+    'success',      -- la acción ocurrió
+    'failure'       -- se intentó, pero no ocurrió
+);
+
+CREATE TABLE IF NOT EXISTS audit_events (
+    id              BIGSERIAL PRIMARY KEY,
+    created_at      TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+
+    correlation_id  UUID,
+
+    category        audit_category NOT NULL,
+    module          audit_module   NOT NULL,
+    action          TEXT           NOT NULL CHECK (char_length(btrim(action)) > 0),
+    outcome         audit_outcome  NOT NULL,
+
+    actor           TEXT,
+
+    entity_type     TEXT,
+    entity_id       TEXT,
+
+    summary         TEXT NOT NULL CHECK (char_length(btrim(summary)) > 0),
+
+    -- {"campo": {"from": ..., "to": ...}}
+    changes         JSONB,
+    -- Detalle libre: resumen de importación, contexto de un error, etc.
+    metadata        JSONB,
+    error_message   TEXT,
+
+    -- Un evento de categoría 'error' siempre es un fallo. Así la vista
+    -- "Errores" se resuelve con outcome = 'failure'.
+    CHECK (category <> 'error' OR outcome = 'failure'),
+
+    -- Si hay entity_id debe haber entity_type.
+    CHECK (entity_id IS NULL OR entity_type IS NOT NULL)
+);
+
+CREATE INDEX idx_audit_events_created   ON audit_events (created_at DESC, id DESC);
+CREATE INDEX idx_audit_events_module    ON audit_events (module, created_at DESC);
+CREATE INDEX idx_audit_events_corr      ON audit_events (correlation_id) WHERE correlation_id IS NOT NULL;
+CREATE INDEX idx_audit_events_entity    ON audit_events (entity_type, entity_id) WHERE entity_type IS NOT NULL;
+CREATE INDEX idx_audit_events_failures  ON audit_events (created_at DESC) WHERE outcome = 'failure';
+
+-- ------------------------------------------------------------
+-- Inmutabilidad (append-only)
+-- ------------------------------------------------------------
+CREATE OR REPLACE FUNCTION prevent_audit_events_modification()
+RETURNS TRIGGER AS $$
+BEGIN
+    RAISE EXCEPTION 'audit_events es append-only: % no está permitido', TG_OP
+        USING ERRCODE = 'restrict_violation';
+END;
+$$ LANGUAGE plpgsql;
+
+CREATE TRIGGER trg_audit_events_no_update_delete
+    BEFORE UPDATE OR DELETE ON audit_events
+    FOR EACH ROW EXECUTE FUNCTION prevent_audit_events_modification();
+
+CREATE TRIGGER trg_audit_events_no_truncate
+    BEFORE TRUNCATE ON audit_events
+    FOR EACH STATEMENT EXECUTE FUNCTION prevent_audit_events_modification();
+==== MODULO CASH ====
+pub mod dto;
+pub mod handlers;
+pub mod models;
+pub mod repository;
+pub mod router;
+pub mod service;
+use chrono::{DateTime, Utc};
+use serde::{Deserialize, Serialize};
+use sqlx::FromRow;
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, sqlx::Type)]
+#[sqlx(type_name = "cash_movement_type", rename_all = "snake_case")]
+#[serde(rename_all = "snake_case")]
+pub enum CashMovementType {
+    ManualIn,
+    ManualOut,
+    SaleIn,
+    SaleOut,
+}
+
+impl CashMovementType {
+    /// Solo estos dos se pueden registrar manualmente desde el comando de Tauri.
+    /// SaleIn/SaleOut quedan reservados para cuando exista modules::sales.
+    pub fn is_manual(&self) -> bool {
+        matches!(
+            self,
+            CashMovementType::ManualIn | CashMovementType::ManualOut
+        )
+    }
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, FromRow)]
+pub struct CashSession {
+    pub id: i32,
+    pub opening_amount: i64,
+    pub expected_amount: Option<i64>,
+    pub counted_amount: Option<i64>,
+    pub difference: Option<i64>,
+    pub status: String,
+    pub opened_by: String,
+    pub closed_by: Option<String>,
+    pub opening_notes: Option<String>,
+    pub closing_notes: Option<String>,
+    pub opened_at: DateTime<Utc>,
+    pub closed_at: Option<DateTime<Utc>>,
+}
+
+impl CashSession {
+    pub fn is_open(&self) -> bool {
+        self.status == "open"
+    }
+}
+
+/// Sesión abierta junto con los totales acumulados hasta el momento —
+/// usado para mostrar el estado en vivo de la caja sin tener que cerrarla.
+#[derive(Debug, Clone, Serialize, Deserialize, FromRow)]
+pub struct CashSessionWithTotals {
+    pub id: i32,
+    pub opening_amount: i64,
+    pub status: String,
+    pub opened_by: String,
+    pub opening_notes: Option<String>,
+    pub opened_at: DateTime<Utc>,
+    pub total_in: i64,
+    pub total_out: i64,
+    pub current_balance: i64,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, FromRow)]
+pub struct CashMovement {
+    pub id: i32,
+    pub session_id: i32,
+    pub movement_type: CashMovementType,
+    pub amount: i64,
+    pub sale_id: Option<i32>,
+    pub notes: Option<String>,
+    pub created_by: String,
+    pub created_at: DateTime<Utc>,
+}
+use chrono::NaiveDate;
+use serde::{Deserialize, Serialize};
+
+use crate::modules::cash::models::CashMovementType;
+
+// ============================================================
+// APERTURA / CIERRE DE TURNO
+// ============================================================
+
+#[derive(Debug, Deserialize)]
+pub struct OpenSessionDto {
+    pub opening_amount: i64,
+    pub opening_notes: Option<String>,
+    pub opened_by: Option<String>,
+}
+
+#[derive(Debug, Deserialize)]
+pub struct CloseSessionDto {
+    pub counted_amount: i64,
+    pub closing_notes: Option<String>,
+    pub closed_by: Option<String>,
+}
+
+// ============================================================
+// MOVIMIENTOS
+// ============================================================
+
+#[derive(Debug, Deserialize)]
+pub struct CreateMovementDto {
+    pub movement_type: CashMovementType,
+    pub amount: i64,
+    pub notes: Option<String>,
+    pub created_by: Option<String>,
+    // Reservado para cuando exista modules::sales; no se usa todavía.
+    pub sale_id: Option<i32>,
+}
+
+// ============================================================
+// FILTROS / PAGINACIÓN
+// ============================================================
+
+#[derive(Debug, Deserialize, Default)]
+pub struct CashSessionFilterDto {
+    pub status: Option<String>,
+    pub date_from: Option<NaiveDate>,
+    pub date_to: Option<NaiveDate>,
+    pub page: Option<i64>,
+    pub page_size: Option<i64>,
+}
+
+#[derive(Debug, Deserialize, Default)]
+pub struct CashMovementFilterDto {
+    pub session_id: Option<i32>,
+    pub movement_type: Option<String>,
+    pub page: Option<i64>,
+    pub page_size: Option<i64>,
+}
+
+#[derive(Debug, Serialize)]
+pub struct PaginatedResponse<T> {
+    pub data: Vec<T>,
+    pub total: i64,
+    pub page: i64,
+    pub page_size: i64,
+    pub total_pages: i64,
+}
+
+impl<T> PaginatedResponse<T> {
+    pub fn new(data: Vec<T>, total: i64, page: i64, page_size: i64) -> Self {
+        let total_pages = if page_size > 0 {
+            (total + page_size - 1) / page_size
+        } else {
+            0
+        };
+
+        Self {
+            data,
+            total,
+            page,
+            page_size,
+            total_pages,
+        }
+    }
+}
+use serde_json::json;
+use sqlx::{PgConnection, PgPool};
+use uuid::Uuid;
+
+use crate::modules::audit::{
+    actor::declared_actor,
+    dto::NewAuditEvent,
+    models::{AuditCategory, AuditModule, AuditOutcome},
+    repository as audit_repo,
+};
+
+use crate::modules::cash::{
+    dto::{
+        CashMovementFilterDto, CashSessionFilterDto, CloseSessionDto, CreateMovementDto,
+        OpenSessionDto,
+    },
+    models::{CashMovement, CashMovementType, CashSession, CashSessionWithTotals},
+};
+
+/// Errores de negocio propios del cierre de turno — se distinguen de
+/// sqlx::Error para que el service pueda dar un mensaje claro.
+pub enum CloseSessionError {
+    Db(sqlx::Error),
+    /// El turno ya estaba cerrado cuando se obtuvo el lock de la fila.
+    AlreadyClosed,
+}
+
+impl From<sqlx::Error> for CloseSessionError {
+    fn from(e: sqlx::Error) -> Self {
+        CloseSessionError::Db(e)
+    }
+}
+
+// ============================================================
+// SESIONES DE CAJA
+// ============================================================
+
+pub async fn get_open_session(pool: &PgPool) -> Result<Option<CashSession>, sqlx::Error> {
+    sqlx::query_as!(
+        CashSession,
+        "SELECT * FROM cash_sessions WHERE status = 'open'"
+    )
+    .fetch_optional(pool)
+    .await
+}
+
+pub async fn get_open_session_with_totals(
+    pool: &PgPool,
+) -> Result<Option<CashSessionWithTotals>, sqlx::Error> {
+    sqlx::query_as!(
+        CashSessionWithTotals,
+        r#"SELECT
+               s.id, s.opening_amount, s.status, s.opened_by,
+               s.opening_notes, s.opened_at,
+               COALESCE(SUM(m.amount) FILTER (
+                   WHERE m.movement_type IN ('manual_in', 'sale_in')
+               ), 0)::BIGINT AS "total_in!",
+               COALESCE(SUM(m.amount) FILTER (
+                   WHERE m.movement_type IN ('manual_out', 'sale_out')
+               ), 0)::BIGINT AS "total_out!",
+               (s.opening_amount
+                   + COALESCE(SUM(m.amount) FILTER (
+                       WHERE m.movement_type IN ('manual_in', 'sale_in')
+                     ), 0)
+                   - COALESCE(SUM(m.amount) FILTER (
+                       WHERE m.movement_type IN ('manual_out', 'sale_out')
+                     ), 0))::BIGINT AS "current_balance!"
+           FROM cash_sessions s
+           LEFT JOIN cash_movements m ON m.session_id = s.id
+           WHERE s.status = 'open'
+           GROUP BY s.id"#
+    )
+    .fetch_optional(pool)
+    .await
+}
+
+pub async fn get_session_by_id(pool: &PgPool, id: i32) -> Result<Option<CashSession>, sqlx::Error> {
+    sqlx::query_as!(CashSession, "SELECT * FROM cash_sessions WHERE id = $1", id)
+        .fetch_optional(pool)
+        .await
+}
+
+pub async fn list_sessions(
+    pool: &PgPool,
+    filter: &CashSessionFilterDto,
+) -> Result<(Vec<CashSession>, i64), sqlx::Error> {
+    let page = filter.page.unwrap_or(1).max(1);
+    let page_size = filter.page_size.unwrap_or(20).clamp(1, 100);
+    let offset = (page - 1) * page_size;
+
+    let rows = sqlx::query_as!(
+        CashSession,
+        r#"SELECT * FROM cash_sessions
+           WHERE ($1::TEXT IS NULL OR status = $1)
+             AND ($2::DATE IS NULL OR opened_at::DATE >= $2)
+             AND ($3::DATE IS NULL OR opened_at::DATE <= $3)
+           ORDER BY opened_at DESC
+           LIMIT $4 OFFSET $5"#,
+        filter.status,
+        filter.date_from,
+        filter.date_to,
+        page_size,
+        offset
+    )
+    .fetch_all(pool)
+    .await?;
+
+    let total = sqlx::query_scalar!(
+        r#"SELECT COUNT(*) FROM cash_sessions
+           WHERE ($1::TEXT IS NULL OR status = $1)
+             AND ($2::DATE IS NULL OR opened_at::DATE >= $2)
+             AND ($3::DATE IS NULL OR opened_at::DATE <= $3)"#,
+        filter.status,
+        filter.date_from,
+        filter.date_to
+    )
+    .fetch_one(pool)
+    .await?
+    .unwrap_or(0);
+
+    Ok((rows, total))
+}
+pub async fn open_session(pool: &PgPool, dto: OpenSessionDto) -> Result<CashSession, sqlx::Error> {
+    let actor = declared_actor(&dto.opened_by);
+    let mut tx = pool.begin().await?;
+
+    let session = sqlx::query_as!(
+        CashSession,
+        "INSERT INTO cash_sessions (opening_amount, opening_notes, opened_by)
+         VALUES ($1, $2, $3)
+         RETURNING *",
+        dto.opening_amount,
+        dto.opening_notes,
+        dto.opened_by.unwrap_or_else(|| "system".to_string())
+    )
+    .fetch_one(&mut *tx)
+    .await?;
+
+    audit_repo::insert_event(
+        &mut *tx,
+        NewAuditEvent {
+            correlation_id: Some(Uuid::new_v4()),
+            category: AuditCategory::Business,
+            module: AuditModule::Cash,
+            action: "open".to_string(),
+            outcome: AuditOutcome::Success,
+            actor,
+            entity_type: Some("cash_session".to_string()),
+            entity_id: Some(session.id.to_string()),
+            summary: format!("Turno de caja #{} abierto", session.id),
+            changes: None,
+            metadata: Some(json!({
+                "opening_amount": session.opening_amount,
+                "opening_notes": session.opening_notes,
+            })),
+            error_message: None,
+        },
+    )
+    .await?;
+
+    tx.commit().await?;
+
+    Ok(session)
+}
+
+/// Cierra el turno dentro de una transacción y registra el evento de auditoría.
+pub async fn close_session(
+    pool: &PgPool,
+    id: i32,
+    dto: CloseSessionDto,
+) -> Result<Option<CashSession>, CloseSessionError> {
+    let actor = declared_actor(&dto.closed_by);
+    let mut tx = pool.begin().await?;
+
+    let session = sqlx::query_as!(
+        CashSession,
+        "SELECT * FROM cash_sessions WHERE id = $1 FOR UPDATE",
+        id
+    )
+    .fetch_optional(&mut *tx)
+    .await?;
+
+    let Some(session) = session else {
+        return Ok(None);
+    };
+
+    if !session.is_open() {
+        return Err(CloseSessionError::AlreadyClosed);
+    }
+
+    let total_in = sqlx::query_scalar!(
+        r#"SELECT COALESCE(SUM(amount), 0)::BIGINT AS "total!"
+           FROM cash_movements
+           WHERE session_id = $1
+             AND movement_type IN ('manual_in', 'sale_in')"#,
+        id
+    )
+    .fetch_one(&mut *tx)
+    .await?;
+
+    let total_out = sqlx::query_scalar!(
+        r#"SELECT COALESCE(SUM(amount), 0)::BIGINT AS "total!"
+           FROM cash_movements
+           WHERE session_id = $1
+             AND movement_type IN ('manual_out', 'sale_out')"#,
+        id
+    )
+    .fetch_one(&mut *tx)
+    .await?;
+
+    let expected_amount = session.opening_amount + total_in - total_out;
+    let difference = dto.counted_amount - expected_amount;
+
+    let updated = sqlx::query_as!(
+        CashSession,
+        "UPDATE cash_sessions
+         SET status          = 'closed',
+             expected_amount = $1,
+             counted_amount  = $2,
+             difference      = $3,
+             closing_notes   = $4,
+             closed_by       = $5,
+             closed_at       = NOW()
+         WHERE id = $6
+         RETURNING *",
+        expected_amount,
+        dto.counted_amount,
+        difference,
+        dto.closing_notes,
+        dto.closed_by.unwrap_or_else(|| "system".to_string()),
+        id
+    )
+    .fetch_one(&mut *tx)
+    .await?;
+
+    audit_repo::insert_event(
+        &mut *tx,
+        NewAuditEvent {
+            correlation_id: Some(Uuid::new_v4()),
+            category: AuditCategory::Business,
+            module: AuditModule::Cash,
+            action: "close".to_string(),
+            outcome: AuditOutcome::Success,
+            actor,
+            entity_type: Some("cash_session".to_string()),
+            entity_id: Some(updated.id.to_string()),
+            summary: format!("Turno de caja #{} cerrado", updated.id),
+            changes: Some(json!({
+                "status": { "from": "open", "to": "closed" },
+            })),
+            metadata: Some(json!({
+                "opening_amount": updated.opening_amount,
+                "expected_amount": updated.expected_amount,
+                "counted_amount": updated.counted_amount,
+                "difference": updated.difference,
+                "closing_notes": updated.closing_notes,
+            })),
+            error_message: None,
+        },
+    )
+    .await?;
+
+    tx.commit().await?;
+
+    Ok(Some(updated))
+}
+
+// ============================================================
+// MOVIMIENTOS
+// ============================================================
+
+/// Inserta un movimiento usando la conexión/transacción proporcionada
+/// por el llamador.
+///
+/// NO abre una transacción propia y NO hace COMMIT.
+///
+/// Esto permite que una venta pueda registrar el movimiento de caja
+/// dentro de la misma transacción que:
+/// - la venta
+/// - los items de la venta
+/// - la salida de inventario
+///
+/// Si cualquiera de esas operaciones falla, el llamador puede hacer
+/// ROLLBACK de todo.
+pub async fn create_movement(
+    conn: &mut PgConnection,
+    session_id: i32,
+    dto: CreateMovementDto,
+) -> Result<Option<CashMovement>, sqlx::Error> {
+    // 1. Bloquear la sesión para evitar que un movimiento
+    //    se registre mientras otro proceso la está cerrando.
+    let status = sqlx::query_scalar!(
+        "SELECT status
+         FROM cash_sessions
+         WHERE id = $1
+         FOR UPDATE",
+        session_id
+    )
+    .fetch_optional(&mut *conn)
+    .await?;
+
+    // 2. Solo se permiten movimientos en sesiones abiertas.
+    match status {
+        Some(s) if s == "open" => {}
+        _ => return Ok(None),
+    }
+
+    // 3. Registrar el movimiento dentro de la transacción
+    //    que recibió esta función.
+    let movement = sqlx::query_as!(
+        CashMovement,
+        r#"INSERT INTO cash_movements
+               (session_id, movement_type, amount, sale_id, notes, created_by)
+           VALUES ($1, $2, $3, $4, $5, $6)
+           RETURNING
+               id,
+               session_id,
+               movement_type AS "movement_type: CashMovementType",
+               amount,
+               sale_id,
+               notes,
+               created_by,
+               created_at"#,
+        session_id,
+        dto.movement_type as CashMovementType,
+        dto.amount,
+        dto.sale_id,
+        dto.notes,
+        dto.created_by.unwrap_or_else(|| "system".to_string())
+    )
+    .fetch_one(&mut *conn)
+    .await?;
+
+    Ok(Some(movement))
+}
+
+pub async fn list_movements(
+    pool: &PgPool,
+    filter: &CashMovementFilterDto,
+) -> Result<(Vec<CashMovement>, i64), sqlx::Error> {
+    let page = filter.page.unwrap_or(1).max(1);
+    let page_size = filter.page_size.unwrap_or(50).clamp(1, 200);
+    let offset = (page - 1) * page_size;
+
+    let rows = sqlx::query_as!(
+        CashMovement,
+        r#"SELECT
+               id,
+               session_id,
+               movement_type AS "movement_type: CashMovementType",
+               amount,
+               sale_id,
+               notes,
+               created_by,
+               created_at
+           FROM cash_movements
+           WHERE ($1::INT  IS NULL OR session_id = $1)
+             AND ($2::TEXT IS NULL OR movement_type::TEXT = $2)
+           ORDER BY created_at DESC
+           LIMIT $3 OFFSET $4"#,
+        filter.session_id,
+        filter.movement_type,
+        page_size,
+        offset
+    )
+    .fetch_all(pool)
+    .await?;
+
+    let total = sqlx::query_scalar!(
+        r#"SELECT COUNT(*)
+           FROM cash_movements
+           WHERE ($1::INT  IS NULL OR session_id = $1)
+             AND ($2::TEXT IS NULL OR movement_type::TEXT = $2)"#,
+        filter.session_id,
+        filter.movement_type
+    )
+    .fetch_one(pool)
+    .await?
+    .unwrap_or(0);
+
+    Ok((rows, total))
+}
+use serde_json::json;
+use sqlx::PgPool;
+use uuid::Uuid;
+
+use crate::errors::app_error::AppError;
+use crate::modules::audit::{
+    actor::declared_actor,
+    dto::NewAuditEvent,
+    models::{AuditCategory, AuditModule, AuditOutcome},
+    repository as audit_repo,
+};
+use crate::modules::cash::{
+    dto::{
+        CashMovementFilterDto, CashSessionFilterDto, CloseSessionDto, CreateMovementDto,
+        OpenSessionDto, PaginatedResponse,
+    },
+    models::{CashMovement, CashMovementType, CashSession, CashSessionWithTotals},
+    repository::{self, CloseSessionError},
+};
+
+// ============================================================
+// SESIONES
+// ============================================================
+
+pub async fn get_current_session(pool: &PgPool) -> Result<Option<CashSessionWithTotals>, AppError> {
+    repository::get_open_session_with_totals(pool)
+        .await
+        .map_err(AppError::from)
+}
+
+pub async fn get_session(pool: &PgPool, id: i32) -> Result<CashSession, AppError> {
+    repository::get_session_by_id(pool, id)
+        .await
+        .map_err(AppError::from)?
+        .ok_or_else(|| AppError::not_found("Turno de caja no encontrado"))
+}
+
+pub async fn list_sessions(
+    pool: &PgPool,
+    filter: CashSessionFilterDto,
+) -> Result<PaginatedResponse<CashSession>, AppError> {
+    let page = filter.page.unwrap_or(1).max(1);
+    let page_size = filter.page_size.unwrap_or(20);
+
+    let (data, total) = repository::list_sessions(pool, &filter)
+        .await
+        .map_err(AppError::from)?;
+
+    Ok(PaginatedResponse::new(data, total, page, page_size))
+}
+
+pub async fn open_session(pool: &PgPool, dto: OpenSessionDto) -> Result<CashSession, AppError> {
+    if dto.opening_amount < 0 {
+        return Err(AppError::validation(
+            "El monto de apertura no puede ser negativo",
+        ));
+    }
+
+    repository::open_session(pool, dto).await.map_err(|e| {
+        if e.to_string().contains("uq_one_open_session") {
+            AppError::validation(
+                "Ya hay un turno de caja abierto. Ciérralo antes de abrir uno nuevo.",
+            )
+        } else {
+            AppError::from(e)
+        }
+    })
+}
+
+pub async fn close_session(
+    pool: &PgPool,
+    id: i32,
+    dto: CloseSessionDto,
+) -> Result<CashSession, AppError> {
+    if dto.counted_amount < 0 {
+        return Err(AppError::validation(
+            "El monto contado no puede ser negativo",
+        ));
+    }
+
+    let session = get_session(pool, id).await?;
+
+    if !session.is_open() {
+        return Err(AppError::validation("Este turno ya está cerrado"));
+    }
+
+    repository::close_session(pool, id, dto)
+        .await
+        .map_err(|e| match e {
+            CloseSessionError::Db(err) => AppError::from(err),
+            CloseSessionError::AlreadyClosed => AppError::validation("Este turno ya está cerrado"),
+        })?
+        .ok_or_else(|| AppError::not_found("Turno de caja no encontrado"))
+}
+
+// ============================================================
+// MOVIMIENTOS
+// ============================================================
+
+/// Registra un movimiento manual de caja.
+///
+/// Esta función abre su propia transacción porque los movimientos
+/// manuales se ejecutan de forma independiente.
+///
+/// En una venta, en cambio, `repository::create_movement` será
+/// llamado directamente usando la transacción general de la venta.
+pub async fn register_manual_movement(
+    pool: &PgPool,
+    session_id: i32,
+    dto: CreateMovementDto,
+) -> Result<CashMovement, AppError> {
+    // Solo permitimos movimientos manuales desde este comando.
+    if !dto.movement_type.is_manual() {
+        return Err(AppError::validation(
+            "Solo se pueden registrar movimientos manuales de ingreso o egreso desde este comando",
+        ));
+    }
+
+    // El monto debe ser positivo.
+    if dto.amount <= 0 {
+        return Err(AppError::validation("El monto debe ser mayor a cero"));
+    }
+
+    // `dto` se consume en create_movement: el actor se toma antes.
+    let actor = declared_actor(&dto.created_by);
+
+    // Abrimos la transacción aquí.
+    let mut tx = pool.begin().await.map_err(AppError::from)?;
+
+    // El repository utiliza la transacción existente.
+    let movement = repository::create_movement(&mut tx, session_id, dto)
+        .await
+        .map_err(AppError::from)?
+        .ok_or_else(|| {
+            AppError::validation("No hay un turno de caja abierto para registrar el movimiento")
+        })?;
+
+    let label = if movement.movement_type == CashMovementType::ManualIn {
+        "Ingreso manual"
+    } else {
+        "Egreso manual"
+    };
+
+    audit_repo::insert_event(
+        &mut *tx,
+        NewAuditEvent {
+            correlation_id: Some(Uuid::new_v4()),
+            category: AuditCategory::Business,
+            module: AuditModule::Cash,
+            action: "create".to_string(),
+            outcome: AuditOutcome::Success,
+            actor,
+            entity_type: Some("cash_movement".to_string()),
+            entity_id: Some(movement.id.to_string()),
+            summary: format!("{} de caja en el turno #{}", label, movement.session_id),
+            changes: None,
+            metadata: Some(json!({
+                "movement_type": movement.movement_type,
+                "amount": movement.amount,
+                "session_id": movement.session_id,
+                "notes": movement.notes,
+            })),
+            error_message: None,
+        },
+    )
+    .await
+    .map_err(AppError::from)?;
+
+    // Si todo salió bien, confirmamos.
+    tx.commit().await.map_err(AppError::from)?;
+
+    Ok(movement)
+}
+
+pub async fn list_movements(
+    pool: &PgPool,
+    filter: CashMovementFilterDto,
+) -> Result<PaginatedResponse<CashMovement>, AppError> {
+    let page = filter.page.unwrap_or(1).max(1);
+    let page_size = filter.page_size.unwrap_or(50);
+
+    let (data, total) = repository::list_movements(pool, &filter)
+        .await
+        .map_err(AppError::from)?;
+
+    Ok(PaginatedResponse::new(data, total, page, page_size))
+}
+use tauri::State;
+
+use crate::db::DbPool;
+use crate::errors::app_error::AppError;
+use crate::modules::audit::{
+    actor::declared_actor,
+    failure::{finish, FailureContext},
+    models::AuditModule,
+};
+use crate::modules::cash::{
+    dto::{
+        CashMovementFilterDto, CashSessionFilterDto, CloseSessionDto, CreateMovementDto,
+        OpenSessionDto, PaginatedResponse,
+    },
+    models::{CashMovement, CashSession, CashSessionWithTotals},
+    service,
+};
+
+#[tauri::command]
+pub async fn open_cash_session(
+    pool: State<'_, DbPool>,
+    dto: OpenSessionDto,
+) -> Result<CashSession, String> {
+    let ctx = FailureContext {
+        module: AuditModule::Cash,
+        action: "open",
+        entity_type: Some("cash_session"),
+        entity_id: None,
+        actor: declared_actor(&dto.opened_by),
+    };
+    finish(&pool, ctx, service::open_session(&pool, dto).await).await
+}
+
+#[tauri::command]
+pub async fn close_cash_session(
+    pool: State<'_, DbPool>,
+    id: i32,
+    dto: CloseSessionDto,
+) -> Result<CashSession, String> {
+    let ctx = FailureContext {
+        module: AuditModule::Cash,
+        action: "close",
+        entity_type: Some("cash_session"),
+        entity_id: Some(id.to_string()),
+        actor: declared_actor(&dto.closed_by),
+    };
+    finish(&pool, ctx, service::close_session(&pool, id, dto).await).await
+}
+
+#[tauri::command]
+pub async fn get_current_cash_session(
+    pool: State<'_, DbPool>,
+) -> Result<Option<CashSessionWithTotals>, String> {
+    service::get_current_session(&pool)
+        .await
+        .map_err(|e: AppError| e.to_string())
+}
+
+#[tauri::command]
+pub async fn get_cash_session(pool: State<'_, DbPool>, id: i32) -> Result<CashSession, String> {
+    service::get_session(&pool, id)
+        .await
+        .map_err(|e: AppError| e.to_string())
+}
+
+#[tauri::command]
+pub async fn list_cash_sessions(
+    pool: State<'_, DbPool>,
+    filter: CashSessionFilterDto,
+) -> Result<PaginatedResponse<CashSession>, String> {
+    service::list_sessions(&pool, filter)
+        .await
+        .map_err(|e: AppError| e.to_string())
+}
+
+// OJO: el parámetro se llama session_id (snake_case) porque Tauri exige que la
+// clave top-level del objeto de argumentos venga en camelCase desde el frontend
+// (invoke('register_cash_movement', { sessionId, dto })) y él mismo la traduce.
+#[tauri::command]
+pub async fn register_cash_movement(
+    pool: State<'_, DbPool>,
+    session_id: i32,
+    dto: CreateMovementDto,
+) -> Result<CashMovement, String> {
+    let ctx = FailureContext {
+        module: AuditModule::Cash,
+        action: "create",
+        entity_type: Some("cash_movement"),
+        entity_id: None,
+        actor: declared_actor(&dto.created_by),
+    };
+    finish(
+        &pool,
+        ctx,
+        service::register_manual_movement(&pool, session_id, dto).await,
+    )
+    .await
+}
+
+#[tauri::command]
+pub async fn list_cash_movements(
+    pool: State<'_, DbPool>,
+    filter: CashMovementFilterDto,
+) -> Result<PaginatedResponse<CashMovement>, String> {
+    service::list_movements(&pool, filter)
+        .await
+        .map_err(|e: AppError| e.to_string())
+}
+pub use super::handlers::{
+    close_cash_session, get_cash_session, get_current_cash_session, list_cash_movements,
+    list_cash_sessions, open_cash_session, register_cash_movement,
+};
+==== MODULO AUDIT ====
+pub mod actor;
+pub mod changes;
+pub mod dto;
+pub mod failure;
+pub mod handlers;
+pub mod models;
+pub mod repository;
+pub mod router;
+pub mod service;
+/// Actor para auditoría mientras no exista login: el nombre declarado por
+/// el cliente, o `None` si no vino o está en blanco.
+pub fn declared_actor(declared: &Option<String>) -> Option<String> {
+    declared
+        .as_deref()
+        .map(str::trim)
+        .filter(|name| !name.is_empty())
+        .map(str::to_string)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn declared_actor_trims_and_drops_blank_names() {
+        assert_eq!(declared_actor(&None), None);
+        assert_eq!(declared_actor(&Some("   ".to_string())), None);
+        assert_eq!(
+            declared_actor(&Some("  Ana ".to_string())),
+            Some("Ana".to_string())
+        );
+    }
+}
+use serde::Serialize;
+use serde_json::{json, Map, Value as JsonValue};
+
+/// Los textos más largos que esto se guardan resumidos en `changes`
+/// (por ejemplo, un logo en base64 o una descripción enorme), para que un
+/// solo cambio no infle la tabla de auditoría.
+const MAX_VALUE_CHARS: usize = 500;
+
+fn shorten(value: &JsonValue) -> JsonValue {
+    match value {
+        JsonValue::String(text) if text.chars().count() > MAX_VALUE_CHARS => {
+            json!(format!("[texto de {} caracteres]", text.chars().count()))
+        }
+        other => other.clone(),
+    }
+}
+
+/// Compara dos versiones de la misma fila y devuelve solo los campos que
+/// cambiaron, como `{"campo": {"from": .., "to": ..}}`. Vacío si no cambió
+/// nada. `ignore` lista campos que no interesan (`id`, timestamps).
+///
+/// Cualquier columna nueva que se agregue al struct queda auditada por
+/// defecto. La comparación se hace con los valores completos; solo el valor
+/// que se guarda se resume si es muy largo.
+///
+/// Los structs del proyecto solo contienen tipos simples, así que serializar
+/// no falla; si alguna vez no produjera un objeto JSON, devuelve vacío.
+pub fn changed_fields<T: Serialize>(
+    before: &T,
+    after: &T,
+    ignore: &[&str],
+) -> Map<String, JsonValue> {
+    let (JsonValue::Object(before), JsonValue::Object(after)) = (
+        serde_json::to_value(before).unwrap_or(JsonValue::Null),
+        serde_json::to_value(after).unwrap_or(JsonValue::Null),
+    ) else {
+        return Map::new();
+    };
+
+    let mut changes = Map::new();
+    for (field, from) in &before {
+        if ignore.contains(&field.as_str()) {
+            continue;
+        }
+        let to = after.get(field).unwrap_or(&JsonValue::Null);
+        if from != to {
+            changes.insert(
+                field.clone(),
+                json!({ "from": shorten(from), "to": shorten(to) }),
+            );
+        }
+    }
+    changes
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[derive(Serialize)]
+    struct Row {
+        id: i32,
+        name: String,
+        note: Option<String>,
+        is_active: bool,
+        updated_at: i64,
+    }
+
+    fn row() -> Row {
+        Row {
+            id: 1,
+            name: "Perfumes".to_string(),
+            note: None,
+            is_active: true,
+            updated_at: 100,
+        }
+    }
+
+    #[test]
+    fn identical_rows_have_no_changes() {
+        assert!(changed_fields(&row(), &row(), &["id", "updated_at"]).is_empty());
+    }
+
+    #[test]
+    fn reports_only_changed_fields_with_before_and_after() {
+        let mut after = row();
+        after.name = "Fragancias".to_string();
+        after.note = Some("nueva".to_string());
+
+        let changes = changed_fields(&row(), &after, &["id", "updated_at"]);
+
+        assert_eq!(changes.len(), 2);
+        assert_eq!(
+            changes["name"],
+            json!({ "from": "Perfumes", "to": "Fragancias" })
+        );
+        assert_eq!(changes["note"], json!({ "from": null, "to": "nueva" }));
+    }
+
+    #[test]
+    fn ignored_fields_are_not_reported() {
+        let mut after = row();
+        after.id = 2;
+        after.updated_at = 999;
+
+        assert!(changed_fields(&row(), &after, &["id", "updated_at"]).is_empty());
+        assert_eq!(changed_fields(&row(), &after, &[]).len(), 2);
+    }
+
+    #[test]
+    fn long_text_is_summarized_but_still_compared_in_full() {
+        let mut before = row();
+        let mut after = row();
+        before.note = Some("a".repeat(800));
+        after.note = Some(format!("{}b", "a".repeat(799)));
+
+        let changes = changed_fields(&before, &after, &["id", "updated_at"]);
+
+        assert_eq!(
+            changes["note"],
+            json!({
+                "from": "[texto de 800 caracteres]",
+                "to": "[texto de 800 caracteres]"
+            })
+        );
+
+        let same = Row {
+            note: Some("a".repeat(800)),
+            ..row()
+        };
+        assert!(changed_fields(&same, &same, &["id", "updated_at"]).is_empty());
+    }
+}
+use serde_json::json;
+use sqlx::PgPool;
+use uuid::Uuid;
+
+use crate::errors::app_error::AppError;
+use crate::modules::audit::{
+    dto::NewAuditEvent,
+    models::{AuditCategory, AuditModule, AuditOutcome},
+    repository,
+};
+use crate::modules::developer;
+
+const MAX_MESSAGE_CHARS: usize = 500;
+
+/// Qué operación falló. Lo arma el handler.
+pub struct FailureContext<'a> {
+    pub module: AuditModule,
+    pub action: &'a str,
+    pub entity_type: Option<&'a str>,
+    pub entity_id: Option<String>,
+    pub actor: Option<String>,
+}
+
+/// Solo los fallos técnicos se auditan; los rechazos de validación y los
+/// "no encontrado" son respuestas esperadas del negocio.
+fn technical_details(error: &AppError) -> Option<(&'static str, String)> {
+    match error {
+        AppError::Database(sqlx_error) => {
+            let message = match sqlx_error.as_database_error() {
+                Some(db) => format!(
+                    "Error de base de datos (código {}, constraint {})",
+                    db.code().as_deref().unwrap_or("?"),
+                    db.constraint().unwrap_or("-")
+                ),
+                None => format!("Error de base de datos: {sqlx_error}"),
+            };
+            Some(("database", message))
+        }
+        AppError::Internal(message) => Some((
+            "internal",
+            message.chars().take(MAX_MESSAGE_CHARS).collect(),
+        )),
+        AppError::Validation(_) | AppError::NotFound(_) => None,
+    }
+}
+
+async fn write_audit_event(
+    pool: &PgPool,
+    ctx: &FailureContext<'_>,
+    kind: &'static str,
+    message: &str,
+    correlation_id: Uuid,
+) -> bool {
+    let mut conn = match pool.acquire().await {
+        Ok(conn) => conn,
+        Err(acquire_error) => {
+            tracing::error!(
+                "No se pudo auditar el fallo de {}: {}",
+                ctx.action,
+                acquire_error
+            );
+            return false;
+        }
+    };
+
+    let event = NewAuditEvent {
+        correlation_id: Some(correlation_id),
+        category: AuditCategory::Error,
+        module: ctx.module,
+        action: ctx.action.to_string(),
+        outcome: AuditOutcome::Failure,
+        actor: ctx.actor.clone(),
+        entity_type: ctx.entity_type.map(str::to_string),
+        entity_id: ctx.entity_id.clone(),
+        summary: format!("Falló la operación «{}»", ctx.action),
+        changes: None,
+        metadata: Some(json!({ "error_kind": kind })),
+        error_message: Some(message.to_string()),
+    };
+
+    match repository::insert_event(&mut *conn, event).await {
+        Ok(_) => true,
+        Err(insert_error) => {
+            tracing::error!(
+                "No se pudo auditar el fallo de {}: {}",
+                ctx.action,
+                insert_error
+            );
+            false
+        }
+    }
+}
+
+async fn record_failure(pool: &PgPool, ctx: &FailureContext<'_>, error: &AppError) {
+    let Some((kind, message)) = technical_details(error) else {
+        return;
+    };
+
+    let correlation_id = Uuid::new_v4();
+    let audited = write_audit_event(pool, ctx, kind, &message, correlation_id).await;
+
+    // Mismo Uuid que Audit solo si el evento de Audit realmente se insertó.
+    developer::capture_failure(
+        &format!("{:?}", ctx.module).to_lowercase(),
+        ctx.action,
+        kind,
+        &message,
+        audited.then_some(correlation_id),
+    );
+}
+
+/// Envuelve el resultado de un service en un handler: audita el fallo
+/// técnico (si lo es) y devuelve el mismo `String` de error que antes.
+pub async fn finish<T>(
+    pool: &PgPool,
+    ctx: FailureContext<'_>,
+    result: Result<T, AppError>,
+) -> Result<T, String> {
+    match result {
+        Ok(value) => Ok(value),
+        Err(error) => {
+            record_failure(pool, &ctx, &error).await;
+            Err(error.to_string())
+        }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn business_rejections_are_not_audited() {
+        assert!(technical_details(&AppError::validation("monto inválido")).is_none());
+        assert!(technical_details(&AppError::not_found("no existe")).is_none());
+    }
+
+    #[test]
+    fn technical_errors_are_audited() {
+        let (kind, _) = technical_details(&AppError::Database(sqlx::Error::PoolTimedOut)).unwrap();
+        assert_eq!(kind, "database");
+
+        let (kind, message) = technical_details(&AppError::internal("falló")).unwrap();
+        assert_eq!(kind, "internal");
+        assert_eq!(message, "falló");
+    }
+
+    #[test]
+    fn internal_messages_are_truncated() {
+        let long = "x".repeat(900);
+        let (_, message) = technical_details(&AppError::internal(&long)).unwrap();
+        assert_eq!(message.chars().count(), MAX_MESSAGE_CHARS);
+    }
+}
+use chrono::{DateTime, Utc};
+use serde::{Deserialize, Serialize};
+use serde_json::Value as JsonValue;
+use sqlx::FromRow;
+use uuid::Uuid;
+
+// ============================================================
+// ENUMS (espejo de los tipos de la migración 012)
+// ============================================================
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, sqlx::Type)]
+#[sqlx(type_name = "audit_category", rename_all = "snake_case")]
+#[serde(rename_all = "snake_case")]
+pub enum AuditCategory {
+    Business,
+    Error,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, sqlx::Type)]
+#[sqlx(type_name = "audit_module", rename_all = "snake_case")]
+#[serde(rename_all = "snake_case")]
+pub enum AuditModule {
+    Sales,
+    Inventory,
+    Cash,
+    Stocktake,
+    Settings,
+    Import,
+    Licensing,
+    Billing,
+    System,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, sqlx::Type)]
+#[sqlx(type_name = "audit_outcome", rename_all = "snake_case")]
+#[serde(rename_all = "snake_case")]
+pub enum AuditOutcome {
+    Success,
+    Failure,
+}
+
+// ============================================================
+// EVENTO DE AUDITORÍA
+// ============================================================
+
+/// Fila de `audit_events`. La tabla es append-only: este struct solo se
+/// lee; los eventos nuevos se insertarán con un DTO propio (etapa 2).
+#[derive(Debug, Clone, Serialize, Deserialize, FromRow)]
+pub struct AuditEvent {
+    pub id: i64,
+    pub created_at: DateTime<Utc>,
+    pub correlation_id: Option<Uuid>,
+    pub category: AuditCategory,
+    pub module: AuditModule,
+    pub action: String,
+    pub outcome: AuditOutcome,
+    pub actor: Option<String>,
+    pub entity_type: Option<String>,
+    pub entity_id: Option<String>,
+    pub summary: String,
+    pub changes: Option<JsonValue>,
+    pub metadata: Option<JsonValue>,
+    pub error_message: Option<String>,
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn enums_serialize_as_snake_case_like_the_database_values() {
+        assert_eq!(
+            serde_json::to_string(&AuditModule::Stocktake).unwrap(),
+            "\"stocktake\""
+        );
+        assert_eq!(
+            serde_json::to_string(&AuditCategory::Business).unwrap(),
+            "\"business\""
+        );
+        assert_eq!(
+            serde_json::to_string(&AuditOutcome::Failure).unwrap(),
+            "\"failure\""
+        );
+    }
+}
+use chrono::NaiveDate;
+use serde::Deserialize;
+use serde_json::Value as JsonValue;
+use uuid::Uuid;
+
+use crate::modules::audit::models::{AuditCategory, AuditModule, AuditOutcome};
+use crate::modules::inventory::dto::SortDir;
+
+// ============================================================
+// ESCRITURA
+// ============================================================
+
+/// Evento a insertar en `audit_events`.
+///
+/// A propósito NO deriva `Deserialize`: los eventos los construye el
+/// backend, nunca llegan desde el frontend.
+#[derive(Debug, Clone)]
+pub struct NewAuditEvent {
+    pub correlation_id: Option<Uuid>,
+    pub category: AuditCategory,
+    pub module: AuditModule,
+    pub action: String,
+    pub outcome: AuditOutcome,
+    pub actor: Option<String>,
+    pub entity_type: Option<String>,
+    pub entity_id: Option<String>,
+    pub summary: String,
+    pub changes: Option<JsonValue>,
+    pub metadata: Option<JsonValue>,
+    pub error_message: Option<String>,
+}
+
+// ============================================================
+// FILTROS / BÚSQUEDA
+// ============================================================
+
+/// Filtros del listado de eventos (futuro Audit Explorer).
+///
+/// - `search` busca (ILIKE) en summary, action, entity_id y error_message.
+/// - `date_from` / `date_to` son días inclusivos según la zona horaria de
+///   Ajustes (`app_settings.timezone`), no la de la sesión de BD.
+/// - `sort_dir` ordena por fecha; por defecto `desc` (más reciente primero).
+#[derive(Debug, Deserialize, Default)]
+pub struct AuditEventFilterDto {
+    pub module: Option<AuditModule>,
+    pub category: Option<AuditCategory>,
+    pub outcome: Option<AuditOutcome>,
+    pub action: Option<String>,
+    pub entity_type: Option<String>,
+    pub entity_id: Option<String>,
+    pub correlation_id: Option<Uuid>,
+    pub search: Option<String>,
+    pub date_from: Option<NaiveDate>,
+    pub date_to: Option<NaiveDate>,
+    pub sort_dir: Option<SortDir>,
+    pub page: Option<i64>,
+    pub page_size: Option<i64>,
+}
+use sqlx::PgPool;
+use uuid::Uuid;
+
+use crate::errors::app_error::AppError;
+use crate::modules::audit::{dto::AuditEventFilterDto, models::AuditEvent, repository};
+use crate::modules::inventory::dto::PaginatedResponse;
+
+fn validate_filter(filter: &AuditEventFilterDto) -> Result<(), AppError> {
+    if let (Some(from), Some(to)) = (filter.date_from, filter.date_to) {
+        if from > to {
+            return Err(AppError::validation(
+                "La fecha inicial no puede ser posterior a la final",
+            ));
+        }
+    }
+    Ok(())
+}
+
+pub async fn list_events(
+    pool: &PgPool,
+    filter: AuditEventFilterDto,
+) -> Result<PaginatedResponse<AuditEvent>, AppError> {
+    validate_filter(&filter)?;
+
+    let page = filter.page.unwrap_or(1).max(1);
+    let page_size = filter.page_size.unwrap_or(50).clamp(1, 200);
+
+    let (data, total) = repository::list_events(pool, &filter)
+        .await
+        .map_err(AppError::from)?;
+
+    Ok(PaginatedResponse::new(data, total, page, page_size))
+}
+
+pub async fn get_event(pool: &PgPool, id: i64) -> Result<AuditEvent, AppError> {
+    repository::get_event(pool, id)
+        .await
+        .map_err(AppError::from)?
+        .ok_or_else(|| AppError::not_found("Evento de auditoría no encontrado"))
+}
+
+/// "Ver operación completa": hasta 1000 eventos, del más antiguo al más reciente.
+pub async fn list_by_correlation(
+    pool: &PgPool,
+    correlation_id: Uuid,
+) -> Result<Vec<AuditEvent>, AppError> {
+    repository::list_by_correlation(pool, correlation_id)
+        .await
+        .map_err(AppError::from)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use chrono::NaiveDate;
+
+    fn day(day: u32) -> Option<NaiveDate> {
+        NaiveDate::from_ymd_opt(2026, 10, day)
+    }
+
+    #[test]
+    fn inverted_date_range_is_rejected() {
+        let filter = AuditEventFilterDto {
+            date_from: day(10),
+            date_to: day(5),
+            ..Default::default()
+        };
+        assert!(validate_filter(&filter).is_err());
+    }
+
+    #[test]
+    fn open_or_ordered_ranges_are_accepted() {
+        assert!(validate_filter(&AuditEventFilterDto::default()).is_ok());
+
+        let same_day = AuditEventFilterDto {
+            date_from: day(5),
+            date_to: day(5),
+            ..Default::default()
+        };
+        assert!(validate_filter(&same_day).is_ok());
+
+        let only_from = AuditEventFilterDto {
+            date_from: day(5),
+            ..Default::default()
+        };
+        assert!(validate_filter(&only_from).is_ok());
+    }
+}
+use sqlx::{PgConnection, PgPool};
+use uuid::Uuid;
+
+use crate::modules::audit::{
+    dto::{AuditEventFilterDto, NewAuditEvent},
+    models::{AuditCategory, AuditEvent, AuditModule, AuditOutcome},
+};
+use crate::modules::inventory::dto::SortDir;
+
+/// Tope de eventos que devuelve `list_by_correlation`. Una operación normal
+/// (venta, cierre de caja) tiene unos pocos eventos; el tope protege ante una
+/// importación con muchísimas filas rechazadas. Para recorrer más, usar
+/// `list_events` con el filtro `correlation_id` y paginación.
+const CORRELATION_LIMIT: i64 = 1000;
+
+// ============================================================
+// HELPERS
+// ============================================================
+
+/// Texto de un filtro: sin espacios sobrantes y `None` si queda vacío.
+fn clean(value: &Option<String>) -> Option<&str> {
+    value
+        .as_deref()
+        .map(str::trim)
+        .filter(|text| !text.is_empty())
+}
+
+/// Patrón ILIKE para `search`, escapando `\`, `%` y `_` para que el texto
+/// del usuario se busque literalmente.
+fn search_pattern(search: &Option<String>) -> Option<String> {
+    let text = clean(search)?;
+    let escaped = text
+        .replace('\\', "\\\\")
+        .replace('%', "\\%")
+        .replace('_', "\\_");
+    Some(format!("%{escaped}%"))
+}
+
+// ============================================================
+// ESCRITURA
+// ============================================================
+
+/// Inserta un evento usando la conexión/transacción del llamador.
+///
+/// NO abre transacción propia y NO hace COMMIT, igual que `apply_stock_out`.
+/// - Evento que debe desaparecer si la operación hace rollback: pasar la
+///   transacción de la operación.
+/// - Evento de fallo, que debe sobrevivir al rollback: pasar una conexión
+///   aparte (`pool.acquire()`).
+pub async fn insert_event(
+    conn: &mut PgConnection,
+    event: NewAuditEvent,
+) -> Result<AuditEvent, sqlx::Error> {
+    let inserted = sqlx::query_as!(
+        AuditEvent,
+        r#"INSERT INTO audit_events
+			   (correlation_id, category, module, action, outcome, actor,
+				entity_type, entity_id, summary, changes, metadata, error_message)
+		   VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12)
+		   RETURNING
+			   id, created_at, correlation_id,
+			   category AS "category: AuditCategory",
+			   module   AS "module: AuditModule",
+			   action,
+			   outcome  AS "outcome: AuditOutcome",
+			   actor, entity_type, entity_id, summary,
+			   changes, metadata, error_message"#,
+        event.correlation_id,
+        event.category as AuditCategory,
+        event.module as AuditModule,
+        event.action,
+        event.outcome as AuditOutcome,
+        event.actor,
+        event.entity_type,
+        event.entity_id,
+        event.summary,
+        event.changes,
+        event.metadata,
+        event.error_message
+    )
+    .fetch_one(&mut *conn)
+    .await?;
+
+    log_feed(&inserted);
+    Ok(inserted)
+}
+
+/// Texto de una línea del feed: `summary (actor)`, o solo `summary` sin actor.
+fn feed_message(summary: &str, actor: Option<&str>) -> String {
+    match actor.map(str::trim).filter(|name| !name.is_empty()) {
+        Some(name) => format!("{summary} ({name})"),
+        None => summary.to_string(),
+    }
+}
+
+/// Línea en el CMD por cada evento de negocio guardado.
+/// Los fallos técnicos no se imprimen aquí: ya los captura Developer Mode.
+fn log_feed(event: &AuditEvent) {
+    if matches!(event.outcome, AuditOutcome::Failure) {
+        return;
+    }
+    let message = feed_message(&event.summary, event.actor.as_deref());
+    tracing::info!(target: "pos_lib::audit", ok = true, "{}", message);
+}
+
+// ============================================================
+// CONSULTA
+// ============================================================
+
+pub async fn get_event(pool: &PgPool, id: i64) -> Result<Option<AuditEvent>, sqlx::Error> {
+    sqlx::query_as!(
+        AuditEvent,
+        r#"SELECT
+			   id, created_at, correlation_id,
+			   category AS "category: AuditCategory",
+			   module   AS "module: AuditModule",
+			   action,
+			   outcome  AS "outcome: AuditOutcome",
+			   actor, entity_type, entity_id, summary,
+			   changes, metadata, error_message
+		   FROM audit_events
+		   WHERE id = $1"#,
+        id
+    )
+    .fetch_optional(pool)
+    .await
+}
+
+/// Todos los eventos de una operación, del más antiguo al más reciente
+/// ("Ver operación completa"). Máximo `CORRELATION_LIMIT` eventos.
+pub async fn list_by_correlation(
+    pool: &PgPool,
+    correlation_id: Uuid,
+) -> Result<Vec<AuditEvent>, sqlx::Error> {
+    sqlx::query_as!(
+        AuditEvent,
+        r#"SELECT
+			   id, created_at, correlation_id,
+			   category AS "category: AuditCategory",
+			   module   AS "module: AuditModule",
+			   action,
+			   outcome  AS "outcome: AuditOutcome",
+			   actor, entity_type, entity_id, summary,
+			   changes, metadata, error_message
+		   FROM audit_events
+		   WHERE correlation_id = $1
+		   ORDER BY created_at ASC, id ASC
+		   LIMIT $2"#,
+        correlation_id,
+        CORRELATION_LIMIT
+    )
+    .fetch_all(pool)
+    .await
+}
+
+/// Listado con filtros, búsqueda, orden por fecha y paginación.
+///
+/// El orden usa dos queries (asc / desc) en lugar de un `CASE` en el
+/// `ORDER BY`: con `CASE` PostgreSQL no puede recorrer el índice
+/// `idx_audit_events_created` y ordenaría toda la tabla en cada página.
+pub async fn list_events(
+    pool: &PgPool,
+    filter: &AuditEventFilterDto,
+) -> Result<(Vec<AuditEvent>, i64), sqlx::Error> {
+    let page = filter.page.unwrap_or(1).max(1);
+    let page_size = filter.page_size.unwrap_or(50).clamp(1, 200);
+    let offset = (page - 1).saturating_mul(page_size);
+
+    let action = clean(&filter.action);
+    let entity_type = clean(&filter.entity_type);
+    let entity_id = clean(&filter.entity_id);
+    let search = search_pattern(&filter.search);
+
+    // Zona de Ajustes: define dónde empieza y termina cada día del filtro.
+    let tz: String = sqlx::query_scalar!(
+        r#"SELECT COALESCE(
+               (SELECT timezone FROM app_settings WHERE id = 1),
+               current_setting('TimeZone')
+           ) AS "tz!""#
+    )
+    .fetch_one(pool)
+    .await?;
+
+    let rows = match filter.sort_dir.unwrap_or(SortDir::Desc) {
+        SortDir::Desc => {
+            sqlx::query_as!(
+                AuditEvent,
+                r#"SELECT
+					   id, created_at, correlation_id,
+					   category AS "category: AuditCategory",
+					   module   AS "module: AuditModule",
+					   action,
+					   outcome  AS "outcome: AuditOutcome",
+					   actor, entity_type, entity_id, summary,
+					   changes, metadata, error_message
+				   FROM audit_events
+				   WHERE ($1::audit_module   IS NULL OR module = $1)
+					 AND ($2::audit_category IS NULL OR category = $2)
+					 AND ($3::audit_outcome  IS NULL OR outcome = $3)
+					 AND ($4::TEXT IS NULL OR action = $4)
+					 AND ($5::TEXT IS NULL OR entity_type = $5)
+					 AND ($6::TEXT IS NULL OR entity_id = $6)
+					 AND ($7::UUID IS NULL OR correlation_id = $7)
+					 AND ($8::TEXT IS NULL
+						  OR summary ILIKE $8 OR action ILIKE $8
+						  OR entity_id ILIKE $8 OR error_message ILIKE $8)
+                     AND ($9::DATE  IS NULL OR created_at >= ($9::DATE)::timestamp AT TIME ZONE $13)
+                     AND ($10::DATE IS NULL OR created_at <  ($10::DATE + 1)::timestamp AT TIME ZONE $13)
+				   ORDER BY created_at DESC, id DESC
+				   LIMIT $11 OFFSET $12"#,
+                filter.module as Option<AuditModule>,
+                filter.category as Option<AuditCategory>,
+                filter.outcome as Option<AuditOutcome>,
+                action,
+                entity_type,
+                entity_id,
+                filter.correlation_id,
+                search,
+                filter.date_from,
+                filter.date_to,
+                page_size,
+                offset,
+                tz
+            )
+            .fetch_all(pool)
+            .await?
+        }
+        SortDir::Asc => {
+            sqlx::query_as!(
+                AuditEvent,
+                r#"SELECT
+					   id, created_at, correlation_id,
+					   category AS "category: AuditCategory",
+					   module   AS "module: AuditModule",
+					   action,
+					   outcome  AS "outcome: AuditOutcome",
+					   actor, entity_type, entity_id, summary,
+					   changes, metadata, error_message
+				   FROM audit_events
+				   WHERE ($1::audit_module   IS NULL OR module = $1)
+					 AND ($2::audit_category IS NULL OR category = $2)
+					 AND ($3::audit_outcome  IS NULL OR outcome = $3)
+					 AND ($4::TEXT IS NULL OR action = $4)
+					 AND ($5::TEXT IS NULL OR entity_type = $5)
+					 AND ($6::TEXT IS NULL OR entity_id = $6)
+					 AND ($7::UUID IS NULL OR correlation_id = $7)
+					 AND ($8::TEXT IS NULL
+						  OR summary ILIKE $8 OR action ILIKE $8
+						  OR entity_id ILIKE $8 OR error_message ILIKE $8)
+                     AND ($9::DATE  IS NULL OR created_at >= ($9::DATE)::timestamp AT TIME ZONE $13)
+                     AND ($10::DATE IS NULL OR created_at <  ($10::DATE + 1)::timestamp AT TIME ZONE $13)
+				   ORDER BY created_at ASC, id ASC
+				   LIMIT $11 OFFSET $12"#,
+                filter.module as Option<AuditModule>,
+                filter.category as Option<AuditCategory>,
+                filter.outcome as Option<AuditOutcome>,
+                action,
+                entity_type,
+                entity_id,
+                filter.correlation_id,
+                search,
+                filter.date_from,
+                filter.date_to,
+                page_size,
+                offset,
+                tz
+            )
+            .fetch_all(pool)
+            .await?
+        }
+    };
+
+    let total = sqlx::query_scalar!(
+        r#"SELECT COUNT(*) FROM audit_events
+		   WHERE ($1::audit_module   IS NULL OR module = $1)
+			 AND ($2::audit_category IS NULL OR category = $2)
+			 AND ($3::audit_outcome  IS NULL OR outcome = $3)
+			 AND ($4::TEXT IS NULL OR action = $4)
+			 AND ($5::TEXT IS NULL OR entity_type = $5)
+			 AND ($6::TEXT IS NULL OR entity_id = $6)
+			 AND ($7::UUID IS NULL OR correlation_id = $7)
+			 AND ($8::TEXT IS NULL
+				  OR summary ILIKE $8 OR action ILIKE $8
+				  OR entity_id ILIKE $8 OR error_message ILIKE $8)
+             AND ($9::DATE  IS NULL OR created_at >= ($9::DATE)::timestamp AT TIME ZONE $11)
+             AND ($10::DATE IS NULL OR created_at <  ($10::DATE + 1)::timestamp AT TIME ZONE $11)"#,
+        filter.module as Option<AuditModule>,
+        filter.category as Option<AuditCategory>,
+        filter.outcome as Option<AuditOutcome>,
+        action,
+        entity_type,
+        entity_id,
+        filter.correlation_id,
+        search,
+        filter.date_from,
+        filter.date_to,
+        tz
+    )
+    .fetch_one(pool)
+    .await?
+    .unwrap_or(0);
+
+    Ok((rows, total))
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn search_pattern_ignores_blank_text() {
+        assert_eq!(search_pattern(&None), None);
+        assert_eq!(search_pattern(&Some("   ".to_string())), None);
+    }
+
+    #[test]
+    fn search_pattern_escapes_like_wildcards() {
+        assert_eq!(
+            search_pattern(&Some(" 50%_off ".to_string())),
+            Some("%50\\%\\_off%".to_string())
+        );
+        assert_eq!(
+            search_pattern(&Some("caja".to_string())),
+            Some("%caja%".to_string())
+        );
+    }
+
+    #[test]
+    fn feed_message_appends_actor_only_when_present() {
+        assert_eq!(
+            feed_message("Venta #8 creada", Some("Ana")),
+            "Venta #8 creada (Ana)"
+        );
+        assert_eq!(feed_message("Venta #8 creada", None), "Venta #8 creada");
+        assert_eq!(
+            feed_message("Venta #8 creada", Some("  ")),
+            "Venta #8 creada"
+        );
+    }
+}
+use tauri::State;
+use uuid::Uuid;
+
+use crate::db::DbPool;
+use crate::modules::audit::{dto::AuditEventFilterDto, models::AuditEvent, service};
+use crate::modules::inventory::dto::PaginatedResponse;
+
+#[tauri::command]
+pub async fn list_audit_events(
+    pool: State<'_, DbPool>,
+    filter: AuditEventFilterDto,
+) -> Result<PaginatedResponse<AuditEvent>, String> {
+    service::list_events(&pool, filter)
+        .await
+        .map_err(|error| error.to_string())
+}
+
+#[tauri::command]
+pub async fn get_audit_event(pool: State<'_, DbPool>, id: i64) -> Result<AuditEvent, String> {
+    service::get_event(&pool, id)
+        .await
+        .map_err(|error| error.to_string())
+}
+
+#[tauri::command]
+pub async fn list_audit_events_by_correlation(
+    pool: State<'_, DbPool>,
+    correlation_id: Uuid,
+) -> Result<Vec<AuditEvent>, String> {
+    service::list_by_correlation(&pool, correlation_id)
+        .await
+        .map_err(|error| error.to_string())
+}
+pub use super::handlers::{get_audit_event, list_audit_events, list_audit_events_by_correlation};
+==== MODULO SALES - PATRON TRANSACCIONAL ====
+use chrono::{DateTime, Utc};
+use serde::{Deserialize, Serialize};
+use sqlx::FromRow;
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, sqlx::Type)]
+#[sqlx(type_name = "payment_method", rename_all = "snake_case")]
+#[serde(rename_all = "snake_case")]
+pub enum PaymentMethod {
+    Cash,
+    Card,
+    Transfer,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, sqlx::Type)]
+#[sqlx(type_name = "sale_status", rename_all = "snake_case")]
+#[serde(rename_all = "snake_case")]
+pub enum SaleStatus {
+    Completed,
+    Cancelled,
+    Refunded,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, FromRow)]
+pub struct Sale {
+    pub id: i32,
+    pub customer_id: Option<i32>,
+    pub subtotal: i64,
+    pub tax: i64,
+    pub discount: i64,
+    pub total: i64,
+    pub status: SaleStatus,
+    pub notes: Option<String>,
+    pub created_by: String,
+    pub created_at: DateTime<Utc>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, FromRow)]
+pub struct SaleItem {
+    pub id: i32,
+    pub sale_id: i32,
+    pub variant_id: i32,
+    pub quantity: i32,
+    pub unit_price: i64,
+    pub discount: i64,
+    pub tax: i64,
+    pub subtotal: i64,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, FromRow)]
+pub struct SalePayment {
+    pub id: i32,
+    pub sale_id: i32,
+    pub method: PaymentMethod,
+    pub amount: i64,
+}
+
+/// Venta completa con ítems y pagos — se ensambla a mano con 3 queries
+/// en el repository, no es un FromRow directo.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct SaleDetail {
+    #[serde(flatten)]
+    pub sale: Sale,
+    pub items: Vec<SaleItem>,
+    pub payments: Vec<SalePayment>,
+}
+use chrono::NaiveDate;
+use serde::{Deserialize, Serialize};
+
+use crate::modules::sales::models::PaymentMethod;
+
+#[derive(Debug, Deserialize)]
+pub struct CreateSaleItemDto {
+    pub variant_id: i32,
+    pub quantity: i32,
+    pub discount: Option<i64>,
+}
+
+#[derive(Debug, Deserialize)]
+pub struct CreateSalePaymentDto {
+    pub method: PaymentMethod,
+    pub amount: i64,
+}
+
+#[derive(Debug, Deserialize)]
+pub struct CreateSaleDto {
+    pub customer_id: Option<i32>,
+    pub items: Vec<CreateSaleItemDto>,
+    pub payments: Vec<CreateSalePaymentDto>,
+    pub discount: Option<i64>,
+    pub notes: Option<String>,
+    pub created_by: Option<String>,
+}
+
+#[derive(Debug, Deserialize, Default)]
+pub struct SaleFilterDto {
+    pub status: Option<String>,
+    pub customer_id: Option<i32>,
+    pub date_from: Option<NaiveDate>,
+    pub date_to: Option<NaiveDate>,
+    pub page: Option<i64>,
+    pub page_size: Option<i64>,
+}
+
+#[derive(Debug, Serialize)]
+pub struct PaginatedResponse<T> {
+    pub data: Vec<T>,
+    pub total: i64,
+    pub page: i64,
+    pub page_size: i64,
+    pub total_pages: i64,
+}
+
+impl<T> PaginatedResponse<T> {
+    pub fn new(data: Vec<T>, total: i64, page: i64, page_size: i64) -> Self {
+        let total_pages = if page_size > 0 {
+            (total + page_size - 1) / page_size
+        } else {
+            0
+        };
+        Self {
+            data,
+            total,
+            page,
+            page_size,
+            total_pages,
+        }
+    }
+}
+use sqlx::PgPool;
+
+use crate::errors::app_error::AppError;
+use crate::modules::sales::{
+    dto::{CreateSaleDto, PaginatedResponse, SaleFilterDto},
+    models::{Sale, SaleDetail},
+    repository::{self, CreateSaleError},
+};
+
+pub async fn create_sale(pool: &PgPool, dto: CreateSaleDto) -> Result<SaleDetail, AppError> {
+    if dto.items.is_empty() {
+        return Err(AppError::validation("La venta debe tener al menos un ítem"));
+    }
+    if dto.payments.is_empty() {
+        return Err(AppError::validation("La venta debe tener al menos un pago"));
+    }
+    if dto.items.iter().any(|i| i.quantity <= 0) {
+        return Err(AppError::validation(
+            "La cantidad de cada ítem debe ser mayor a cero",
+        ));
+    }
+    if dto.payments.iter().any(|p| p.amount <= 0) {
+        return Err(AppError::validation(
+            "El monto de cada pago debe ser mayor a cero",
+        ));
+    }
+
+    repository::create_sale(pool, dto)
+        .await
+        .map_err(|e| match e {
+            CreateSaleError::Db(err) => AppError::from(err),
+            CreateSaleError::NoOpenCashSession => {
+                AppError::validation("Hay un pago en efectivo pero no hay un turno de caja abierto")
+            }
+            CreateSaleError::PaymentMismatch => {
+                AppError::validation("El total de los pagos no coincide con el total de la venta")
+            }
+            CreateSaleError::InvalidDiscount => AppError::validation(
+                "El descuento no puede ser negativo ni superar el subtotal de la venta",
+            ),
+            CreateSaleError::AmountOverflow => {
+                AppError::validation("El importe de la venta supera el rango permitido")
+            }
+            CreateSaleError::InsufficientStock {
+                variant_id,
+                available,
+                requested,
+            } => AppError::validation(&format!(
+                "Stock insuficiente para la variante {}. Disponible: {}, solicitado: {}",
+                variant_id, available, requested
+            )),
+        })
+}
+
+pub async fn get_sale(pool: &PgPool, id: i32) -> Result<SaleDetail, AppError> {
+    repository::get_sale_by_id(pool, id)
+        .await
+        .map_err(AppError::from)?
+        .ok_or_else(|| AppError::not_found("Venta no encontrada"))
+}
+
+pub async fn list_sales(
+    pool: &PgPool,
+    filter: SaleFilterDto,
+) -> Result<PaginatedResponse<Sale>, AppError> {
+    let page = filter.page.unwrap_or(1).max(1);
+    let page_size = filter.page_size.unwrap_or(20);
+
+    let (data, total) = repository::list_sales(pool, &filter)
+        .await
+        .map_err(AppError::from)?;
+    Ok(PaginatedResponse::new(data, total, page, page_size))
+}
+use serde_json::json;
+use sqlx::PgPool;
+use uuid::Uuid;
+
+use crate::modules::audit::{
+    actor::declared_actor,
+    dto::NewAuditEvent,
+    models::{AuditCategory, AuditModule, AuditOutcome},
+    repository as audit_repo,
+};
+
+use crate::modules::cash::{
+    dto::CreateMovementDto, models::CashMovementType, repository as cash_repo,
+};
+use crate::modules::inventory::{
+    dto::StockOutDto, models::MovementType, repository as inventory_repo,
+};
+use crate::modules::sales::{
+    dto::{CreateSaleDto, SaleFilterDto},
+    models::{PaymentMethod, Sale, SaleDetail, SaleItem, SalePayment, SaleStatus},
+};
+use crate::types::money::tax_included_in;
+
+/// Errores de negocio propios de la confirmación de venta —
+/// se distinguen de sqlx::Error para poder dar mensajes claros en el service.
+pub enum CreateSaleError {
+    Db(sqlx::Error),
+    NoOpenCashSession,
+    PaymentMismatch,
+    InvalidDiscount,
+    AmountOverflow,
+    InsufficientStock {
+        variant_id: i32,
+        available: i32,
+        requested: i32,
+    },
+}
+
+fn allocate_proportionally(amount: i64, weights: &[i64]) -> Vec<i64> {
+    let total_weight: i128 = weights.iter().map(|weight| (*weight).max(0) as i128).sum();
+    if amount <= 0 || total_weight == 0 {
+        return vec![0; weights.len()];
+    }
+
+    let mut shares = Vec::with_capacity(weights.len());
+    let mut remainders = Vec::with_capacity(weights.len());
+    let mut allocated = 0_i64;
+
+    for (index, weight) in weights.iter().enumerate() {
+        let numerator = amount as i128 * (*weight).max(0) as i128;
+        let share = (numerator / total_weight) as i64;
+        allocated += share;
+        shares.push(share);
+        remainders.push((index, numerator % total_weight));
+    }
+
+    remainders.sort_by(|left, right| right.1.cmp(&left.1).then_with(|| left.0.cmp(&right.0)));
+    for (index, _) in remainders.into_iter().take((amount - allocated) as usize) {
+        shares[index] += 1;
+    }
+
+    shares
+}
+
+impl From<sqlx::Error> for CreateSaleError {
+    fn from(e: sqlx::Error) -> Self {
+        CreateSaleError::Db(e)
+    }
+}
+
+/// Crea la venta completa — venta, ítems, pagos, salida de inventario y
+/// movimiento de caja si aplica — dentro de UNA sola transacción. Si algo
+/// falla en cualquier paso, todo se revierte automáticamente al dropear `tx`.
+pub async fn create_sale(pool: &PgPool, dto: CreateSaleDto) -> Result<SaleDetail, CreateSaleError> {
+    let mut tx = pool.begin().await?;
+
+    let created_by = dto
+        .created_by
+        .clone()
+        .unwrap_or_else(|| "system".to_string());
+    let actor = declared_actor(&dto.created_by);
+    let global_discount = dto.discount.unwrap_or(0);
+    if global_discount < 0 {
+        return Err(CreateSaleError::InvalidDiscount);
+    }
+
+    let settings =
+        sqlx::query!("SELECT tax_rate_bps, currency_decimals FROM app_settings WHERE id = 1")
+            .fetch_one(&mut *tx)
+            .await?;
+    let currency_decimals = settings.currency_decimals as u8;
+
+    // 1. Precio server-side por cada ítem — nunca se confía en el precio del cliente
+    struct LineItem {
+        variant_id: i32,
+        quantity: i32,
+        unit_price: i64,
+        discount: i64,
+        subtotal: i64,
+        tax: i64,
+    }
+    let mut lines = Vec::new();
+    let mut subtotal_total: i64 = 0;
+
+    for item in &dto.items {
+        let price = sqlx::query_scalar!(
+            "SELECT price FROM product_variants WHERE id = $1",
+            item.variant_id
+        )
+        .fetch_one(&mut *tx)
+        .await?;
+
+        let discount = item.discount.unwrap_or(0);
+        let gross = price
+            .checked_mul(item.quantity as i64)
+            .ok_or(CreateSaleError::AmountOverflow)?;
+        if discount < 0 || discount > gross {
+            return Err(CreateSaleError::InvalidDiscount);
+        }
+        let line_subtotal = gross - discount;
+
+        subtotal_total = subtotal_total
+            .checked_add(line_subtotal)
+            .ok_or(CreateSaleError::AmountOverflow)?;
+        lines.push(LineItem {
+            variant_id: item.variant_id,
+            quantity: item.quantity,
+            unit_price: price,
+            discount,
+            subtotal: line_subtotal,
+            tax: 0,
+        });
+    }
+
+    if global_discount > subtotal_total {
+        return Err(CreateSaleError::InvalidDiscount);
+    }
+    let total = subtotal_total - global_discount;
+    let total_tax = tax_included_in(total, settings.tax_rate_bps, currency_decimals);
+    let allocated_discounts = allocate_proportionally(
+        global_discount,
+        &lines.iter().map(|line| line.subtotal).collect::<Vec<_>>(),
+    );
+    let discounted_line_totals: Vec<i64> = lines
+        .iter()
+        .zip(allocated_discounts)
+        .map(|(line, discount)| line.subtotal - discount)
+        .collect();
+    let currency_step = 10_i64.pow(2_u32 - currency_decimals as u32);
+    let allocated_taxes =
+        allocate_proportionally(total_tax / currency_step, &discounted_line_totals)
+            .into_iter()
+            .map(|tax_units| tax_units * currency_step)
+            .collect::<Vec<_>>();
+    for (line, tax) in lines.iter_mut().zip(allocated_taxes) {
+        line.tax = tax;
+    }
+    let payments_total = dto.payments.iter().try_fold(0_i64, |sum, payment| {
+        sum.checked_add(payment.amount)
+            .ok_or(CreateSaleError::AmountOverflow)
+    })?;
+
+    if payments_total != total {
+        return Err(CreateSaleError::PaymentMismatch);
+    }
+
+    // 2. Insertar sale
+    let sale = sqlx::query_as!(
+        Sale,
+        r#"INSERT INTO sales (customer_id, subtotal, tax, discount, total, status, notes, created_by)
+           VALUES ($1, $2, $3, $4, $5, 'completed', $6, $7)
+           RETURNING id, customer_id, subtotal, tax, discount, total,
+                     status AS "status: SaleStatus", notes, created_by, created_at"#,
+        dto.customer_id,
+        subtotal_total,
+        total_tax,
+        global_discount,
+        total,
+        dto.notes,
+        created_by
+    )
+    .fetch_one(&mut *tx)
+    .await?;
+
+    // 3. Insertar sale_items y descontar stock de cada uno
+    let mut items = Vec::new();
+    for line in lines {
+        let saved_item = sqlx::query_as!(
+            SaleItem,
+            "INSERT INTO sale_items (sale_id, variant_id, quantity, unit_price, discount, tax, subtotal)
+             VALUES ($1, $2, $3, $4, $5, $6, $7)
+             RETURNING *",
+            sale.id,
+            line.variant_id,
+            line.quantity,
+            line.unit_price,
+            line.discount,
+            line.tax,
+            line.subtotal
+        )
+        .fetch_one(&mut *tx)
+        .await?;
+
+        let row = sqlx::query!(
+            "SELECT stock, allow_negative FROM product_variants WHERE id = $1 FOR UPDATE",
+            line.variant_id
+        )
+        .fetch_one(&mut *tx)
+        .await?;
+
+        if row.stock < line.quantity && !row.allow_negative {
+            return Err(CreateSaleError::InsufficientStock {
+                variant_id: line.variant_id,
+                available: row.stock,
+                requested: line.quantity,
+            });
+        }
+
+        inventory_repo::apply_stock_out(
+            &mut tx,
+            StockOutDto {
+                variant_id: line.variant_id,
+                quantity: line.quantity,
+                reason: None,
+                notes: Some(format!("Venta #{}", sale.id)),
+                created_by: Some(created_by.clone()),
+                sale_id: Some(sale.id),
+            },
+            MovementType::Sale,
+        )
+        .await?;
+
+        items.push(saved_item);
+    }
+
+    // 4. Insertar sale_payments
+    let mut payments = Vec::new();
+    for p in &dto.payments {
+        let saved = sqlx::query_as!(
+            SalePayment,
+            r#"INSERT INTO sale_payments (sale_id, method, amount)
+               VALUES ($1, $2, $3)
+               RETURNING id, sale_id, method AS "method: PaymentMethod", amount"#,
+            sale.id,
+            p.method as PaymentMethod,
+            p.amount
+        )
+        .fetch_one(&mut *tx)
+        .await?;
+        payments.push(saved);
+    }
+
+    // 5. Pago en efectivo -> movimiento de caja en el turno abierto
+    let cash_amount: i64 = dto
+        .payments
+        .iter()
+        .filter(|p| p.method == PaymentMethod::Cash)
+        .map(|p| p.amount)
+        .sum();
+    let mut cash_session_id: Option<i32> = None;
+
+    if cash_amount > 0 {
+        let session_id = sqlx::query_scalar!("SELECT id FROM cash_sessions WHERE status = 'open'")
+            .fetch_optional(&mut *tx)
+            .await?;
+
+        let Some(session_id) = session_id else {
+            return Err(CreateSaleError::NoOpenCashSession);
+        };
+        cash_session_id = Some(session_id);
+
+        let movement = cash_repo::create_movement(
+            &mut tx,
+            session_id,
+            CreateMovementDto {
+                movement_type: CashMovementType::SaleIn,
+                amount: cash_amount,
+                notes: Some(format!("Venta #{}", sale.id)),
+                created_by: Some(created_by.clone()),
+                sale_id: Some(sale.id),
+            },
+        )
+        .await?;
+
+        // El turno se cerró entre la lectura y el lock: sin movimiento de
+        // caja no hay venta en efectivo. Se revierte todo al soltar `tx`.
+        if movement.is_none() {
+            return Err(CreateSaleError::NoOpenCashSession);
+        }
+    }
+
+    // El detalle por ítem vive en sale_items; este evento conserva el resumen.
+    audit_repo::insert_event(
+        &mut *tx,
+        NewAuditEvent {
+            correlation_id: Some(Uuid::new_v4()),
+            category: AuditCategory::Business,
+            module: AuditModule::Sales,
+            action: "create".to_string(),
+            outcome: AuditOutcome::Success,
+            actor,
+            entity_type: Some("sale".to_string()),
+            entity_id: Some(sale.id.to_string()),
+            summary: format!("Venta #{} registrada", sale.id),
+            changes: None,
+            metadata: Some(json!({
+                "subtotal": sale.subtotal,
+                "discount": sale.discount,
+                "tax": sale.tax,
+                "total": sale.total,
+                "item_count": items.len(),
+                "units": items.iter().map(|item| item.quantity as i64).sum::<i64>(),
+                "payments": payments
+                    .iter()
+                    .map(|payment| json!({
+                        "method": payment.method,
+                        "amount": payment.amount,
+                    }))
+                    .collect::<Vec<_>>(),
+                "customer_id": sale.customer_id,
+                "cash_session_id": cash_session_id,
+            })),
+            error_message: None,
+        },
+    )
+    .await?;
+
+    tx.commit().await?;
+    Ok(SaleDetail {
+        sale,
+        items,
+        payments,
+    })
+}
+
+pub async fn get_sale_by_id(pool: &PgPool, id: i32) -> Result<Option<SaleDetail>, sqlx::Error> {
+    let sale = sqlx::query_as!(
+        Sale,
+        r#"SELECT id, customer_id, subtotal, tax, discount, total,
+                  status AS "status: SaleStatus", notes, created_by, created_at
+           FROM sales WHERE id = $1"#,
+        id
+    )
+    .fetch_optional(pool)
+    .await?;
+
+    let Some(sale) = sale else { return Ok(None) };
+
+    let items = sqlx::query_as!(
+        SaleItem,
+        "SELECT * FROM sale_items WHERE sale_id = $1 ORDER BY id ASC",
+        id
+    )
+    .fetch_all(pool)
+    .await?;
+
+    let payments = sqlx::query_as!(
+        SalePayment,
+        r#"SELECT id, sale_id, method AS "method: PaymentMethod", amount
+           FROM sale_payments WHERE sale_id = $1"#,
+        id
+    )
+    .fetch_all(pool)
+    .await?;
+
+    Ok(Some(SaleDetail {
+        sale,
+        items,
+        payments,
+    }))
+}
+
+pub async fn list_sales(
+    pool: &PgPool,
+    filter: &SaleFilterDto,
+) -> Result<(Vec<Sale>, i64), sqlx::Error> {
+    let page = filter.page.unwrap_or(1).max(1);
+    let page_size = filter.page_size.unwrap_or(20).clamp(1, 100);
+    let offset = (page - 1) * page_size;
+
+    let rows = sqlx::query_as!(
+        Sale,
+        r#"SELECT id, customer_id, subtotal, tax, discount, total,
+                  status AS "status: SaleStatus", notes, created_by, created_at
+           FROM sales
+           WHERE ($1::TEXT IS NULL OR status::TEXT = $1)
+             AND ($2::INT  IS NULL OR customer_id = $2)
+             AND ($3::DATE IS NULL OR created_at::DATE >= $3)
+             AND ($4::DATE IS NULL OR created_at::DATE <= $4)
+           ORDER BY created_at DESC
+           LIMIT $5 OFFSET $6"#,
+        filter.status,
+        filter.customer_id,
+        filter.date_from,
+        filter.date_to,
+        page_size,
+        offset
+    )
+    .fetch_all(pool)
+    .await?;
+
+    let total = sqlx::query_scalar!(
+        r#"SELECT COUNT(*) FROM sales
+           WHERE ($1::TEXT IS NULL OR status::TEXT = $1)
+             AND ($2::INT  IS NULL OR customer_id = $2)
+             AND ($3::DATE IS NULL OR created_at::DATE >= $3)
+             AND ($4::DATE IS NULL OR created_at::DATE <= $4)"#,
+        filter.status,
+        filter.customer_id,
+        filter.date_from,
+        filter.date_to
+    )
+    .fetch_one(pool)
+    .await?
+    .unwrap_or(0);
+
+    Ok((rows, total))
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn proportional_allocation_preserves_amount_and_prioritizes_largest_remainders() {
+        assert_eq!(allocate_proportionally(10, &[1, 1, 1]), vec![4, 3, 3]);
+        assert_eq!(allocate_proportionally(19, &[100, 200]), vec![6, 13]);
+    }
+
+    #[test]
+    fn discounts_and_tax_allocations_reconcile_with_sale_total() {
+        let gross_lines = [10_001, 20_002];
+        let sale_discount = 3_000;
+        let discounts = allocate_proportionally(sale_discount, &gross_lines);
+        let after_discount: Vec<i64> = gross_lines
+            .iter()
+            .zip(discounts)
+            .map(|(gross, discount)| gross - discount)
+            .collect();
+        let sale_total: i64 = after_discount.iter().sum();
+        let tax_total = tax_included_in(sale_total, 1900, 0);
+        let line_taxes = allocate_proportionally(tax_total / 100, &after_discount)
+            .into_iter()
+            .map(|tax_units| tax_units * 100)
+            .collect::<Vec<_>>();
+
+        assert_eq!(line_taxes.iter().sum::<i64>(), tax_total);
+        assert!(line_taxes.iter().all(|tax| tax % 100 == 0));
+    }
+}
+use tauri::State;
+
+use crate::db::DbPool;
+use crate::errors::app_error::AppError;
+use crate::modules::audit::{
+    actor::declared_actor,
+    failure::{finish, FailureContext},
+    models::AuditModule,
+};
+use crate::modules::sales::{
+    dto::{CreateSaleDto, PaginatedResponse, SaleFilterDto},
+    models::{Sale, SaleDetail},
+    service,
+};
+
+#[tauri::command]
+pub async fn create_sale(
+    pool: State<'_, DbPool>,
+    dto: CreateSaleDto,
+) -> Result<SaleDetail, String> {
+    let ctx = FailureContext {
+        module: AuditModule::Sales,
+        action: "create",
+        entity_type: Some("sale"),
+        entity_id: None,
+        actor: declared_actor(&dto.created_by),
+    };
+    finish(&pool, ctx, service::create_sale(&pool, dto).await).await
+}
+
+#[tauri::command]
+pub async fn get_sale(pool: State<'_, DbPool>, id: i32) -> Result<SaleDetail, String> {
+    service::get_sale(&pool, id)
+        .await
+        .map_err(|e: AppError| e.to_string())
+}
+
+#[tauri::command]
+pub async fn list_sales(
+    pool: State<'_, DbPool>,
+    filter: SaleFilterDto,
+) -> Result<PaginatedResponse<Sale>, String> {
+    service::list_sales(&pool, filter)
+        .await
+        .map_err(|e: AppError| e.to_string())
+}
+pub use super::handlers::{create_sale, get_sale, list_sales};
+==== CUSTOMERS Y SUPPLIERS - SOLO MODELOS Y ROUTER ====
+
+
+==== REPORTS ====
+
+==== FRONTEND BASE ====
+import { invoke } from '@tauri-apps/api/core';
+import type {
+  CashSession,
+  CashSessionWithTotals,
+  CashMovement,
+  OpenSessionDto,
+  CloseSessionDto,
+  CreateMovementDto,
+  CashSessionFilterDto,
+  CashMovementFilterDto,
+  PaginatedResponse,
+} from '../types';
+
+// OJO: las claves de nivel superior del objeto de argumentos van en camelCase
+// (Tauri las traduce a snake_case del lado de Rust). El bug ya documentado
+// en ProductDetail fue justo por mandar snake_case aquí.
+
+export async function openCashSession(dto: OpenSessionDto): Promise<CashSession> {
+  return invoke('open_cash_session', { dto });
+}
+
+export async function closeCashSession(
+  id: number,
+  dto: CloseSessionDto
+): Promise<CashSession> {
+  return invoke('close_cash_session', { id, dto });
+}
+
+export async function getCurrentCashSession(): Promise<CashSessionWithTotals | null> {
+  return invoke('get_current_cash_session');
+}
+
+export async function getCashSession(id: number): Promise<CashSession> {
+  return invoke('get_cash_session', { id });
+}
+
+export async function listCashSessions(
+  filter: CashSessionFilterDto = {}
+): Promise<PaginatedResponse<CashSession>> {
+  return invoke('list_cash_sessions', { filter });
+}
+
+export async function registerCashMovement(
+  sessionId: number,
+  dto: CreateMovementDto
+): Promise<CashMovement> {
+  return invoke('register_cash_movement', { sessionId, dto });
+}
+
+export async function listCashMovements(
+  filter: CashMovementFilterDto = {}
+): Promise<PaginatedResponse<CashMovement>> {
+  return invoke('list_cash_movements', { filter });
+}import { invoke } from '@tauri-apps/api/core';
+import type { AuditEvent, AuditFilterDto, PaginatedResponse } from '../types';
+
+// Las claves de primer nivel van en camelCase; los campos dentro del filtro
+// conservan snake_case. Los errores llegan como string.
+
+export const listAuditEvents = (
+  filter: AuditFilterDto = {}
+): Promise<PaginatedResponse<AuditEvent>> =>
+  invoke('list_audit_events', { filter });
+
+export const getAuditEvent = (id: number): Promise<AuditEvent> =>
+  invoke('get_audit_event', { id });
+
+/** Máx. 1000 eventos, del más antiguo al más reciente. */
+export const listAuditEventsByCorrelation = (
+  correlationId: string
+): Promise<AuditEvent[]> =>
+  invoke('list_audit_events_by_correlation', { correlationId });// ============================================================
+// CATEGORÍAS
+// ============================================================
+
+export interface Category {
+  id: number;
+  name: string;
+  description?: string;
+  is_active: boolean;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface CreateCategoryDto {
+  name: string;
+  description?: string;
+}
+
+export interface UpdateCategoryDto {
+  name?: string;
+  description?: string;
+  is_active?: boolean;
+}
+
+// ============================================================
+// PRODUCTOS
+// ============================================================
+
+export interface Product {
+  id: number;
+  category_id: number;
+  name: string;
+  description?: string;
+  brand?: string;
+  image_url?: string;
+  is_active: boolean;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface ProductWithCategory extends Product {
+  category_name: string;
+}
+
+export interface CreateProductDto {
+  category_id: number;
+  name: string;
+  description?: string;
+  brand?: string;
+  image_url?: string;
+}
+
+export interface UpdateProductDto {
+  category_id?: number;
+  name?: string;
+  description?: string;
+  brand?: string;
+  image_url?: string;
+  is_active?: boolean;
+}
+
+// ============================================================
+// VARIANTES
+// ============================================================
+
+export type StockStatus = 'ok' | 'low' | 'out_of_stock';
+
+export interface ProductVariant {
+  id: number;
+  product_id: number;
+  attributes: Record<string, string>;
+  sku?: string;
+  barcode?: string;
+  price: number; // centavos
+  cost: number;  // centavos
+  stock: number;
+  stock_min: number;
+  allow_negative: boolean;
+  is_active: boolean;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface VariantWithProduct extends ProductVariant {
+  product_name: string;
+  brand?: string;
+  image_url?: string;
+  category_id: number;
+  category_name: string;
+}
+
+export interface CreateVariantDto {
+  product_id: number;
+  attributes: Record<string, string>;
+  sku?: string;
+  barcode?: string;
+  price: number;
+  cost?: number;
+  stock?: number;
+  stock_min?: number;
+  allow_negative?: boolean;
+}
+
+export interface UpdateVariantDto {
+  attributes?: Record<string, string>;
+  sku?: string;
+  barcode?: string;
+  price?: number;
+  cost?: number;
+  stock_min?: number;
+  allow_negative?: boolean;
+  is_active?: boolean;
+}
+
+// ============================================================
+// MOVIMIENTOS DE INVENTARIO (KARDEX)
+// ============================================================
+
+export type MovementType =
+  | 'purchase'
+  | 'sale'
+  | 'sale_return'
+  | 'manual_in'
+  | 'manual_out'
+  | 'adjustment'
+  | 'initial_stock';
+
+export type MovementReason =
+  | 'damaged'
+  | 'lost'
+  | 'expired'
+  | 'theft'
+  | 'internal_use'
+  | 'count_correction'
+  | 'other';
+
+export interface InventoryMovement {
+  id: number;
+  variant_id: number;
+  movement_type: MovementType;
+  quantity: number;
+  stock_before: number;
+  stock_after: number;
+  unit_cost: number;
+  sale_id?: number;
+  purchase_id?: number;
+  reason: MovementReason | null;
+  notes?: string;
+  created_by: string;
+  created_at: string;
+}
+
+export interface MovementWithDetails extends InventoryMovement {
+  product_name: string;
+  attributes: Record<string, string>;
+  sku?: string;
+  barcode?: string;
+}
+
+// ============================================================
+// DTOs DE STOCK
+// ============================================================
+
+export interface StockEntryDto {
+  variant_id: number;
+  quantity: number;
+  unit_cost?: number;
+  notes?: string;
+  created_by?: string;
+}
+
+export interface StockOutDto {
+  variant_id: number;
+  quantity: number;
+  reason?: MovementReason;
+  notes?: string;
+  created_by?: string;
+}
+
+export interface StockAdjustmentDto {
+  variant_id: number;
+  actual_stock: number;
+  reason?: MovementReason;
+  notes?: string;
+  created_by?: string;
+}
+
+// ============================================================
+// FILTROS
+// ============================================================
+
+export interface ProductFilterDto {
+  category_id?: number;
+  search?: string;
+  is_active?: boolean;
+  variant_is_active?: boolean;
+  stock_status?: 'ok' | 'low' | 'out_of_stock';
+  sort_by?: 'name' | 'brand' | 'category' | 'created_at';
+  sort_dir?: 'asc' | 'desc';
+  page?: number;
+  page_size?: number;
+}
+
+export interface KardexFilterDto {
+  variant_id?: number;
+  product_id?: number;
+  movement_type?: string;
+  date_from?: string;
+  date_to?: string;
+  page?: number;
+  page_size?: number;
+}
+
+// ============================================================
+// RESPUESTAS
+// ============================================================
+
+export interface PaginatedResponse<T> {
+  data: T[];
+  total: number;
+  page: number;
+  page_size: number;
+  total_pages: number;
+}
+
+export interface LowStockItemDto {
+  variant_id: number;
+  product_name: string;
+  attributes: Record<string, string>;
+  barcode?: string;
+  stock: number;
+  stock_min: number;
+  stock_status: string;
+}
+
+export interface InventoryValueDto {
+  value_at_cost: number;
+  potential_sale_value: number;
+  variants_without_cost: number;
+  negative_stock_variants: number;
+  variants_valued: number;
+}
+
+export interface ProductStockStatsDto {
+  product_id: number;
+  variant_count: number;
+  total_stock: number;
+  min_stock_min: number;
+}
+
+export interface ExportSummaryDto {
+  active_rows: number;
+  inactive_rows: number;
+  low_stock_rows: number;
+}
+
+export type LicenseKind = 'purchase' | 'rental';
+export type LicenseStatusKind = 'unlicensed' | 'active' | 'expired' | 'invalid';
+
+export interface LicenseStatusDto {
+  installation_id: string;
+  status: LicenseStatusKind;
+  license_id: string | null;
+  licensee: string | null;
+  kind: LicenseKind | null;
+  expires_at: string | null;
+  source_code_access: boolean;
+  message: string;
+}
+
+// ============================================================
+// AJUSTES
+// ============================================================
+
+export interface AppSettings {
+  id: number;
+  business_name: string;
+  tax_id: string | null;
+  address: string | null;
+  phone: string | null;
+  email: string | null;
+  currency: string;
+  currency_decimals: number;
+  tax_rate_bps: number;
+  tax_name: string;
+  timezone: string;
+  ticket_header: string | null;
+  ticket_footer: string | null;
+  show_logo: boolean;
+  show_tax_id: boolean;
+  show_address: boolean;
+  show_phone: boolean;
+  show_cashier: boolean;
+  show_tax_breakdown: boolean;
+  show_discounts: boolean;
+  show_payment_method: boolean;
+  low_stock_default_threshold: number;
+  logo_url: string | null;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface UpdateSettingsDto {
+  business_name?: string;
+  // Nullable fields always replace current values; null clears the field.
+  tax_id: string | null;
+  address: string | null;
+  phone: string | null;
+  email: string | null;
+  currency?: string;
+  currency_decimals?: number;
+  tax_rate_bps?: number;
+  tax_name?: string;
+  timezone?: string;
+  ticket_header: string | null;
+  ticket_footer: string | null;
+  show_logo?: boolean;
+  show_tax_id?: boolean;
+  show_address?: boolean;
+  show_phone?: boolean;
+  show_cashier?: boolean;
+  show_tax_breakdown?: boolean;
+  show_discounts?: boolean;
+  show_payment_method?: boolean;
+  low_stock_default_threshold?: number;
+  logo_url: string | null;
+}
+// ============================================================
+// CAJA
+// ============================================================
+
+export type CashMovementType = 'manual_in' | 'manual_out' | 'sale_in' | 'sale_out';
+
+export interface CashSession {
+  id: number;
+  opening_amount: number;
+  expected_amount: number | null;
+  counted_amount: number | null;
+  difference: number | null;
+  status: 'open' | 'closed';
+  opened_by: string;
+  closed_by: string | null;
+  opening_notes: string | null;
+  closing_notes: string | null;
+  opened_at: string;
+  closed_at: string | null;
+}
+
+export interface CashSessionWithTotals {
+  id: number;
+  opening_amount: number;
+  status: 'open' | 'closed';
+  opened_by: string;
+  opening_notes: string | null;
+  opened_at: string;
+  total_in: number;
+  total_out: number;
+  current_balance: number;
+}
+
+export interface CashMovement {
+  id: number;
+  session_id: number;
+  movement_type: CashMovementType;
+  amount: number;
+  sale_id: number | null;
+  notes: string | null;
+  created_by: string;
+  created_at: string;
+}
+
+export interface OpenSessionDto {
+  opening_amount: number;
+  opening_notes?: string | null;
+  opened_by?: string | null;
+}
+
+export interface CloseSessionDto {
+  counted_amount: number;
+  closing_notes?: string | null;
+  closed_by?: string | null;
+}
+
+export type ManualCashMovementType = 'manual_in' | 'manual_out';
+
+export interface CreateMovementDto {
+  movement_type: ManualCashMovementType;
+  amount: number;
+  notes?: string | null;
+  created_by?: string | null;
+  sale_id?: number | null;
+}
+
+export interface CashSessionFilterDto {
+  status?: string | null;
+  date_from?: string | null;
+  date_to?: string | null;
+  page?: number;
+  page_size?: number;
+}
+
+export interface CashMovementFilterDto {
+  session_id?: number | null;
+  movement_type?: string | null;
+  page?: number;
+  page_size?: number;
+}
+
+// ============================================================
+// VENTAS
+// ============================================================
+
+export type PaymentMethod = 'cash' | 'card' | 'transfer';
+export type SaleStatus = 'completed' | 'cancelled' | 'refunded';
+
+export interface Sale {
+  id: number;
+  customer_id: number | null;
+  subtotal: number;
+  tax: number;
+  discount: number;
+  total: number;
+  status: SaleStatus;
+  notes: string | null;
+  created_by: string;
+  created_at: string;
+}
+
+export interface SaleItem {
+  id: number;
+  sale_id: number;
+  variant_id: number;
+  quantity: number;
+  unit_price: number;
+  discount: number;
+  tax: number;
+  subtotal: number;
+}
+
+export interface SalePayment {
+  id: number;
+  sale_id: number;
+  method: PaymentMethod;
+  amount: number;
+}
+
+export interface SaleDetail extends Sale {
+  items: SaleItem[];
+  payments: SalePayment[];
+}
+
+export interface CreateSaleItemDto {
+  variant_id: number;
+  quantity: number;
+  discount?: number | null;
+}
+
+export interface CreateSalePaymentDto {
+  method: PaymentMethod;
+  amount: number;
+}
+
+export interface CreateSaleDto {
+  customer_id?: number | null;
+  items: CreateSaleItemDto[];
+  payments: CreateSalePaymentDto[];
+  discount?: number | null;
+  notes?: string | null;
+  created_by?: string | null;
+}
+
+export interface SaleFilterDto {
+  status?: string | null;
+  customer_id?: number | null;
+  date_from?: string | null;
+  date_to?: string | null;
+  page?: number;
+  page_size?: number;
+}
+export interface ImportRowResult {
+  row_number: number;
+  product_name: string;
+  sku?: string;
+  status: 'new_product' | 'existing_product' | 'skipped_duplicate_sku' | 'error';
+  message?: string;
+}
+
+export interface ImportSummaryDto {
+  new_categories: number;
+  new_products: number;
+  new_variants: number;
+  skipped: number;
+  errors: number;
+  rows: ImportRowResult[];
+  total_rows: number;
+  rows_truncated: boolean;
+  can_execute: boolean;
+}
+
+export type StocktakeStatus = 'counting' | 'applied' | 'cancelled';
+
+export interface Stocktake {
+  id: number;
+  category_id: number | null;
+  category_name: string | null;
+  status: StocktakeStatus;
+  notes: string | null;
+  created_by: string;
+  created_at: string;
+  applied_at: string | null;
+  cancelled_at: string | null;
+  total_lines: number;
+  counted_lines: number;
+}
+
+export interface CreateStocktakeDto {
+  category_id?: number | null;
+  notes?: string | null;
+  created_by?: string | null;
+}
+
+export interface StocktakeLineFilterDto {
+  search?: string | null;
+  only_pending?: boolean;
+  page?: number;
+  page_size?: number;
+}
+
+/** Fila para el conteo ciego: no contiene el stock del sistema. */
+export interface StocktakeCountLineDto {
+  variant_id: number;
+  product_name: string;
+  attributes: Record<string, string>;
+  sku: string | null;
+  barcode: string | null;
+  counted_stock: number | null;
+}
+
+export interface StocktakeReviewLineDto {
+  variant_id: number;
+  product_name: string;
+  attributes: Record<string, string>;
+  sku: string | null;
+  barcode: string | null;
+  expected_stock: number;
+  current_stock: number;
+  counted_stock: number;
+  difference: number;
+  moved_during_count: boolean;
+}
+
+export interface StocktakeSummaryDto {
+  uncounted: number;
+  matching: number;
+  with_difference: number;
+  surplus_units: number;
+  shortage_units: number;
+  moved_during_count: number;
+}
+
+// ============================================================
+// AUDITORÍA
+// ============================================================
+
+export type AuditCategory = 'business' | 'error';
+export type AuditOutcome = 'success' | 'failure';
+export type AuditModule =
+  | 'sales'
+  | 'inventory'
+  | 'cash'
+  | 'stocktake'
+  | 'settings'
+  | 'import'
+  | 'licensing'
+  | 'billing'
+  | 'system';
+
+/** Un campo que cambió: solo aparecen los campos modificados. */
+export interface AuditChange {
+  from: unknown;
+  to: unknown;
+}
+
+export interface AuditEvent {
+  id: number;
+  /** ISO-8601 UTC */
+  created_at: string;
+  correlation_id: string | null;
+  category: AuditCategory;
+  module: AuditModule;
+  action: string;
+  outcome: AuditOutcome;
+  actor: string | null;
+  entity_type: string | null;
+  entity_id: string | null;
+  summary: string;
+  changes: Record<string, AuditChange> | null;
+  metadata: Record<string, unknown> | null;
+  error_message: string | null;
+}
+
+export interface AuditFilterDto {
+  module?: AuditModule;
+  category?: AuditCategory;
+  outcome?: AuditOutcome;
+  action?: string;
+  entity_type?: string;
+  entity_id?: string;
+  correlation_id?: string;
+  search?: string;
+  /** 'YYYY-MM-DD', inclusivo */
+  date_from?: string;
+  /** 'YYYY-MM-DD', inclusivo */
+  date_to?: string;
+  sort_dir?: 'asc' | 'desc';
+  page?: number;
+  page_size?: number;
+}
+
+export interface StocktakeReviewDto {
+  stocktake: Stocktake;
+  summary: StocktakeSummaryDto;
+  lines: StocktakeReviewLineDto[];
+}
+
+export interface StocktakeApplyResultDto {
+  adjusted: number;
+  unchanged: number;
+  uncounted: number;
+}import React from 'react';
+import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
+
+import { AppLayout } from '../components/layout/AppLayout';
+import { LicenseGate } from '../components/licensing/LicenseGate';
+import { Audit } from '../pages/Audit/Audit';
+import { Developer } from '../pages/Developer/Developer';
+import { Inventory } from '../pages/Inventory/Inventory';
+import { ProductDetail } from '../pages/ProductDetail/ProductDetail';
+import { Settings } from '../pages/Settings/Settings';
+import Cash from '../pages/Cash/Cash';
+import Sales from '../pages/Sales/Sales';
+import SalesHistory from '../pages/SalesHistory/SalesHistory';
+import { StocktakePage } from '../pages/Stocktake/Stocktake';
+
+const Placeholder: React.FC<{ name: string }> = ({ name }) => (
+  <div
+    style={{
+      flex: 1,
+      display: 'flex',
+      alignItems: 'center',
+      justifyContent: 'center',
+      flexDirection: 'column',
+      gap: 12,
+      color: 'var(--text-muted)',
+      fontFamily: 'var(--font-sans)',
+    }}
+  >
+    <span style={{ fontSize: 36, opacity: 0.3 }}>🚧</span>
+    <p style={{ fontSize: 16 }}>{name} — próximamente</p>
+  </div>
+);
+
+export const AppRouter: React.FC = () => (
+  <BrowserRouter>
+    <LicenseGate>
+      <AppLayout>
+        <Routes>
+        <Route path="/" element={<Navigate to="/inventory" replace />} />
+
+        {/* Inventario */}
+        <Route path="/inventory" element={<Inventory />} />
+        <Route path="/inventory/:id" element={<ProductDetail />} />
+        <Route path="/stocktake" element={<StocktakePage />} />
+
+        {/* Ventas */}
+        <Route path="/sales" element={<Sales />} />
+
+        {/* Historial de ventas */}
+        <Route path="/sales-history" element={<SalesHistory />} />
+
+        {/* Caja */}
+        <Route path="/cash" element={<Cash />} />
+
+        {/* Clientes */}
+        <Route
+          path="/customers"
+          element={<Placeholder name="Clientes" />}
+        />
+
+        {/* Deudas */}
+        <Route
+          path="/debts"
+          element={<Placeholder name="Deudas" />}
+        />
+
+        {/* Proveedores */}
+        <Route
+          path="/suppliers"
+          element={<Placeholder name="Proveedores" />}
+        />
+
+        {/* Reportes */}
+        <Route
+          path="/reports"
+          element={<Placeholder name="Reportes" />}
+        />
+
+        {/* Auditoría */}
+        <Route path="/audit" element={<Audit />} />
+
+        {/* Developer Mode */}
+        <Route path="/developer" element={<Developer />} />
+
+        {/* Configuración */}
+        <Route path="/settings" element={<Settings />} />
+        </Routes>
+      </AppLayout>
+    </LicenseGate>
+  </BrowserRouter>
+);import React, {
+  createContext, useCallback, useContext, useEffect, useState,
+} from 'react';
+import type { AppSettings } from '../types';
+import { getSettings } from '../services/settings.service';
+import { setMoneyConfig } from '../utils/format';
+
+interface AppContextValue {
+  settings: AppSettings;
+  refreshSettings: () => Promise<void>;
+  applySettings: (settings: AppSettings) => void;
+}
+
+const AppContext = createContext<AppContextValue | null>(null);
+
+export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
+  const [settings, setSettings] = useState<AppSettings | null>(null);
+  const [error, setError] = useState<string | null>(null);
+
+  const applySettings = useCallback((nextSettings: AppSettings) => {
+    setMoneyConfig({
+      currency: nextSettings.currency,
+      decimals: nextSettings.currency_decimals,
+    });
+    setSettings(nextSettings);
+  }, []);
+
+  const refreshSettings = useCallback(async () => {
+    try {
+      setError(null);
+      applySettings(await getSettings());
+    } catch (cause) {
+      setError(
+        typeof cause === 'string'
+          ? cause
+          : cause instanceof Error
+            ? cause.message
+            : 'No se pudieron cargar los ajustes',
+      );
+    }
+  }, [applySettings]);
+
+  useEffect(() => {
+    void refreshSettings();
+  }, [refreshSettings]);
+
+  if (error) {
+    return (
+      <div style={{ padding: 32, color: 'var(--text-primary)', fontFamily: 'var(--font-sans)' }}>
+        <p>{error}</p>
+        <button className="btn btn-primary" style={{ marginTop: 12 }} onClick={refreshSettings}>
+          Reintentar
+        </button>
+      </div>
+    );
+  }
+
+  if (!settings) return null;
+
+  return (
+    <AppContext.Provider value={{ settings, refreshSettings, applySettings }}>
+      <React.Fragment key={`${settings.currency}-${settings.currency_decimals}`}>
+        {children}
+      </React.Fragment>
+    </AppContext.Provider>
+  );
+};
+
+export const useSettings = (): AppContextValue => {
+  const context = useContext(AppContext);
+  if (!context) throw new Error('useSettings debe usarse dentro de <AppProvider>');
+  return context;
+};import React, { useCallback, useEffect, useState } from 'react';
+import { NavLink, useNavigate } from 'react-router-dom';
+import { Modal } from '../ui/Modal';
+import { useSettings } from '../../context/AppContext';
+import {
+  NAVIGATION_SHORTCUTS,
+  onNavigationShortcutsChanged,
+  readNavigationShortcuts,
+} from '../../utils/shortcuts';
+import './Sidebar.css';
+
+export const Sidebar: React.FC = () => {
+  const [termsOpen, setTermsOpen] = useState(false);
+  const { settings } = useSettings();
+  const navigate = useNavigate();
+  const [now, setNow] = useState(() => new Date());
+  const [shortcuts, setShortcuts] = useState(() => {
+    try {
+      return readNavigationShortcuts();
+    } catch (error) {
+      console.error('No se pudieron leer los atajos:', error);
+      return {};
+    }
+  });
+
+  useEffect(() => {
+    let interval: number | undefined;
+    let timeout: number | undefined;
+    const updateClock = () => setNow(new Date());
+    const startClock = () => {
+      updateClock();
+      if (timeout !== undefined) window.clearTimeout(timeout);
+      if (interval !== undefined) window.clearInterval(interval);
+      const delayToNextSecond = 1_000 - (Date.now() % 1_000);
+      timeout = window.setTimeout(() => {
+        timeout = undefined;
+        updateClock();
+        interval = window.setInterval(updateClock, 1_000);
+      }, delayToNextSecond);
+    };
+
+    startClock();
+    document.addEventListener('visibilitychange', startClock);
+    return () => {
+      if (timeout !== undefined) window.clearTimeout(timeout);
+      if (interval !== undefined) window.clearInterval(interval);
+      document.removeEventListener('visibilitychange', startClock);
+    };
+  }, []);
+
+  const refreshShortcuts = useCallback(() => {
+    try {
+      setShortcuts(readNavigationShortcuts());
+    } catch (error) {
+      console.error('No se pudieron leer los atajos:', error);
+    }
+  }, []);
+
+  useEffect(() => onNavigationShortcutsChanged(refreshShortcuts), [refreshShortcuts]);
+
+  useEffect(() => {
+    const handleShortcut = (event: KeyboardEvent) => {
+      if (event.altKey || event.ctrlKey || event.metaKey || event.shiftKey) return;
+      const target = event.target;
+      if (
+        target instanceof HTMLElement &&
+        (target.isContentEditable || /^(INPUT|TEXTAREA|SELECT)$/.test(target.tagName))
+      ) {
+        return;
+      }
+
+      const key = event.key.toUpperCase();
+      const destination = NAVIGATION_SHORTCUTS.find(item => shortcuts[item.path] === key);
+      if (!destination) return;
+      event.preventDefault();
+      navigate(destination.path);
+    };
+
+    window.addEventListener('keydown', handleShortcut);
+    return () => window.removeEventListener('keydown', handleShortcut);
+  }, [navigate, shortcuts]);
+
+  const dateLabel = new Intl.DateTimeFormat('es-CO', {
+    weekday: 'long',
+    day: 'numeric',
+    month: 'long',
+    year: 'numeric',
+    timeZone: settings.timezone,
+  }).format(now);
+  const timeLabel = new Intl.DateTimeFormat('es-CO', {
+    hour: '2-digit',
+    minute: '2-digit',
+    second: '2-digit',
+    hour12: false,
+    timeZone: settings.timezone,
+  }).format(now);
+
+  return (
+    <aside className="sidebar">
+      <div className="sidebar-logo">
+        <span className="sidebar-logo-text">POS</span>
+      </div>
+      <div className="sidebar-date" aria-label={`Fecha: ${dateLabel}`}>
+        {dateLabel}
+      </div>
+      <time className="sidebar-clock" aria-label={`Hora: ${timeLabel}`}>
+        {timeLabel}
+      </time>
+
+      <nav className="sidebar-nav">
+        {NAVIGATION_SHORTCUTS.map(item => (
+          <NavLink
+            key={item.path}
+            to={item.path}
+            className={({ isActive }) =>
+              `sidebar-link ${isActive ? 'sidebar-link--active' : ''}`
+            }
+          >
+            <span className="sidebar-link-label">{item.label}</span>
+          </NavLink>
+        ))}
+      </nav>
+
+      <footer className="sidebar-footer">
+        <span className="sidebar-footer-credit">Desarrollado por <strong>AFCM</strong></span>
+        <a className="sidebar-footer-contact" href="tel:+573012249460">
+          Contacto: 301 224 9460
+        </a>
+        <span className="sidebar-footer-version">Versión 1.12</span>
+        <span className="sidebar-footer-license">
+          Licencia de uso: compra perpetua o alquiler. Incluye acceso al código fuente.
+        </span>
+        <button
+          type="button"
+          className="sidebar-terms-button"
+          onClick={() => setTermsOpen(true)}
+        >
+          Términos y condiciones
+        </button>
+      </footer>
+
+      {termsOpen && (
+        <Modal title="Términos y condiciones de licencia" onClose={() => setTermsOpen(false)} width={720}>
+          <div className="sidebar-terms-content">
+            <p className="sidebar-terms-intro">
+              Estos términos resumen las condiciones de uso de CashFlow POS. La modalidad,
+              el precio, el periodo de alquiler y los datos de las partes deben quedar
+              confirmados en el acuerdo de compra o alquiler.
+            </p>
+
+            <section>
+              <h3>1. Modalidades y activación</h3>
+              <p>
+                La licencia se concede en modalidad de compra perpetua o alquiler por el
+                periodo acordado. Cada licencia activa una instalación identificada por
+                un código único. La activación se realiza sin conexión mediante un archivo
+                firmado emitido para ese código.
+              </p>
+              <p>
+                La compra perpetua no tiene vencimiento. El alquiler termina en la fecha
+                indicada en la licencia; desde ese momento, el acceso al sistema queda
+                bloqueado hasta importar una renovación válida.
+              </p>
+            </section>
+
+            <section>
+              <h3>2. Acceso al código fuente</h3>
+              <p>
+                Tanto la compra perpetua como el alquiler incluyen acceso al código fuente.
+                No se ofrece una modalidad de alquiler que excluya dicho acceso. El código
+                se entrega por separado, mediante el canal y en el momento acordados con
+                AFCM; el archivo de activación por sí solo no contiene ni entrega los fuentes.
+              </p>
+              <p>
+                El acceso al código fuente no autoriza a revender, publicar ni redistribuir
+                el sistema o sus fuentes a terceros. Cualquier permiso adicional debe
+                constar expresamente en el acuerdo de licencia.
+              </p>
+            </section>
+
+            <section>
+              <h3>3. Uso permitido y restricciones</h3>
+              <p>
+                El titular puede usar CashFlow POS en la instalación licenciada para la
+                operación de su negocio. No debe copiar la activación para habilitar
+                instalaciones adicionales, compartir la licencia con terceros ni alterar
+                el mecanismo de firma o vencimiento para evadir estas condiciones.
+                Para trasladar la licencia a otro equipo, debe coordinar la reactivación
+                con AFCM.
+              </p>
+            </section>
+
+            <section>
+              <h3>4. Información y copias de seguridad</h3>
+              <p>
+                El titular es responsable de la exactitud de la información registrada,
+                de proteger sus credenciales y de mantener copias de seguridad periódicas
+                de sus datos. Antes de actualizar el sistema o cambiar de equipo, debe
+                verificar que cuenta con una copia recuperable.
+              </p>
+            </section>
+
+            <section>
+              <h3>5. Soporte, cambios y disponibilidad</h3>
+              <p>
+                El soporte, las actualizaciones, las integraciones y los tiempos de atención
+                se rigen por lo que se acuerde por escrito. La licencia no implica por sí
+                sola servicios de instalación, capacitación, personalización o soporte
+                permanente.
+              </p>
+            </section>
+
+            <section>
+              <h3>6. Aceptación y acuerdo comercial</h3>
+              <p>
+                La compra o el alquiler deben documentar el titular, la modalidad, el
+                importe, las fechas aplicables y la forma de entrega del código fuente.
+                Si existe una diferencia entre este resumen y el acuerdo firmado, prevalece
+                lo pactado expresamente por las partes, dentro de la legislación aplicable.
+              </p>
+            </section>
+
+            <p className="sidebar-terms-note">
+              Este texto es informativo y debe revisarse y formalizarse antes de utilizarse
+              como contrato comercial.
+            </p>
+          </div>
+        </Modal>
+      )}
+    </aside>
+  );
+};import './styles/theme.css';
+import { AppProvider } from './context/AppContext';
+import { AppRouter } from './routes/AppRouter';
+import { useEffect } from 'react';
+import { syncDeveloperMode } from './utils/developerMode';
+
+function App() {
+  useEffect(() => {
+    void syncDeveloperMode();
+  }, []);
+
+  return (
+    <AppProvider>
+      <AppRouter />
+    </AppProvider>
+  );
+}
+
+export default App;
+
+
+==== UTILS ====
+let moneyConfig = { currency: 'COP', decimals: 0 };
+
+/** Update the active money formatting config when application settings load. */
+export const setMoneyConfig = (config: { currency: string; decimals: number }): void => {
+  moneyConfig = { currency: config.currency, decimals: config.decimals };
+};
+
+/** Current currency settings provided by the application context. */
+export const MONEY_DEFAULTS = {
+  get currency(): string { return moneyConfig.currency; },
+  get decimals(): number { return moneyConfig.decimals; },
+};
+
+const clampDecimals = (decimals: number): number => Math.min(Math.max(decimals, 0), 2);
+
+/** Centésimas -> importe formateado. Todo importe se guarda en centésimas. */
+export const formatMoney = (
+  minor: number,
+  currency: string = MONEY_DEFAULTS.currency,
+  decimals: number = MONEY_DEFAULTS.decimals,
+): string => {
+  const precision = clampDecimals(decimals);
+  return new Intl.NumberFormat('es-CO', {
+    style: 'currency',
+    currency,
+    minimumFractionDigits: precision,
+    maximumFractionDigits: precision,
+  }).format(minor / 100);
+};
+
+/**
+ * Texto tecleado por el usuario en unidades principales -> centésimas.
+ * Rechaza negativos, texto y precisión superior a la moneda.
+ */
+export const parseMoneyInput = (
+  raw: string,
+  decimals: number = MONEY_DEFAULTS.decimals,
+): number | null => {
+  const text = raw.trim();
+  const precision = clampDecimals(decimals);
+  const pattern = precision > 0
+    ? new RegExp(`^\\d+(\\.\\d{1,${precision}})?$`)
+    : /^\d+$/;
+  if (!pattern.test(text)) return null;
+
+  const [whole, fraction = ''] = text.split('.');
+  const minor = Number(whole) * 100 + Number(fraction.padEnd(2, '0'));
+  return Number.isSafeInteger(minor) ? minor : null;
+};
+
+/** Centésimas -> texto en unidades principales para un input. */
+export const minorToInput = (
+  minor: number,
+  decimals: number = MONEY_DEFAULTS.decimals,
+): string => (minor / 100).toFixed(clampDecimals(decimals));
+
+/** Valor step de un input de dinero. */
+export const moneyStep = (decimals: number = MONEY_DEFAULTS.decimals): string =>
+  decimals > 0 ? '0.01' : '1';
+
+export type MarginResult =
+  | { kind: 'ok'; percent: number }
+  | { kind: 'no_cost' }
+  | { kind: 'no_price' };
+
+/** Margen sobre precio: (price - cost) / price × 100. Importes en centavos. */
+export function calcMargin(price: number, cost: number): MarginResult {
+  if (price <= 0) return { kind: 'no_price' };
+  if (cost <= 0) return { kind: 'no_cost' };
+  const percent = Math.round(((price - cost) / price) * 1000) / 10;
+  return { kind: 'ok', percent };
+}
+
+export function formatMargin(margin: MarginResult): string {
+  switch (margin.kind) {
+    case 'ok': return `${margin.percent}%`;
+    case 'no_cost': return 'Sin costo';
+    case 'no_price': return 'Sin precio';
+  }
+}
+
+/** Fecha ISO → "12 jun 2026, 8:42 p. m." */
+export const formatDate = (iso: string): string => {
+  return new Intl.DateTimeFormat('es-CO', {
+    day: '2-digit',
+    month: 'short',
+    year: 'numeric',
+    hour: '2-digit',
+    minute: '2-digit',
+  }).format(new Date(iso));
+};
+
+/** Fecha ISO → "12/06/2026" */
+export const formatDateShort = (iso: string): string => {
+  return new Intl.DateTimeFormat('es-CO', {
+    day: '2-digit',
+    month: '2-digit',
+    year: 'numeric',
+  }).format(new Date(iso));
+};
+
+/** Atributos JSON → "Talla: M · Color: Rojo" */
+export const formatAttributes = (attrs: Record<string, string>): string => {
+  return Object.entries(attrs)
+    .map(([k, v]) => `${capitalize(k)}: ${v}`)
+    .join(' · ');
+};
+
+/** Tipo de movimiento → etiqueta legible */
+export const formatMovementType = (type: string): string => {
+  const labels: Record<string, string> = {
+    purchase:      'Compra',
+    sale:          'Venta',
+    sale_return:   'Devolución',
+    manual_in:     'Entrada manual',
+    manual_out:    'Salida manual',
+    adjustment:    'Ajuste',
+    initial_stock: 'Stock inicial',
+  };
+  return labels[type] ?? type;
+};
+
+const capitalize = (s: string): string =>
+  s.charAt(0).toUpperCase() + s.slice(1);import type {
+  AuditCategory,
+  AuditEvent,
+  AuditFilterDto,
+  AuditModule,
+  AuditOutcome,
+} from '../types';
+import { REASON_LABELS } from './movementReasons';
+
+// ============================================================
+// Errores
+// ============================================================
+
+export const errorMessage = (error: unknown): string =>
+  typeof error === 'string'
+    ? error
+    : error instanceof Error
+      ? error.message
+      : 'Error desconocido';
+
+// ============================================================
+// Catálogo de etiquetas
+// ============================================================
+
+export const AUDIT_MODULES: readonly AuditModule[] = [
+  'sales', 'inventory', 'cash', 'stocktake', 'settings',
+  'import', 'licensing', 'billing', 'system',
+];
+export const AUDIT_CATEGORIES: readonly AuditCategory[] = ['business', 'error'];
+export const AUDIT_OUTCOMES: readonly AuditOutcome[] = ['success', 'failure'];
+
+export const MODULE_LABELS: Record<AuditModule, string> = {
+  sales: 'Ventas',
+  inventory: 'Inventario',
+  cash: 'Caja',
+  stocktake: 'Toma de inventario',
+  settings: 'Ajustes',
+  import: 'Importación',
+  licensing: 'Licencia',
+  billing: 'Facturación',
+  system: 'Sistema',
+};
+
+export const CATEGORY_LABELS: Record<AuditCategory, string> = {
+  business: 'Negocio',
+  error: 'Error técnico',
+};
+
+export const OUTCOME_LABELS: Record<AuditOutcome, string> = {
+  success: 'Exitoso',
+  failure: 'Fallido',
+};
+
+const ACTION_LABELS: Record<string, string> = {
+  'cash.open': 'Apertura de caja',
+  'cash.close': 'Cierre de caja',
+  'cash.create': 'Movimiento de caja',
+  'sales.create': 'Venta registrada',
+  'inventory.create': 'Creación',
+  'inventory.update': 'Actualización',
+  'inventory.stock_in': 'Entrada de stock',
+  'inventory.stock_out': 'Salida de stock',
+  'inventory.stock_adjust': 'Ajuste de stock',
+  'stocktake.start': 'Inicio de toma',
+  'stocktake.apply': 'Toma aplicada',
+  'stocktake.cancel': 'Toma cancelada',
+  'settings.update': 'Ajustes actualizados',
+  'licensing.activate': 'Licencia activada',
+  'import.execute': 'Importación ejecutada',
+};
+
+const ENTITY_TYPE_LABELS: Record<string, string> = {
+  cash_session: 'Turno de caja',
+  cash_movement: 'Movimiento de caja',
+  sale: 'Venta',
+  category: 'Categoría',
+  product: 'Producto',
+  variant: 'Variante',
+  stocktake: 'Toma de inventario',
+  app_settings: 'Ajustes',
+  license: 'Licencia',
+  inventory_import: 'Importación de inventario',
+};
+
+const FIELD_LABELS: Record<string, string> = {
+  // genéricos
+  status: 'Estado', name: 'Nombre', description: 'Descripción', notes: 'Notas',
+  is_active: 'Activo', created_at: 'Creado', updated_at: 'Actualizado',
+  // caja
+  opening_amount: 'Monto de apertura', opening_notes: 'Notas de apertura',
+  expected_amount: 'Monto esperado', counted_amount: 'Monto contado',
+  difference: 'Diferencia', closing_notes: 'Notas de cierre',
+  movement_type: 'Tipo de movimiento', amount: 'Monto', session_id: 'Turno',
+  // ventas
+  subtotal: 'Subtotal', discount: 'Descuento', tax: 'Impuesto', total: 'Total',
+  item_count: 'Líneas', units: 'Unidades', payments: 'Pagos',
+  customer_id: 'Cliente', cash_session_id: 'Turno de caja',
+  // inventario
+  category_id: 'Categoría', product_id: 'Producto', brand: 'Marca',
+  image_url: 'Imagen', attributes: 'Atributos', sku: 'SKU', barcode: 'Código de barras',
+  price: 'Precio', cost: 'Costo', stock: 'Stock', stock_min: 'Stock mínimo',
+  allow_negative: 'Permite stock negativo', quantity: 'Cantidad',
+  unit_cost: 'Costo unitario', reason: 'Motivo',
+  // stocktake
+  line_count: 'Variantes', adjusted: 'Ajustadas', unchanged: 'Sin diferencia',
+  uncounted: 'Sin contar', surplus_units: 'Unidades sobrantes',
+  shortage_units: 'Unidades faltantes', total_lines: 'Total de variantes',
+  counted_lines: 'Variantes contadas', category_name: 'Nombre de categoría',
+  // ajustes
+  business_name: 'Nombre del negocio', tax_id: 'NIT / RUT', address: 'Dirección',
+  phone: 'Teléfono', email: 'Correo', currency: 'Moneda',
+  currency_decimals: 'Decimales', tax_rate_bps: 'Tasa de impuesto (pb)',
+  tax_name: 'Nombre del impuesto', timezone: 'Zona horaria',
+  ticket_header: 'Encabezado del ticket', ticket_footer: 'Pie del ticket',
+  low_stock_default_threshold: 'Umbral de stock bajo', logo_url: 'Logo',
+  // licencia
+  license_id: 'Licencia', licensee: 'Titular', kind: 'Modalidad',
+  issued_at: 'Emitida', expires_at: 'Vence', replaced_license_id: 'Licencia reemplazada',
+  // importación
+  file_name: 'Archivo', total_rows: 'Filas', new_categories: 'Categorías nuevas',
+  new_products: 'Productos nuevos', new_variants: 'Variantes nuevas',
+  skipped: 'Omitidas', errors: 'Errores',
+  // error
+  error_kind: 'Tipo de error',
+};
+
+const VALUE_LABELS: Record<string, Record<string, string>> = {
+  status: {
+    open: 'Abierto', closed: 'Cerrado', counting: 'En conteo',
+    applied: 'Aplicada', cancelled: 'Cancelada',
+  },
+  movement_type: {
+    manual_in: 'Ingreso manual', manual_out: 'Egreso manual',
+    sale_in: 'Venta (ingreso)', sale_out: 'Venta (devolución)',
+    purchase: 'Compra', sale: 'Venta', sale_return: 'Devolución',
+    adjustment: 'Ajuste', initial_stock: 'Stock inicial',
+  },
+  method: { cash: 'Efectivo', card: 'Tarjeta', transfer: 'Transferencia' },
+  reason: { ...REASON_LABELS },
+  kind: { purchase: 'Compra perpetua', rental: 'Alquiler' },
+  error_kind: { database: 'Base de datos', internal: 'Interno' },
+};
+
+const humanize = (key: string): string => {
+  const text = key.replace(/_/g, ' ').trim();
+  return text.charAt(0).toUpperCase() + text.slice(1);
+};
+
+export const moduleLabel = (module: string): string =>
+  MODULE_LABELS[module as AuditModule] ?? humanize(module);
+
+export const actionLabel = (module: string, action: string): string =>
+  ACTION_LABELS[`${module}.${action}`] ?? humanize(action);
+
+export const entityTypeLabel = (entityType: string): string =>
+  ENTITY_TYPE_LABELS[entityType] ?? humanize(entityType);
+
+export const fieldLabel = (key: string): string => FIELD_LABELS[key] ?? humanize(key);
+
+export const formatActor = (actor: string | null): string =>
+  actor && actor.trim() ? actor : '—';
+
+/** "Variante #12" / "Ajustes #1" / "—" */
+export const formatEntity = (event: Pick<AuditEvent, 'entity_type' | 'entity_id'>): string => {
+  if (!event.entity_type) return '—';
+  const label = entityTypeLabel(event.entity_type);
+  return event.entity_id ? `${label} #${event.entity_id}` : label;
+};
+
+// ============================================================
+// Fechas
+// ============================================================
+
+/** ISO UTC -> fecha localizada en la zona indicada. Si algo falla, devuelve el original. */
+export const formatAuditDate = (iso: string, timeZone: string): string => {
+  const date = new Date(iso);
+  if (Number.isNaN(date.getTime())) return iso;
+  try {
+    return new Intl.DateTimeFormat('es-CO', {
+      day: '2-digit',
+      month: 'short',
+      year: 'numeric',
+      hour: '2-digit',
+      minute: '2-digit',
+      second: '2-digit',
+      timeZone,
+    }).format(date);
+  } catch {
+    return iso;
+  }
+};
+
+const DATE_ONLY = /^\d{4}-\d{2}-\d{2}$/;
+
+const isRealDate = (value: string): boolean => {
+  if (!DATE_ONLY.test(value)) return false;
+  const parsed = new Date(`${value}T00:00:00Z`);
+  return !Number.isNaN(parsed.getTime()) && parsed.toISOString().slice(0, 10) === value;
+};
+
+/** Mensaje de error o null. Mismo texto que el backend para el rango invertido. */
+export const validateDateRange = (from: string, to: string): string | null => {
+  const f = from.trim();
+  const t = to.trim();
+  if (f && !isRealDate(f)) return 'La fecha inicial no es válida';
+  if (t && !isRealDate(t)) return 'La fecha final no es válida';
+  if (f && t && f > t) return 'La fecha inicial no puede ser posterior a la final';
+  return null;
+};
+
+// ============================================================
+// Filtros: estado de UI <-> DTO <-> URL
+// ============================================================
+
+export const DEFAULT_PAGE_SIZE = 50;
+export const MAX_PAGE_SIZE = 200;
+
+export interface AuditFilterState {
+  module: string;
+  category: string;
+  outcome: string;
+  action: string;
+  entityType: string;
+  entityId: string;
+  dateFrom: string;
+  dateTo: string;
+  search: string;
+  sortDir: 'asc' | 'desc';
+  page: number;
+}
+
+export const EMPTY_FILTER: AuditFilterState = {
+  module: '',
+  category: '',
+  outcome: '',
+  action: '',
+  entityType: '',
+  entityId: '',
+  dateFrom: '',
+  dateTo: '',
+  search: '',
+  sortDir: 'desc',
+  page: 1,
+};
+
+const clean = (value: string): string | undefined => {
+  const trimmed = value.trim();
+  return trimmed === '' ? undefined : trimmed;
+};
+
+const oneOf = <T extends string>(allowed: readonly T[], value: string): T | undefined =>
+  (allowed as readonly string[]).includes(value) ? (value as T) : undefined;
+
+const normalizePage = (page: number): number =>
+  Number.isFinite(page) && page >= 1 ? Math.floor(page) : 1;
+
+/** Estado de UI -> filter del backend (snake_case, sin claves vacías). */
+export const buildAuditFilter = (
+  state: AuditFilterState,
+  pageSize: number = DEFAULT_PAGE_SIZE,
+): AuditFilterDto => {
+  const filter: AuditFilterDto = {
+    sort_dir: state.sortDir === 'asc' ? 'asc' : 'desc',
+    page: normalizePage(state.page),
+    page_size: Math.min(Math.max(Math.floor(pageSize) || DEFAULT_PAGE_SIZE, 1), MAX_PAGE_SIZE),
+  };
+
+  const module = oneOf(AUDIT_MODULES, state.module);
+  const category = oneOf(AUDIT_CATEGORIES, state.category);
+  const outcome = oneOf(AUDIT_OUTCOMES, state.outcome);
+  const action = clean(state.action);
+  const entityType = clean(state.entityType);
+  const entityId = clean(state.entityId);
+  const dateFrom = clean(state.dateFrom);
+  const dateTo = clean(state.dateTo);
+  const search = clean(state.search);
+
+  if (module) filter.module = module;
+  if (category) filter.category = category;
+  if (outcome) filter.outcome = outcome;
+  if (action) filter.action = action;
+  if (entityType) filter.entity_type = entityType;
+  if (entityId) filter.entity_id = entityId;
+  if (dateFrom) filter.date_from = dateFrom;
+  if (dateTo) filter.date_to = dateTo;
+  if (search) filter.search = search;
+  return filter;
+};
+
+/** True si hay algún filtro activo (sin contar orden ni página). */
+export const hasActiveFilters = (state: AuditFilterState): boolean =>
+  [
+    state.module, state.category, state.outcome, state.action,
+    state.entityType, state.entityId, state.dateFrom, state.dateTo, state.search,
+  ].some(value => value.trim() !== '');
+
+/** Estado -> query string. Omite valores por defecto. */
+export const filterToSearchParams = (state: AuditFilterState): URLSearchParams => {
+  const params = new URLSearchParams();
+  const put = (key: string, value: string) => {
+    const trimmed = value.trim();
+    if (trimmed) params.set(key, trimmed);
+  };
+  put('module', state.module);
+  put('category', state.category);
+  put('outcome', state.outcome);
+  put('action', state.action);
+  put('entity_type', state.entityType);
+  put('entity_id', state.entityId);
+  put('from', state.dateFrom);
+  put('to', state.dateTo);
+  put('q', state.search);
+  if (state.sortDir === 'asc') params.set('sort', 'asc');
+  const page = normalizePage(state.page);
+  if (page > 1) params.set('page', String(page));
+  return params;
+};
+
+/** Query string -> estado. Ignora valores inválidos. */
+export const searchParamsToFilter = (params: URLSearchParams): AuditFilterState => {
+  const get = (key: string) => params.get(key)?.trim() ?? '';
+  const page = Number(params.get('page'));
+  const from = get('from');
+  const to = get('to');
+  return {
+    module: oneOf(AUDIT_MODULES, get('module')) ?? '',
+    category: oneOf(AUDIT_CATEGORIES, get('category')) ?? '',
+    outcome: oneOf(AUDIT_OUTCOMES, get('outcome')) ?? '',
+    action: get('action'),
+    entityType: get('entity_type'),
+    entityId: get('entity_id'),
+    dateFrom: isRealDate(from) ? from : '',
+    dateTo: isRealDate(to) ? to : '',
+    search: get('q'),
+    sortDir: get('sort') === 'asc' ? 'asc' : 'desc',
+    page: Number.isInteger(page) && page >= 1 ? page : 1,
+  };
+};
+
+// ============================================================
+// Changes y metadata
+// ============================================================
+
+export type MoneyFormatter = (minor: number) => string;
+
+const MONEY_FIELDS: Record<string, readonly string[]> = {
+  cash: ['opening_amount', 'expected_amount', 'counted_amount', 'difference', 'amount'],
+  sales: ['subtotal', 'discount', 'tax', 'total', 'amount'],
+  inventory: ['price', 'cost', 'unit_cost'],
+};
+
+/** Si el campo es un importe en centavos según el módulo. */
+export const isMoneyField = (module: string, key: string): boolean =>
+  MONEY_FIELDS[module]?.includes(key) ?? false;
+
+const isPlainObject = (value: unknown): value is Record<string, unknown> =>
+  typeof value === 'object' && value !== null && !Array.isArray(value);
+
+/** Valor genérico legible. Los textos largos ("[texto de N caracteres]") pasan tal cual. */
+export const formatAuditValue = (
+  module: string,
+  key: string,
+  value: unknown,
+  formatMoney: MoneyFormatter,
+): string => {
+  if (value === null || value === undefined) return '—';
+  if (typeof value === 'boolean') return value ? 'Sí' : 'No';
+  if (typeof value === 'number') {
+    return isMoneyField(module, key) ? formatMoney(value) : String(value);
+  }
+  if (typeof value === 'string') {
+    if (value === '') return '(vacío)';
+    return VALUE_LABELS[key]?.[value] ?? value;
+  }
+  if (Array.isArray(value) && key === 'payments') {
+    return formatPayments(module, value, formatMoney);
+  }
+  if (isPlainObject(value) && key === 'attributes') {
+    const entries = Object.entries(value);
+    return entries.length === 0
+      ? '—'
+      : entries.map(([k, v]) => `${humanize(k)}: ${String(v)}`).join(' · ');
+  }
+  try {
+    return JSON.stringify(value);
+  } catch {
+    return String(value);
+  }
+};
+
+const formatPayments = (module: string, payments: unknown[], formatMoney: MoneyFormatter): string => {
+  const parts = payments.map(item => {
+    if (!isPlainObject(item)) return String(item);
+    const method = typeof item.method === 'string'
+      ? (VALUE_LABELS.method[item.method] ?? item.method)
+      : 'Pago';
+    const amount = typeof item.amount === 'number'
+      ? (isMoneyField(module, 'amount') ? formatMoney(item.amount) : String(item.amount))
+      : '—';
+    return `${method}: ${amount}`;
+  });
+  return parts.length > 0 ? parts.join(' · ') : '—';
+};
+
+export interface ChangeRow {
+  key: string;
+  label: string;
+  from: string;
+  to: string;
+}
+
+export interface MetadataRow {
+  key: string;
+  label: string;
+  value: string;
+}
+
+/** `changes` -> filas antes/después. Tolera entradas mal formadas. */
+export const buildChangeRows = (
+  event: Pick<AuditEvent, 'module' | 'changes'>,
+  formatMoney: MoneyFormatter,
+): ChangeRow[] => {
+  if (!event.changes) return [];
+  return Object.entries(event.changes).map(([key, change]) => {
+    const hasShape = isPlainObject(change) && ('from' in change || 'to' in change);
+    const from = hasShape ? change.from : undefined;
+    const to = hasShape ? change.to : change;
+    return {
+      key,
+      label: fieldLabel(key),
+      from: formatAuditValue(event.module, key, from, formatMoney),
+      to: formatAuditValue(event.module, key, to, formatMoney),
+    };
+  });
+};
+
+/** `metadata` -> filas etiquetadas. Claves desconocidas usan el renderizador genérico. */
+export const buildMetadataRows = (
+  event: Pick<AuditEvent, 'module' | 'metadata'>,
+  formatMoney: MoneyFormatter,
+): MetadataRow[] => {
+  if (!event.metadata) return [];
+  return Object.entries(event.metadata).map(([key, value]) => ({
+    key,
+    label: fieldLabel(key),
+    value: formatAuditValue(event.module, key, value, formatMoney),
+  }));
+};import { useEffect, useState } from 'react';
+
+/** Devuelve `value` con retraso: solo cambia tras `delay` ms sin nuevos cambios. */
+export function useDebounce<T>(value: T, delay = 400): T {
+	const [debounced, setDebounced] = useState(value);
+
+	useEffect(() => {
+		const timer = window.setTimeout(() => setDebounced(value), delay);
+		return () => window.clearTimeout(timer);
+	}, [value, delay]);
+
+	return debounced;
+}
+==== UI REUTILIZABLE ====
+import React, { useEffect } from 'react';
+import './Modal.css';
+
+interface ModalProps {
+  title: string;
+  onClose: () => void;
+  children: React.ReactNode;
+  width?: number;
+}
+
+export const Modal: React.FC<ModalProps> = ({ title, onClose, children, width = 560 }) => {
+  useEffect(() => {
+    const handleKey = (e: KeyboardEvent) => { if (e.key === 'Escape') onClose(); };
+    document.addEventListener('keydown', handleKey);
+    return () => document.removeEventListener('keydown', handleKey);
+  }, [onClose]);
+
+  return (
+    <div className="modal-overlay" onClick={e => e.target === e.currentTarget && onClose()}>
+      <div className="modal-panel" style={{ maxWidth: width }}>
+        <div className="modal-header">
+          <h2 className="modal-title">{title}</h2>
+          <button className="modal-close" onClick={onClose}>×</button>
+        </div>
+        <div className="modal-body">{children}</div>
+      </div>
+    </div>
+  );
+};import React, { useEffect } from 'react';
+import './Toast.css';
+
+export type ToastType = 'success' | 'error' | 'warning' | 'info';
+
+export interface ToastData {
+  id: string;
+  message: string;
+  type: ToastType;
+}
+
+const ICONS: Record<ToastType, string> = {
+  success: '✓', error: '✕', warning: '⚠', info: 'ℹ',
+};
+
+export const Toast: React.FC<{ toast: ToastData; onDismiss: (id: string) => void }> = ({ toast, onDismiss }) => {
+  useEffect(() => {
+    const t = setTimeout(() => onDismiss(toast.id), 3500);
+    return () => clearTimeout(t);
+  }, [toast.id, onDismiss]);
+
+  return (
+    <div className={`toast toast--${toast.type}`}>
+      <span className="toast-icon">{ICONS[toast.type]}</span>
+      <span className="toast-msg">{toast.message}</span>
+      <button className="toast-dismiss" onClick={() => onDismiss(toast.id)}>×</button>
+    </div>
+  );
+};
+
+export const ToastContainer: React.FC<{ toasts: ToastData[]; onDismiss: (id: string) => void }> = ({ toasts, onDismiss }) => (
+  <div className="toast-container">
+    {toasts.map(t => <Toast key={t.id} toast={t} onDismiss={onDismiss} />)}
+  </div>
+);==== PAGINA CAJA - PATRON DE PAGINA ====
+import { useEffect, useState, useCallback } from 'react';
+import type {
+  CashSessionWithTotals,
+  CashMovement,
+  ManualCashMovementType,
+} from '../../types';
+import {
+  getCurrentCashSession,
+  openCashSession,
+  closeCashSession,
+  registerCashMovement,
+  listCashMovements,
+} from '../../services/cash.service';
+import { formatMoney, parseMoneyInput, moneyStep, MONEY_DEFAULTS } from '../../utils/format';
+import { getOperatorOrNull, setOperator } from '../../utils/preferences';
+import './Cash.css';
+
+export default function Cash() {
+  const [session, setSession] = useState<CashSessionWithTotals | null>(null);
+  const [movements, setMovements] = useState<CashMovement[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+  const [operator, setOperatorName] = useState(() => getOperatorOrNull() ?? '');
+
+  // Form: apertura
+  const [openingAmount, setOpeningAmount] = useState('');
+  const [openingNotes, setOpeningNotes] = useState('');
+
+  // Form: movimiento manual
+  const [movementType, setMovementType] = useState<ManualCashMovementType>('manual_in');
+  const [movementAmount, setMovementAmount] = useState('');
+  const [movementNotes, setMovementNotes] = useState('');
+
+  // Form: cierre
+  const [showCloseForm, setShowCloseForm] = useState(false);
+  const [countedAmount, setCountedAmount] = useState('');
+  const [closingNotes, setClosingNotes] = useState('');
+
+  const loadSession = useCallback(async () => {
+    setError(null);
+    try {
+      const current = await getCurrentCashSession();
+      setSession(current);
+
+      if (current) {
+        const res = await listCashMovements({ session_id: current.id, page_size: 50 });
+        setMovements(res.data);
+      } else {
+        setMovements([]);
+      }
+    } catch (e) {
+      setError(String(e));
+    } finally {
+      setLoading(false);
+    }
+  }, []);
+
+  useEffect(() => {
+    loadSession();
+  }, [loadSession]);
+
+  async function handleOpenSession(e: React.FormEvent) {
+    e.preventDefault();
+    setError(null);
+    const amountCents = parseMoneyInput(openingAmount);
+    if (amountCents === null) {
+      setError('Ingresa un monto inicial válido');
+      return;
+    }
+    try {
+      const operatorName = operator.trim();
+      await openCashSession({
+        opening_amount: amountCents,
+        opening_notes: openingNotes || null,
+        ...(operatorName ? { opened_by: operatorName } : {}),
+      });
+      setOpeningAmount('');
+      setOpeningNotes('');
+      await loadSession();
+    } catch (e) {
+      setError(String(e));
+    }
+  }
+
+  async function handleAddMovement(e: React.FormEvent) {
+    e.preventDefault();
+    if (!session) return;
+    setError(null);
+    const amountCents = parseMoneyInput(movementAmount);
+    if (amountCents === null || amountCents <= 0) {
+      setError('Ingresa un monto válido mayor a 0');
+      return;
+    }
+    try {
+      const operatorName = operator.trim();
+      await registerCashMovement(session.id, {
+        movement_type: movementType,
+        amount: amountCents,
+        notes: movementNotes || null,
+        ...(operatorName ? { created_by: operatorName } : {}),
+      });
+      setMovementAmount('');
+      setMovementNotes('');
+      await loadSession();
+    } catch (e) {
+      setError(String(e));
+    }
+  }
+
+  async function handleCloseSession(e: React.FormEvent) {
+    e.preventDefault();
+    if (!session) return;
+    setError(null);
+    const countedCents = parseMoneyInput(countedAmount);
+    if (countedCents === null) {
+      setError('Ingresa un monto contado válido');
+      return;
+    }
+    try {
+      const operatorName = operator.trim();
+      await closeCashSession(session.id, {
+        counted_amount: countedCents,
+        closing_notes: closingNotes || null,
+        ...(operatorName ? { closed_by: operatorName } : {}),
+      });
+      setShowCloseForm(false);
+      setCountedAmount('');
+      setClosingNotes('');
+      await loadSession();
+    } catch (e) {
+      setError(String(e));
+    }
+  }
+
+  if (loading) {
+    return <div className="cash-page cash-loading">Cargando caja...</div>;
+  }
+
+  return (
+    <div className="cash-page">
+      <h1>Caja</h1>
+
+      {error && <div className="form-error">{error}</div>}
+
+      <div className="cash-card">
+        <div className="form-field">
+          <label htmlFor="cash-operator">Operador de caja (opcional)</label>
+          <input
+            id="cash-operator"
+            className="form-input"
+            type="text"
+            value={operator}
+            onChange={(e) => {
+              const value = e.target.value;
+              setOperatorName(value);
+              try {
+                setOperator(value);
+              } catch (storageError) {
+                setError(`No se pudo guardar el operador en este equipo: ${String(storageError)}`);
+              }
+            }}
+            maxLength={100}
+          />
+        </div>
+      </div>
+
+      {!session ? (
+        <div className="cash-card">
+          <h2>No hay un turno abierto</h2>
+          <form onSubmit={handleOpenSession} className="cash-form">
+            <div className="form-field">
+              <label>Monto inicial ({MONEY_DEFAULTS.currency})</label>
+              <input
+                className="form-input"
+                type="number"
+                step={moneyStep()}
+                min="0"
+                required
+                value={openingAmount}
+                onChange={(e) => setOpeningAmount(e.target.value)}
+                placeholder="0"
+              />
+            </div>
+            <div className="form-field">
+              <label>Notas de apertura (opcional)</label>
+              <input
+                className="form-input"
+                type="text"
+                value={openingNotes}
+                onChange={(e) => setOpeningNotes(e.target.value)}
+              />
+            </div>
+            <button type="submit" className="btn btn-primary">
+              Abrir turno
+            </button>
+          </form>
+        </div>
+      ) : (
+        <>
+          <div className="cash-card cash-summary">
+            <h2>Turno abierto</h2>
+            <div className="cash-summary-grid">
+              <div>
+                <span className="cash-label">Apertura</span>
+                <span className="cash-value">{formatMoney(session.opening_amount)}</span>
+              </div>
+              <div>
+                <span className="cash-label">Ingresos</span>
+                <span className="cash-value cash-in">{formatMoney(session.total_in)}</span>
+              </div>
+              <div>
+                <span className="cash-label">Egresos</span>
+                <span className="cash-value cash-out">{formatMoney(session.total_out)}</span>
+              </div>
+              <div>
+                <span className="cash-label">Saldo actual</span>
+                <span className="cash-value cash-balance">
+                  {formatMoney(session.current_balance)}
+                </span>
+              </div>
+            </div>
+            <p className="cash-meta">
+              Abierto por {session.opened_by} —{' '}
+              {new Date(session.opened_at).toLocaleString('es-CO')}
+            </p>
+            <button
+              className="btn btn-danger"
+              onClick={() => setShowCloseForm((v) => !v)}
+            >
+              {showCloseForm ? 'Cancelar cierre' : 'Cerrar turno'}
+            </button>
+          </div>
+
+          {showCloseForm && (
+            <div className="cash-card">
+              <h2>Arqueo de cierre</h2>
+              <form onSubmit={handleCloseSession} className="cash-form">
+                <div className="form-field">
+                  <label>Monto contado ({MONEY_DEFAULTS.currency})</label>
+                  <input
+                    className="form-input"
+                    type="number"
+                    step={moneyStep()}
+                    min="0"
+                    required
+                    value={countedAmount}
+                    onChange={(e) => setCountedAmount(e.target.value)}
+                    placeholder="0"
+                  />
+                </div>
+                <div className="form-field">
+                  <label>Notas de cierre (opcional)</label>
+                  <input
+                    className="form-input"
+                    type="text"
+                    value={closingNotes}
+                    onChange={(e) => setClosingNotes(e.target.value)}
+                  />
+                </div>
+                <button type="submit" className="btn btn-primary">
+                  Confirmar cierre
+                </button>
+              </form>
+            </div>
+          )}
+
+          <div className="cash-card">
+            <h2>Registrar movimiento manual</h2>
+            <form onSubmit={handleAddMovement} className="cash-form cash-form-row">
+              <div className="form-field">
+                <label>Tipo</label>
+                <select
+                  className="form-input"
+                  value={movementType}
+                  onChange={(e) => setMovementType(e.target.value as ManualCashMovementType)}
+                >
+                  <option value="manual_in">Ingreso</option>
+                  <option value="manual_out">Egreso</option>
+                </select>
+              </div>
+              <div className="form-field">
+                <label>Monto ({MONEY_DEFAULTS.currency})</label>
+                <input
+                  className="form-input"
+                  type="number"
+                  step={moneyStep()}
+                  min="0"
+                  required
+                  value={movementAmount}
+                  onChange={(e) => setMovementAmount(e.target.value)}
+                  placeholder="0"
+                />
+              </div>
+              <div className="form-field">
+                <label>Notas (opcional)</label>
+                <input
+                  className="form-input"
+                  type="text"
+                  value={movementNotes}
+                  onChange={(e) => setMovementNotes(e.target.value)}
+                />
+              </div>
+              <button type="submit" className="btn btn-primary">
+                Agregar
+              </button>
+            </form>
+          </div>
+
+          <div className="cash-card">
+            <h2>Movimientos del turno</h2>
+            {movements.length === 0 ? (
+              <p className="cash-meta">Sin movimientos registrados aún.</p>
+            ) : (
+              <table className="cash-table">
+                <thead>
+                  <tr>
+                    <th>Fecha</th>
+                    <th>Tipo</th>
+                    <th>Monto</th>
+                    <th>Notas</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {movements.map((m) => (
+                    <tr key={m.id}>
+                      <td>{new Date(m.created_at).toLocaleString('es-CO')}</td>
+                      <td>
+                        <span
+                          className={
+                            m.movement_type.includes('in') ? 'cash-in' : 'cash-out'
+                          }
+                        >
+                          {m.movement_type === 'manual_in' && 'Ingreso manual'}
+                          {m.movement_type === 'manual_out' && 'Egreso manual'}
+                          {m.movement_type === 'sale_in' && 'Venta (ingreso)'}
+                          {m.movement_type === 'sale_out' && 'Venta (devolución)'}
+                        </span>
+                      </td>
+                      <td>{formatMoney(m.amount)}</td>
+                      <td>{m.notes ?? '—'}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            )}
+          </div>
+        </>
+      )}
+    </div>
+  );
+}

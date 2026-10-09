@@ -1,0 +1,278 @@
+============================================================
+AUDITORIA MODULO DE VENTAS - CASHFLOW POS
+============================================================
+
+#################### FRONTEND ####################
+
+===== src\pages\Sales\Sales.tsx =====
+El sistema no puede encontrar la ruta especificada.
+
+===== src\pages\Sales\Sales.css =====
+El sistema no puede encontrar la ruta especificada.
+
+===== src\pages\SalesHistory\SalesHistory.tsx =====
+El sistema no puede encontrar la ruta especificada.
+
+===== src\pages\SalesHistory\SalesHistory.css =====
+El sistema no puede encontrar la ruta especificada.
+
+===== src\components\sales\SaleCart.tsx =====
+El sistema no puede encontrar la ruta especificada.
+
+===== src\components\sales\SaleItem.tsx =====
+El sistema no puede encontrar la ruta especificada.
+
+===== src\components\sales\PaymentPanel.tsx =====
+El sistema no puede encontrar la ruta especificada.
+
+===== src\components\sales\BarcodeInput.tsx =====
+El sistema no puede encontrar la ruta especificada.
+
+===== src\services\sales.service.ts =====
+El sistema no puede encontrar la ruta especificada.
+
+===== src\services\api.ts =====
+El sistema no puede encontrar la ruta especificada.
+
+===== src\types\index.ts =====
+El sistema no puede encontrar el archivo especificado.
+
+===== src\context\AppContext.tsx =====
+El sistema no puede encontrar la ruta especificada.
+
+#################### BACKEND VENTAS ####################
+
+===== src-tauri\src\modules\sales\handlers.rs =====
+El sistema no puede encontrar la ruta especificada.
+
+===== src-tauri\src\modules\sales\service.rs =====
+El sistema no puede encontrar la ruta especificada.
+
+===== src-tauri\src\modules\sales\repository.rs =====
+El sistema no puede encontrar la ruta especificada.
+
+===== src-tauri\src\modules\sales\models.rs =====
+El sistema no puede encontrar la ruta especificada.
+
+===== src-tauri\src\modules\sales\dto.rs =====
+El sistema no puede encontrar la ruta especificada.
+
+===== src-tauri\src\modules\sales\router.rs =====
+El sistema no puede encontrar la ruta especificada.
+
+===== src-tauri\src\modules\sales\mod.rs =====
+El sistema no puede encontrar la ruta especificada.
+
+#################### INTEGRACION INVENTARIO ####################
+
+===== src-tauri\src\modules\inventory\service.rs =====
+El sistema no puede encontrar la ruta especificada.
+
+===== src-tauri\src\modules\inventory\repository.rs =====
+El sistema no puede encontrar la ruta especificada.
+
+#################### INTEGRACION CAJA ####################
+
+===== src-tauri\src\modules\cash\service.rs =====
+El sistema no puede encontrar la ruta especificada.
+
+===== src-tauri\src\modules\cash\repository.rs =====
+El sistema no puede encontrar la ruta especificada.
+
+===== src-tauri\src\modules\cash\models.rs =====
+El sistema no puede encontrar la ruta especificada.
+
+===== src-tauri\src\modules\cash\dto.rs =====
+El sistema no puede encontrar la ruta especificada.
+
+#################### AUDITORIA Y TRANSACCIONES ####################
+
+===== src-tauri\src\middleware\audit.rs =====
+El sistema no puede encontrar la ruta especificada.
+
+===== src-tauri\src\middleware\transaction.rs =====
+El sistema no puede encontrar la ruta especificada.
+
+===== src-tauri\src\modules\audit\service.rs =====
+El sistema no puede encontrar la ruta especificada.
+
+===== src-tauri\src\modules\audit\repository.rs =====
+El sistema no puede encontrar la ruta especificada.
+
+#################### DINERO Y ESQUEMA ####################
+
+===== src-tauri\src\types\money.rs =====
+El sistema no puede encontrar la ruta especificada.
+
+===== src-tauri\src\db\schema.rs =====
+El sistema no puede encontrar la ruta especificada.
+
+#################### RUTAS Y CONFIGURACION ####################
+
+===== src-tauri\src\router.rs =====
+El sistema no puede encontrar la ruta especificada.
+
+===== src-tauri\src\modules\sales\router.rs =====
+El sistema no puede encontrar la ruta especificada.
+
+===== src-tauri\Cargo.toml =====
+El sistema no puede encontrar la ruta especificada.
+
+===== package.json =====
+El sistema no puede encontrar el archivo especificado.
+
+#################### MIGRACIONES ####################
+
+===== LISTADO DE MIGRACIONES =====
+El sistema no puede encontrar el archivo especificado.
+
+#################### PRUEBAS BACKEND ####################
+
+===== LISTADO DE PRUEBAS =====
+El sistema no puede encontrar el archivo especificado.
+
+#################### PRUEBAS FRONTEND ####################
+
+===== LISTADO DE PRUEBAS FRONTEND =====
+C:\Users\AndresContreras\Downloads\CashFlow-POS\src-tauri\src\config
+C:\Users\AndresContreras\Downloads\CashFlow-POS\src-tauri\src\db
+C:\Users\AndresContreras\Downloads\CashFlow-POS\src-tauri\src\errors
+C:\Users\AndresContreras\Downloads\CashFlow-POS\src-tauri\src\import_audit.txt
+C:\Users\AndresContreras\Downloads\CashFlow-POS\src-tauri\src\lib.rs
+C:\Users\AndresContreras\Downloads\CashFlow-POS\src-tauri\src\logging.rs
+C:\Users\AndresContreras\Downloads\CashFlow-POS\src-tauri\src\main.rs
+C:\Users\AndresContreras\Downloads\CashFlow-POS\src-tauri\src\middleware
+C:\Users\AndresContreras\Downloads\CashFlow-POS\src-tauri\src\modules
+C:\Users\AndresContreras\Downloads\CashFlow-POS\src-tauri\src\router.rs
+C:\Users\AndresContreras\Downloads\CashFlow-POS\src-tauri\src\types
+C:\Users\AndresContreras\Downloads\CashFlow-POS\src-tauri\src\config\app.rs
+C:\Users\AndresContreras\Downloads\CashFlow-POS\src-tauri\src\config\database.rs
+C:\Users\AndresContreras\Downloads\CashFlow-POS\src-tauri\src\config\mod.rs
+C:\Users\AndresContreras\Downloads\CashFlow-POS\src-tauri\src\config\printer.rs
+C:\Users\AndresContreras\Downloads\CashFlow-POS\src-tauri\src\config\store.rs
+C:\Users\AndresContreras\Downloads\CashFlow-POS\src-tauri\src\db\connection.rs
+C:\Users\AndresContreras\Downloads\CashFlow-POS\src-tauri\src\db\mod.rs
+C:\Users\AndresContreras\Downloads\CashFlow-POS\src-tauri\src\db\schema.rs
+C:\Users\AndresContreras\Downloads\CashFlow-POS\src-tauri\src\errors\app_error.rs
+C:\Users\AndresContreras\Downloads\CashFlow-POS\src-tauri\src\errors\mod.rs
+C:\Users\AndresContreras\Downloads\CashFlow-POS\src-tauri\src\middleware\audit.rs
+C:\Users\AndresContreras\Downloads\CashFlow-POS\src-tauri\src\middleware\auth.rs
+C:\Users\AndresContreras\Downloads\CashFlow-POS\src-tauri\src\middleware\error_handler.rs
+C:\Users\AndresContreras\Downloads\CashFlow-POS\src-tauri\src\middleware\mod.rs
+C:\Users\AndresContreras\Downloads\CashFlow-POS\src-tauri\src\middleware\transaction.rs
+C:\Users\AndresContreras\Downloads\CashFlow-POS\src-tauri\src\modules\audit
+C:\Users\AndresContreras\Downloads\CashFlow-POS\src-tauri\src\modules\billing
+C:\Users\AndresContreras\Downloads\CashFlow-POS\src-tauri\src\modules\cash
+C:\Users\AndresContreras\Downloads\CashFlow-POS\src-tauri\src\modules\customers
+C:\Users\AndresContreras\Downloads\CashFlow-POS\src-tauri\src\modules\debts
+C:\Users\AndresContreras\Downloads\CashFlow-POS\src-tauri\src\modules\developer
+C:\Users\AndresContreras\Downloads\CashFlow-POS\src-tauri\src\modules\inventory
+C:\Users\AndresContreras\Downloads\CashFlow-POS\src-tauri\src\modules\licensing
+C:\Users\AndresContreras\Downloads\CashFlow-POS\src-tauri\src\modules\mod.rs
+C:\Users\AndresContreras\Downloads\CashFlow-POS\src-tauri\src\modules\reports
+C:\Users\AndresContreras\Downloads\CashFlow-POS\src-tauri\src\modules\sales
+C:\Users\AndresContreras\Downloads\CashFlow-POS\src-tauri\src\modules\settings
+C:\Users\AndresContreras\Downloads\CashFlow-POS\src-tauri\src\modules\stocktake
+C:\Users\AndresContreras\Downloads\CashFlow-POS\src-tauri\src\modules\suppliers
+C:\Users\AndresContreras\Downloads\CashFlow-POS\src-tauri\src\modules\audit\actor.rs
+C:\Users\AndresContreras\Downloads\CashFlow-POS\src-tauri\src\modules\audit\changes.rs
+C:\Users\AndresContreras\Downloads\CashFlow-POS\src-tauri\src\modules\audit\dto.rs
+C:\Users\AndresContreras\Downloads\CashFlow-POS\src-tauri\src\modules\audit\failure.rs
+C:\Users\AndresContreras\Downloads\CashFlow-POS\src-tauri\src\modules\audit\handlers.rs
+C:\Users\AndresContreras\Downloads\CashFlow-POS\src-tauri\src\modules\audit\mod.rs
+C:\Users\AndresContreras\Downloads\CashFlow-POS\src-tauri\src\modules\audit\models.rs
+C:\Users\AndresContreras\Downloads\CashFlow-POS\src-tauri\src\modules\audit\repository.rs
+C:\Users\AndresContreras\Downloads\CashFlow-POS\src-tauri\src\modules\audit\router.rs
+C:\Users\AndresContreras\Downloads\CashFlow-POS\src-tauri\src\modules\audit\service.rs
+C:\Users\AndresContreras\Downloads\CashFlow-POS\src-tauri\src\modules\billing\counter.rs
+C:\Users\AndresContreras\Downloads\CashFlow-POS\src-tauri\src\modules\billing\handlers.rs
+C:\Users\AndresContreras\Downloads\CashFlow-POS\src-tauri\src\modules\billing\mod.rs
+C:\Users\AndresContreras\Downloads\CashFlow-POS\src-tauri\src\modules\billing\models.rs
+C:\Users\AndresContreras\Downloads\CashFlow-POS\src-tauri\src\modules\billing\printer.rs
+C:\Users\AndresContreras\Downloads\CashFlow-POS\src-tauri\src\modules\billing\router.rs
+C:\Users\AndresContreras\Downloads\CashFlow-POS\src-tauri\src\modules\billing\ticket.rs
+C:\Users\AndresContreras\Downloads\CashFlow-POS\src-tauri\src\modules\cash\dto.rs
+C:\Users\AndresContreras\Downloads\CashFlow-POS\src-tauri\src\modules\cash\handlers.rs
+C:\Users\AndresContreras\Downloads\CashFlow-POS\src-tauri\src\modules\cash\mod.rs
+C:\Users\AndresContreras\Downloads\CashFlow-POS\src-tauri\src\modules\cash\models.rs
+C:\Users\AndresContreras\Downloads\CashFlow-POS\src-tauri\src\modules\cash\repository.rs
+C:\Users\AndresContreras\Downloads\CashFlow-POS\src-tauri\src\modules\cash\router.rs
+C:\Users\AndresContreras\Downloads\CashFlow-POS\src-tauri\src\modules\cash\service.rs
+C:\Users\AndresContreras\Downloads\CashFlow-POS\src-tauri\src\modules\customers\dto.rs
+C:\Users\AndresContreras\Downloads\CashFlow-POS\src-tauri\src\modules\customers\handlers.rs
+C:\Users\AndresContreras\Downloads\CashFlow-POS\src-tauri\src\modules\customers\mod.rs
+C:\Users\AndresContreras\Downloads\CashFlow-POS\src-tauri\src\modules\customers\models.rs
+C:\Users\AndresContreras\Downloads\CashFlow-POS\src-tauri\src\modules\customers\repository.rs
+C:\Users\AndresContreras\Downloads\CashFlow-POS\src-tauri\src\modules\customers\router.rs
+C:\Users\AndresContreras\Downloads\CashFlow-POS\src-tauri\src\modules\customers\service.rs
+C:\Users\AndresContreras\Downloads\CashFlow-POS\src-tauri\src\modules\debts\dto.rs
+C:\Users\AndresContreras\Downloads\CashFlow-POS\src-tauri\src\modules\debts\handlers.rs
+C:\Users\AndresContreras\Downloads\CashFlow-POS\src-tauri\src\modules\debts\mod.rs
+C:\Users\AndresContreras\Downloads\CashFlow-POS\src-tauri\src\modules\debts\models.rs
+C:\Users\AndresContreras\Downloads\CashFlow-POS\src-tauri\src\modules\debts\repository.rs
+C:\Users\AndresContreras\Downloads\CashFlow-POS\src-tauri\src\modules\debts\router.rs
+C:\Users\AndresContreras\Downloads\CashFlow-POS\src-tauri\src\modules\debts\service.rs
+C:\Users\AndresContreras\Downloads\CashFlow-POS\src-tauri\src\modules\developer\handlers.rs
+C:\Users\AndresContreras\Downloads\CashFlow-POS\src-tauri\src\modules\developer\layer.rs
+C:\Users\AndresContreras\Downloads\CashFlow-POS\src-tauri\src\modules\developer\mod.rs
+C:\Users\AndresContreras\Downloads\CashFlow-POS\src-tauri\src\modules\developer\models.rs
+C:\Users\AndresContreras\Downloads\CashFlow-POS\src-tauri\src\modules\developer\router.rs
+C:\Users\AndresContreras\Downloads\CashFlow-POS\src-tauri\src\modules\developer\state.rs
+C:\Users\AndresContreras\Downloads\CashFlow-POS\src-tauri\src\modules\inventory\barcode.rs
+C:\Users\AndresContreras\Downloads\CashFlow-POS\src-tauri\src\modules\inventory\dto.rs
+C:\Users\AndresContreras\Downloads\CashFlow-POS\src-tauri\src\modules\inventory\export.rs
+C:\Users\AndresContreras\Downloads\CashFlow-POS\src-tauri\src\modules\inventory\handlers.rs
+C:\Users\AndresContreras\Downloads\CashFlow-POS\src-tauri\src\modules\inventory\import.rs
+C:\Users\AndresContreras\Downloads\CashFlow-POS\src-tauri\src\modules\inventory\kardex.rs
+C:\Users\AndresContreras\Downloads\CashFlow-POS\src-tauri\src\modules\inventory\label.rs
+C:\Users\AndresContreras\Downloads\CashFlow-POS\src-tauri\src\modules\inventory\mod.rs
+C:\Users\AndresContreras\Downloads\CashFlow-POS\src-tauri\src\modules\inventory\models.rs
+C:\Users\AndresContreras\Downloads\CashFlow-POS\src-tauri\src\modules\inventory\repository.rs
+C:\Users\AndresContreras\Downloads\CashFlow-POS\src-tauri\src\modules\inventory\router.rs
+C:\Users\AndresContreras\Downloads\CashFlow-POS\src-tauri\src\modules\inventory\service.rs
+C:\Users\AndresContreras\Downloads\CashFlow-POS\src-tauri\src\modules\licensing\handlers.rs
+C:\Users\AndresContreras\Downloads\CashFlow-POS\src-tauri\src\modules\licensing\mod.rs
+C:\Users\AndresContreras\Downloads\CashFlow-POS\src-tauri\src\modules\licensing\models.rs
+C:\Users\AndresContreras\Downloads\CashFlow-POS\src-tauri\src\modules\licensing\public_key.pem
+C:\Users\AndresContreras\Downloads\CashFlow-POS\src-tauri\src\modules\licensing\public_key.rs
+C:\Users\AndresContreras\Downloads\CashFlow-POS\src-tauri\src\modules\licensing\repository.rs
+C:\Users\AndresContreras\Downloads\CashFlow-POS\src-tauri\src\modules\licensing\router.rs
+C:\Users\AndresContreras\Downloads\CashFlow-POS\src-tauri\src\modules\licensing\service.rs
+C:\Users\AndresContreras\Downloads\CashFlow-POS\src-tauri\src\modules\reports\debt_report.rs
+C:\Users\AndresContreras\Downloads\CashFlow-POS\src-tauri\src\modules\reports\handlers.rs
+C:\Users\AndresContreras\Downloads\CashFlow-POS\src-tauri\src\modules\reports\inventory_report.rs
+C:\Users\AndresContreras\Downloads\CashFlow-POS\src-tauri\src\modules\reports\mod.rs
+C:\Users\AndresContreras\Downloads\CashFlow-POS\src-tauri\src\modules\reports\router.rs
+C:\Users\AndresContreras\Downloads\CashFlow-POS\src-tauri\src\modules\reports\sales_report.rs
+C:\Users\AndresContreras\Downloads\CashFlow-POS\src-tauri\src\modules\sales\dto.rs
+C:\Users\AndresContreras\Downloads\CashFlow-POS\src-tauri\src\modules\sales\handlers.rs
+C:\Users\AndresContreras\Downloads\CashFlow-POS\src-tauri\src\modules\sales\mod.rs
+C:\Users\AndresContreras\Downloads\CashFlow-POS\src-tauri\src\modules\sales\models.rs
+C:\Users\AndresContreras\Downloads\CashFlow-POS\src-tauri\src\modules\sales\repository.rs
+C:\Users\AndresContreras\Downloads\CashFlow-POS\src-tauri\src\modules\sales\router.rs
+C:\Users\AndresContreras\Downloads\CashFlow-POS\src-tauri\src\modules\sales\service.rs
+C:\Users\AndresContreras\Downloads\CashFlow-POS\src-tauri\src\modules\settings\dto.rs
+C:\Users\AndresContreras\Downloads\CashFlow-POS\src-tauri\src\modules\settings\handlers.rs
+C:\Users\AndresContreras\Downloads\CashFlow-POS\src-tauri\src\modules\settings\mod.rs
+C:\Users\AndresContreras\Downloads\CashFlow-POS\src-tauri\src\modules\settings\models.rs
+C:\Users\AndresContreras\Downloads\CashFlow-POS\src-tauri\src\modules\settings\repository.rs
+C:\Users\AndresContreras\Downloads\CashFlow-POS\src-tauri\src\modules\settings\router.rs
+C:\Users\AndresContreras\Downloads\CashFlow-POS\src-tauri\src\modules\settings\service.rs
+C:\Users\AndresContreras\Downloads\CashFlow-POS\src-tauri\src\modules\stocktake\dto.rs
+C:\Users\AndresContreras\Downloads\CashFlow-POS\src-tauri\src\modules\stocktake\handlers.rs
+C:\Users\AndresContreras\Downloads\CashFlow-POS\src-tauri\src\modules\stocktake\mod.rs
+C:\Users\AndresContreras\Downloads\CashFlow-POS\src-tauri\src\modules\stocktake\models.rs
+C:\Users\AndresContreras\Downloads\CashFlow-POS\src-tauri\src\modules\stocktake\repository.rs
+C:\Users\AndresContreras\Downloads\CashFlow-POS\src-tauri\src\modules\stocktake\router.rs
+C:\Users\AndresContreras\Downloads\CashFlow-POS\src-tauri\src\modules\stocktake\service.rs
+C:\Users\AndresContreras\Downloads\CashFlow-POS\src-tauri\src\modules\suppliers\dto.rs
+C:\Users\AndresContreras\Downloads\CashFlow-POS\src-tauri\src\modules\suppliers\handlers.rs
+C:\Users\AndresContreras\Downloads\CashFlow-POS\src-tauri\src\modules\suppliers\mod.rs
+C:\Users\AndresContreras\Downloads\CashFlow-POS\src-tauri\src\modules\suppliers\models.rs
+C:\Users\AndresContreras\Downloads\CashFlow-POS\src-tauri\src\modules\suppliers\purchase_order.rs
+C:\Users\AndresContreras\Downloads\CashFlow-POS\src-tauri\src\modules\suppliers\repository.rs
+C:\Users\AndresContreras\Downloads\CashFlow-POS\src-tauri\src\modules\suppliers\router.rs
+C:\Users\AndresContreras\Downloads\CashFlow-POS\src-tauri\src\modules\suppliers\service.rs
+C:\Users\AndresContreras\Downloads\CashFlow-POS\src-tauri\src\types\mod.rs
+C:\Users\AndresContreras\Downloads\CashFlow-POS\src-tauri\src\types\money.rs
+C:\Users\AndresContreras\Downloads\CashFlow-POS\src-tauri\src\types\pagination.rs
