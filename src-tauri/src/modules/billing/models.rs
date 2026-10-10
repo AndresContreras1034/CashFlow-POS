@@ -61,4 +61,6 @@ pub struct TicketData {
     pub discount: i64,
     pub tax: i64,
     pub total: i64,
+    pub cash_received: Option<i64>,
+    pub change_given: Option<i64>,
 }

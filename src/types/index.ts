@@ -423,6 +423,8 @@ export interface Sale {
   status: SaleStatus;
   notes: string | null;
   courtesy_reason: string | null;
+  cash_received: number | null;
+  change_given: number | null;
   created_by: string;
   created_at: string;
 }
@@ -466,6 +468,7 @@ export interface CreateSaleDto {
   items: CreateSaleItemDto[];
   payments: CreateSalePaymentDto[];
   discount?: number | null;
+  cash_received?: number | null;
   notes?: string | null;
   courtesy_reason?: string | null;
   created_by?: string | null;

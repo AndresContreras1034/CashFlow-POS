@@ -34,6 +34,7 @@ export default function Sales() {
   const [lastSaleId, setLastSaleId] = useState<number | null>(null);
   const [isCourtesy, setIsCourtesy] = useState(false);
   const [courtesyReason, setCourtesyReason] = useState('');
+  const [cashReceivedInput, setCashReceivedInput] = useState('');
 
   const [payments, setPayments] = useState<CreateSalePaymentDto[]>([
     { method: 'cash', amount: 0 },
@@ -63,7 +64,21 @@ export default function Sales() {
   const total = courtesyMode ? 0 : subtotal;
   const paymentsTotal = payments.reduce((sum, p) => sum + (p.amount || 0), 0);
   const remaining = courtesyMode ? 0 : total - paymentsTotal;
+  const cashNet = payments.reduce(
+    (sum, payment) => sum + (payment.method === 'cash' ? payment.amount : 0),
+    0
+  );
+  const cashReceived =
+    cashReceivedInput.trim() === '' ? null : parseMoneyInput(cashReceivedInput);
+  const cashReceivedInvalid = cashReceivedInput.trim() !== '' && cashReceived === null;
+  const cashShortage = cashReceived !== null && cashReceived < cashNet;
+  const cashChange =
+    cashReceived !== null && !cashShortage ? cashReceived - cashNet : null;
   const cashBlocked = cashOpen === false;
+
+  useEffect(() => {
+    if (cashNet === 0 || courtesyMode) setCashReceivedInput('');
+  }, [cashNet, courtesyMode]);
 
   function addToCart(v: VariantWithProduct) {
     setNotice(null);
@@ -187,6 +202,7 @@ export default function Sales() {
     attemptRef.current = null;
     setCart([]);
     setPayments([{ method: 'cash', amount: 0 }]);
+    setCashReceivedInput('');
     setLastSaleId(null);
     setIsCourtesy(false);
     setCourtesyReason('');
@@ -220,6 +236,14 @@ export default function Sales() {
         );
         return;
       }
+      if (!courtesyMode && cashShortage) {
+        setError(`El efectivo recibido es menor al efectivo por cubrir (${formatMoney(cashNet)})`);
+        return;
+      }
+      if (!courtesyMode && cashReceivedInvalid) {
+        setError('Ingresa un valor válido para el efectivo recibido');
+        return;
+      }
       const trimmedCourtesyReason = courtesyReason.trim();
       if (courtesyMode && !trimmedCourtesyReason) {
         setError('Escribe el motivo de la venta de cortesía');
@@ -234,6 +258,7 @@ export default function Sales() {
         })),
         discount: courtesyMode ? subtotal : null,
         payments: courtesyMode ? [] : payments.filter((p) => p.amount > 0),
+        cash_received: courtesyMode ? null : cashReceived,
         courtesy_reason: courtesyMode ? trimmedCourtesyReason : null,
         ...actorField('created_by'),
       };
@@ -248,6 +273,7 @@ export default function Sales() {
       setLastSaleId(sale.id);
       setCart([]);
       setPayments([{ method: 'cash', amount: 0 }]);
+      setCashReceivedInput('');
       setIsCourtesy(false);
       setCourtesyReason('');
     } catch (e) {
@@ -443,6 +469,57 @@ export default function Sales() {
               </div>
             </>
           )}
+          {!courtesyMode && cashNet > 0 && (
+            <div className="sales-cash-tender">
+              <div className="sales-cash-input-row">
+                <label htmlFor="cash-received">Recibido en efectivo</label>
+                <input
+                  id="cash-received"
+                  className="form-input"
+                  type="number"
+                  min={0}
+                  step={moneyStep()}
+                  value={cashReceivedInput}
+                  onChange={(e) => setCashReceivedInput(e.target.value)}
+                />
+              </div>
+              <div className="sales-cash-actions">
+                <button
+                  className="btn"
+                  type="button"
+                  onClick={() => setCashReceivedInput(minorToInput(cashNet))}
+                >
+                  Exacto
+                </button>
+                {[2_000, 5_000, 10_000, 20_000, 50_000, 100_000]
+                  .map((pesos) => pesos * 100)
+                  .filter((amount) => amount >= cashNet)
+                  .map((amount) => (
+                    <button
+                      className="btn"
+                      type="button"
+                      key={amount}
+                      onClick={() => setCashReceivedInput(minorToInput(amount))}
+                    >
+                      {formatMoney(amount)}
+                    </button>
+                  ))}
+              </div>
+              {cashShortage && (
+                <div className="sales-cash-shortage">
+                  Faltan {formatMoney(cashNet - (cashReceived ?? 0))} de efectivo.
+                </div>
+              )}
+              {cashReceivedInvalid && (
+                <div className="sales-cash-shortage">
+                  Ingresa un valor válido para el efectivo recibido.
+                </div>
+              )}
+              {cashChange !== null && (
+                <div className="sales-cash-change">Vuelto: {formatMoney(cashChange)}</div>
+              )}
+            </div>
+          )}
 
           <div
             className={
@@ -472,6 +549,8 @@ export default function Sales() {
             disabled={
               confirming ||
               remaining !== 0 ||
+              cashShortage ||
+              cashReceivedInvalid ||
               cashBlocked ||
               (courtesyMode && !courtesyReason.trim())
             }

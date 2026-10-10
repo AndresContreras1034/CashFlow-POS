@@ -289,6 +289,22 @@ export default function SalesHistory() {
                 <div className="sales-history-totals">
                   <div><span>Subtotal</span><span>{formatMoney(selected.subtotal)}</span></div>
                   <div><span>Descuento</span><span>{formatMoney(selected.discount)}</span></div>
+                  {selected.cash_received !== null && (
+                    <>
+                      <div>
+                        <span>Efectivo recibido</span>
+                        <span>{formatMoney(selected.cash_received)}</span>
+                      </div>
+                      <div>
+                        <span>Cambio</span>
+                        <span>
+                          {selected.change_given === null
+                            ? '—'
+                            : formatMoney(selected.change_given)}
+                        </span>
+                      </div>
+                    </>
+                  )}
                   <div className="sales-history-total-final">
                     <span>Total</span><span>{formatMoney(selected.total)}</span>
                   </div>
@@ -296,11 +312,15 @@ export default function SalesHistory() {
 
                 <h3>Pagos</h3>
                 <ul className="sales-history-payments">
-                  {selected.payments.map((p) => (
-                    <li key={p.id}>
-                      {paymentMethodLabel[p.method] ?? p.method} — {formatMoney(p.amount)}
-                    </li>
-                  ))}
+                  {selected.payments.length === 0 ? (
+                    <li>Sin pagos</li>
+                  ) : (
+                    selected.payments.map((p) => (
+                      <li key={p.id}>
+                        {paymentMethodLabel[p.method] ?? p.method} — {formatMoney(p.amount)}
+                      </li>
+                    ))
+                  )}
                 </ul>
 
                 {selected.notes && (

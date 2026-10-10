@@ -23,6 +23,8 @@ struct SaleRow {
     total: i64,
     status: SaleStatus,
     courtesy_reason: Option<String>,
+    cash_received: Option<i64>,
+    change_given: Option<i64>,
     created_by: String,
     created_at: DateTime<Utc>,
 }
@@ -56,6 +58,8 @@ async fn fetch_ticket_data(pool: &PgPool, sale_id: i32) -> Result<TicketData, St
                total,
                status,
                courtesy_reason,
+               cash_received,
+               change_given,
                created_by,
                created_at
            FROM sales
@@ -164,6 +168,8 @@ async fn fetch_ticket_data(pool: &PgPool, sale_id: i32) -> Result<TicketData, St
         discount: sale.discount,
         tax: sale.tax,
         total: sale.total,
+        cash_received: sale.cash_received,
+        change_given: sale.change_given,
     })
 }
 

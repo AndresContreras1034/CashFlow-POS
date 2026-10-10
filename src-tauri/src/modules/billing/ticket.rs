@@ -138,8 +138,22 @@ pub fn build_sale_ticket(data: &TicketData) -> Vec<u8> {
         push_line(&mut b, &two_col("Transferencia:", &money(transfer)));
         push_line(&mut b, &two_col("Tarjeta:", &money(card)));
         push_line(&mut b, &"-".repeat(CHARS_PER_LINE));
-        push_line(&mut b, &two_col("Total recibido:", &money(total_received)));
-        push_line(&mut b, &two_col("Cambio:", &money(change)));
+        if let Some(cash_received) = data.cash_received {
+            push_line(
+                &mut b,
+                &two_col("Efectivo recibido:", &money(cash_received)),
+            );
+            push_line(
+                &mut b,
+                &two_col(
+                    "Cambio:",
+                    &money(data.change_given.unwrap_or((cash_received - cash).max(0))),
+                ),
+            );
+        } else {
+            push_line(&mut b, &two_col("Total recibido:", &money(total_received)));
+            push_line(&mut b, &two_col("Cambio:", &money(change)));
+        }
 
         push_line(&mut b, &"-".repeat(CHARS_PER_LINE));
     }
@@ -376,6 +390,8 @@ mod tests {
             discount: 100,
             tax: 190,
             total: 1090,
+            cash_received: None,
+            change_given: None,
         };
 
         let ticket = String::from_utf8(build_sale_ticket(&data)).unwrap();
@@ -425,6 +441,8 @@ mod tests {
             discount: 1000,
             tax: 0,
             total: 0,
+            cash_received: None,
+            change_given: None,
         };
 
         let ticket = String::from_utf8(build_sale_ticket(&data)).unwrap();
@@ -432,5 +450,67 @@ mod tests {
         assert!(ticket.contains("Motivo:"));
         assert!(!ticket.contains("Efectivo:"));
         assert!(!ticket.contains("Total recibido"));
+    }
+
+    fn cash_payment_ticket(cash_received: Option<i64>, change_given: Option<i64>) -> TicketData {
+        use crate::modules::billing::models::TicketPayment;
+        use crate::modules::sales::models::PaymentMethod;
+
+        TicketData {
+            business_name: "Tienda".into(),
+            tax_id: None,
+            address: None,
+            phone: None,
+            ticket_header: None,
+            ticket_footer: None,
+            tax_name: "IVA".into(),
+            currency_decimals: 0,
+            show_logo: false,
+            show_tax_id: false,
+            show_address: false,
+            show_phone: false,
+            show_cashier: false,
+            show_tax_breakdown: false,
+            show_discounts: false,
+            show_payment_method: true,
+            sale_id: 3,
+            ticket_number: "V-3".into(),
+            created_at: Utc.timestamp_opt(0, 0).single().unwrap(),
+            created_by: "Operador".into(),
+            status: SaleStatus::Completed,
+            courtesy_reason: None,
+            lines: Vec::new(),
+            payments: vec![TicketPayment {
+                method: PaymentMethod::Cash,
+                amount: 10_000,
+            }],
+            subtotal: 10_000,
+            discount: 0,
+            tax: 0,
+            total: 10_000,
+            cash_received,
+            change_given,
+        }
+    }
+
+    #[test]
+    fn ticket_prints_recorded_cash_received_and_change() {
+        let data = cash_payment_ticket(Some(15_000), Some(5_000));
+        let ticket = String::from_utf8(build_sale_ticket(&data)).unwrap();
+
+        assert!(ticket.contains("Efectivo recibido:"));
+        assert!(ticket.contains(&format_money(15_000, 0)));
+        assert!(ticket.contains("Cambio:"));
+        assert!(ticket.contains(&format_money(5_000, 0)));
+        assert!(!ticket.contains("Total recibido:"));
+    }
+
+    #[test]
+    fn ticket_keeps_legacy_total_received_when_cash_received_is_missing() {
+        let data = cash_payment_ticket(None, None);
+        let ticket = String::from_utf8(build_sale_ticket(&data)).unwrap();
+
+        assert!(ticket.contains("Total recibido:"));
+        assert!(ticket.contains(&format_money(10_000, 0)));
     }
 }
