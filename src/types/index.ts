@@ -467,6 +467,7 @@ export interface CreateSaleDto {
   discount?: number | null;
   notes?: string | null;
   created_by?: string | null;
+  idempotency_key?: string | null;
 }
 
 export interface SaleFilterDto {

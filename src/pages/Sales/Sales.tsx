@@ -35,6 +35,8 @@ export default function Sales() {
   ]);
 
   const scanInputRef = useRef<HTMLInputElement>(null);
+  const attemptRef = useRef<{ fingerprint: string; key: string } | null>(null);
+  const submittingRef = useRef(false);
 
   const subtotal = cart.reduce(
     (sum, line) => sum + line.unit_price * line.quantity - line.discount,
@@ -140,6 +142,7 @@ export default function Sales() {
   }
 
   const resetSale = useCallback(() => {
+    attemptRef.current = null;
     setCart([]);
     setPayments([{ method: 'cash', amount: 0 }]);
     setLastSaleId(null);
@@ -147,6 +150,7 @@ export default function Sales() {
   }, []);
 
   async function handleConfirmSale() {
+    if (submittingRef.current) return;
     setError(null);
 
     if (cart.length === 0) {
@@ -162,9 +166,10 @@ export default function Sales() {
       return;
     }
 
+    submittingRef.current = true;
     setConfirming(true);
     try {
-      const sale = await createSale({
+      const payload = {
         items: cart.map((l) => ({
           variant_id: l.variant_id,
           quantity: l.quantity,
@@ -172,13 +177,22 @@ export default function Sales() {
         })),
         payments: payments.filter((p) => p.amount > 0),
         ...actorField('created_by'),
-      });
+      };
+      const fingerprint = JSON.stringify(payload);
+      if (attemptRef.current?.fingerprint !== fingerprint) {
+        attemptRef.current = { fingerprint, key: crypto.randomUUID() };
+      }
+
+      const attempt = attemptRef.current;
+      const sale = await createSale({ ...payload, idempotency_key: attempt.key });
+      attemptRef.current = null;
       setLastSaleId(sale.id);
       setCart([]);
       setPayments([{ method: 'cash', amount: 0 }]);
     } catch (e) {
       setError(String(e));
     } finally {
+      submittingRef.current = false;
       setConfirming(false);
     }
   }

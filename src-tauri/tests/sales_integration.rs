@@ -16,6 +16,7 @@ use pos_lib::modules::sales::{
     service,
 };
 use sqlx::PgPool;
+use uuid::Uuid;
 
 static SEQ: AtomicU32 = AtomicU32::new(1);
 
@@ -110,6 +111,7 @@ fn new_sale(items: Vec<CreateSaleItemDto>, payments: Vec<CreateSalePaymentDto>) 
         discount: None,
         notes: None,
         created_by: Some("test".to_string()),
+        idempotency_key: None,
     }
 }
 
@@ -684,4 +686,150 @@ async fn b07_filtro_de_fecha_respeta_la_zona_de_ajustes(pool: PgPool) {
         r.total, 1,
         "la venta de las 22:30 (Bogotá) debe caer en el día 8"
     );
+}
+
+// ============================================================
+// GRUPO C: idempotencia
+// ============================================================
+
+fn keyed(
+    key: Uuid,
+    items: Vec<CreateSaleItemDto>,
+    payments: Vec<CreateSalePaymentDto>,
+) -> CreateSaleDto {
+    let mut dto = new_sale(items, payments);
+    dto.idempotency_key = Some(key);
+    dto
+}
+
+#[sqlx::test(migrations = "./migrations")]
+async fn c01_reintento_secuencial_devuelve_la_misma_venta(pool: PgPool) {
+    let v = seed_variant(&pool, 10_000, 10).await;
+    open_cash(&pool).await;
+    let key = Uuid::new_v4();
+    let make = || {
+        keyed(
+            key,
+            vec![item(v, 2)],
+            vec![pay(PaymentMethod::Cash, 20_000)],
+        )
+    };
+
+    let first = service::create_sale(&pool, make()).await.unwrap();
+    let second = service::create_sale(&pool, make()).await.unwrap();
+
+    assert_eq!(first.sale.id, second.sale.id);
+    assert_eq!(second.items.len(), 1);
+    assert_eq!(second.payments.len(), 1);
+    assert_eq!(count(&pool, "sales").await, 1);
+    assert_eq!(count(&pool, "inventory_movements").await, 1);
+    assert_eq!(count(&pool, "cash_movements").await, 1);
+    assert_eq!(
+        stock_of(&pool, v).await,
+        8,
+        "el stock se descuenta una sola vez"
+    );
+}
+
+#[sqlx::test(migrations = "./migrations")]
+async fn c02_reintentos_simultaneos_crean_una_sola_venta(pool: PgPool) {
+    let v = seed_variant(&pool, 10_000, 10).await;
+    let key = Uuid::new_v4();
+    let make = || {
+        keyed(
+            key,
+            vec![item(v, 1)],
+            vec![pay(PaymentMethod::Card, 10_000)],
+        )
+    };
+
+    let (r1, r2, r3) = tokio::join!(
+        service::create_sale(&pool, make()),
+        service::create_sale(&pool, make()),
+        service::create_sale(&pool, make()),
+    );
+
+    let a = r1.expect("intento 1");
+    let b = r2.expect("intento 2");
+    let c = r3.expect("intento 3");
+    assert_eq!(a.sale.id, b.sale.id);
+    assert_eq!(b.sale.id, c.sale.id);
+    assert_eq!(count(&pool, "sales").await, 1);
+    assert_eq!(stock_of(&pool, v).await, 9);
+}
+
+#[sqlx::test(migrations = "./migrations")]
+async fn c03_claves_distintas_crean_ventas_distintas(pool: PgPool) {
+    let v = seed_variant(&pool, 10_000, 10).await;
+
+    for _ in 0..2 {
+        service::create_sale(
+            &pool,
+            keyed(
+                Uuid::new_v4(),
+                vec![item(v, 1)],
+                vec![pay(PaymentMethod::Card, 10_000)],
+            ),
+        )
+        .await
+        .unwrap();
+    }
+
+    assert_eq!(count(&pool, "sales").await, 2);
+    assert_eq!(stock_of(&pool, v).await, 8);
+}
+
+#[sqlx::test(migrations = "./migrations")]
+async fn c04_sin_clave_no_hay_deduplicacion(pool: PgPool) {
+    let v = seed_variant(&pool, 10_000, 10).await;
+
+    for _ in 0..2 {
+        service::create_sale(
+            &pool,
+            new_sale(vec![item(v, 1)], vec![pay(PaymentMethod::Card, 10_000)]),
+        )
+        .await
+        .unwrap();
+    }
+
+    assert_eq!(count(&pool, "sales").await, 2);
+}
+
+#[sqlx::test(migrations = "./migrations")]
+async fn c05_un_fallo_no_consume_la_clave(pool: PgPool) {
+    let v = seed_variant(&pool, 10_000, 1).await;
+    let key = Uuid::new_v4();
+
+    let failed = service::create_sale(
+        &pool,
+        keyed(
+            key,
+            vec![item(v, 2)],
+            vec![pay(PaymentMethod::Card, 20_000)],
+        ),
+    )
+    .await;
+    assert!(failed.is_err());
+    assert_untouched(&pool, v, 1).await;
+
+    sqlx::query("UPDATE product_variants SET stock = 5 WHERE id = $1")
+        .bind(v)
+        .execute(&pool)
+        .await
+        .unwrap();
+
+    let ok = service::create_sale(
+        &pool,
+        keyed(
+            key,
+            vec![item(v, 2)],
+            vec![pay(PaymentMethod::Card, 20_000)],
+        ),
+    )
+    .await
+    .expect("la clave no debió quedar consumida por el fallo");
+
+    assert_eq!(count(&pool, "sales").await, 1);
+    assert_eq!(stock_of(&pool, v).await, 3);
+    assert!(ok.sale.id > 0);
 }

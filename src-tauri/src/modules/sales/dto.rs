@@ -1,5 +1,6 @@
 use chrono::NaiveDate;
 use serde::{Deserialize, Serialize};
+use uuid::Uuid;
 
 use crate::modules::sales::models::PaymentMethod;
 
@@ -24,6 +25,9 @@ pub struct CreateSaleDto {
     pub discount: Option<i64>,
     pub notes: Option<String>,
     pub created_by: Option<String>,
+    /// Reintentos con la misma clave devuelven la venta original.
+    #[serde(default)]
+    pub idempotency_key: Option<Uuid>,
 }
 
 #[derive(Debug, Deserialize, Default)]

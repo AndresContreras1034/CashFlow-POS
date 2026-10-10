@@ -76,6 +76,26 @@ impl From<sqlx::Error> for CreateSaleError {
 pub async fn create_sale(pool: &PgPool, dto: CreateSaleDto) -> Result<SaleDetail, CreateSaleError> {
     let mut tx = pool.begin().await?;
 
+    if let Some(key) = dto.idempotency_key {
+        sqlx::query("SELECT pg_advisory_xact_lock(hashtextextended($1, 0))")
+            .bind(key.to_string())
+            .execute(&mut *tx)
+            .await?;
+
+        let existing: Option<i32> =
+            sqlx::query_scalar("SELECT id FROM sales WHERE idempotency_key = $1")
+                .bind(key)
+                .fetch_optional(&mut *tx)
+                .await?;
+
+        if let Some(sale_id) = existing {
+            tx.rollback().await?;
+            return get_sale_by_id(pool, sale_id)
+                .await?
+                .ok_or(CreateSaleError::Db(sqlx::Error::RowNotFound));
+        }
+    }
+
     let created_by = dto
         .created_by
         .clone()
@@ -210,6 +230,14 @@ pub async fn create_sale(pool: &PgPool, dto: CreateSaleDto) -> Result<SaleDetail
     )
     .fetch_one(&mut *tx)
     .await?;
+
+    if let Some(key) = dto.idempotency_key {
+        sqlx::query("UPDATE sales SET idempotency_key = $1 WHERE id = $2")
+            .bind(key)
+            .bind(sale.id)
+            .execute(&mut *tx)
+            .await?;
+    }
 
     // 3. Insertar sale_items y descontar stock de cada uno
     let mut items = Vec::new();
@@ -348,6 +376,7 @@ pub async fn create_sale(pool: &PgPool, dto: CreateSaleDto) -> Result<SaleDetail
                     .collect::<Vec<_>>(),
                 "customer_id": sale.customer_id,
                 "cash_session_id": cash_session_id,
+                "idempotency_key": dto.idempotency_key,
             })),
             error_message: None,
         },
