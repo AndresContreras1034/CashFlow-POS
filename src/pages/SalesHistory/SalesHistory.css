@@ -579,3 +579,8 @@
     width: 100%;
   }
 }
+.sales-history-presets {
+  display: flex;
+  align-items: end;
+  gap: 8px;
+}

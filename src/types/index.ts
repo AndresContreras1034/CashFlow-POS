@@ -172,6 +172,7 @@ export interface StockEntryDto {
 export interface StockOutDto {
   variant_id: number;
   quantity: number;
+  unit_cost?: number | null;
   reason?: MovementReason;
   notes?: string;
   created_by?: string;
@@ -435,6 +436,7 @@ export interface SaleItem {
   variant_id: number;
   quantity: number;
   unit_price: number;
+  unit_cost: number | null;
   discount: number;
   tax: number;
   subtotal: number;
@@ -450,6 +452,14 @@ export interface SalePayment {
 export interface SaleDetail extends Sale {
   items: SaleItem[];
   payments: SalePayment[];
+  item_names: SaleItemName[];
+}
+
+export interface SaleItemName {
+  item_id: number;
+  product_name: string;
+  sku: string | null;
+  attributes: Record<string, unknown>;
 }
 
 export interface CreateSaleItemDto {
@@ -480,8 +490,15 @@ export interface SaleFilterDto {
   customer_id?: number | null;
   date_from?: string | null;
   date_to?: string | null;
+  sale_id?: number | null;
+  payment_method?: string | null;
+  cash_session_id?: number | null;
   page?: number;
   page_size?: number;
+}
+
+export interface SaleListResponse extends PaginatedResponse<Sale> {
+  total_amount: number;
 }
 export interface ImportRowResult {
   row_number: number;

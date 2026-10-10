@@ -1,4 +1,5 @@
 use serde_json::json;
+use std::collections::HashMap;
 use sqlx::PgPool;
 use uuid::Uuid;
 
@@ -149,6 +150,14 @@ pub async fn create_sale(pool: &PgPool, dto: CreateSaleDto) -> Result<SaleDetail
     .fetch_all(&mut *tx)
     .await?;
 
+    let variant_costs: HashMap<i32, i64> =
+        sqlx::query_as::<_, (i32, i64)>("SELECT id, cost FROM product_variants WHERE id = ANY($1)")
+            .bind(&variant_ids)
+            .fetch_all(&mut *tx)
+            .await?
+            .into_iter()
+            .collect();
+
     if variants.len() != variant_ids.len() {
         return Err(CreateSaleError::VariantNotFound);
     }
@@ -164,6 +173,7 @@ pub async fn create_sale(pool: &PgPool, dto: CreateSaleDto) -> Result<SaleDetail
         variant_id: i32,
         quantity: i32,
         unit_price: i64,
+        unit_cost: Option<i64>,
         discount: i64,
         subtotal: i64,
         tax: i64,
@@ -202,6 +212,10 @@ pub async fn create_sale(pool: &PgPool, dto: CreateSaleDto) -> Result<SaleDetail
             variant_id: item.variant_id,
             quantity: item.quantity,
             unit_price: price,
+            unit_cost: variant_costs
+                .get(&item.variant_id)
+                .copied()
+                .filter(|cost| *cost > 0),
             discount,
             subtotal: line_subtotal,
             tax: 0,
@@ -326,19 +340,20 @@ pub async fn create_sale(pool: &PgPool, dto: CreateSaleDto) -> Result<SaleDetail
     // 3. Insertar sale_items y descontar stock de cada uno
     let mut items = Vec::new();
     for line in lines {
-        let saved_item = sqlx::query_as!(
-            SaleItem,
-            "INSERT INTO sale_items (sale_id, variant_id, quantity, unit_price, discount, tax, subtotal)
-             VALUES ($1, $2, $3, $4, $5, $6, $7)
-             RETURNING *",
-            sale.id,
-            line.variant_id,
-            line.quantity,
-            line.unit_price,
-            line.discount,
-            line.tax,
-            line.subtotal
+        let saved_item = sqlx::query_as::<_, SaleItem>(
+            "INSERT INTO sale_items
+                 (sale_id, variant_id, quantity, unit_price, unit_cost, discount, tax, subtotal)
+             VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
+             RETURNING id, sale_id, variant_id, quantity, unit_price, unit_cost, discount, tax, subtotal",
         )
+        .bind(sale.id)
+        .bind(line.variant_id)
+        .bind(line.quantity)
+        .bind(line.unit_price)
+        .bind(line.unit_cost)
+        .bind(line.discount)
+        .bind(line.tax)
+        .bind(line.subtotal)
         .fetch_one(&mut *tx)
         .await?;
 
@@ -362,6 +377,7 @@ pub async fn create_sale(pool: &PgPool, dto: CreateSaleDto) -> Result<SaleDetail
             StockOutDto {
                 variant_id: line.variant_id,
                 quantity: line.quantity,
+                unit_cost: line.unit_cost,
                 reason: None,
                 notes: Some(format!("Venta #{}", sale.id)),
                 created_by: Some(created_by.clone()),
@@ -460,6 +476,7 @@ pub async fn create_sale(pool: &PgPool, dto: CreateSaleDto) -> Result<SaleDetail
         sale,
         items,
         payments,
+        item_names: Vec::new(),
     })
 }
 
@@ -475,11 +492,23 @@ pub async fn get_sale_by_id(pool: &PgPool, id: i32) -> Result<Option<SaleDetail>
 
     let Some(sale) = sale else { return Ok(None) };
 
-    let items = sqlx::query_as!(
-        SaleItem,
-        "SELECT * FROM sale_items WHERE sale_id = $1 ORDER BY id ASC",
-        id
+    let items = sqlx::query_as::<_, SaleItem>(
+        "SELECT id, sale_id, variant_id, quantity, unit_price, unit_cost, discount, tax, subtotal
+         FROM sale_items WHERE sale_id = $1 ORDER BY id ASC",
     )
+    .bind(id)
+    .fetch_all(pool)
+    .await?;
+
+    let item_names = sqlx::query_as::<_, crate::modules::sales::models::SaleItemName>(
+        r#"SELECT si.id AS item_id, p.name AS product_name, v.sku,
+                  COALESCE(v.attributes, '{}'::jsonb) AS attributes
+           FROM sale_items si
+           JOIN product_variants v ON v.id = si.variant_id
+           JOIN products p ON p.id = v.product_id
+           WHERE si.sale_id = $1 ORDER BY si.id"#,
+    )
+    .bind(id)
     .fetch_all(pool)
     .await?;
 
@@ -496,13 +525,14 @@ pub async fn get_sale_by_id(pool: &PgPool, id: i32) -> Result<Option<SaleDetail>
         sale,
         items,
         payments,
+        item_names,
     }))
 }
 
 pub async fn list_sales(
     pool: &PgPool,
     filter: &SaleFilterDto,
-) -> Result<(Vec<Sale>, i64), sqlx::Error> {
+) -> Result<(Vec<Sale>, i64, i64), sqlx::Error> {
     let page = filter.page.unwrap_or(1).max(1);
     let page_size = filter.page_size.unwrap_or(20).clamp(1, 100);
     let offset = (page - 1) * page_size;
@@ -517,36 +547,73 @@ pub async fn list_sales(
                   (created_at AT TIME ZONE (SELECT timezone FROM app_settings WHERE id = 1))::DATE >= $3)
              AND ($4::DATE IS NULL OR
                   (created_at AT TIME ZONE (SELECT timezone FROM app_settings WHERE id = 1))::DATE <= $4)
+             AND ($5::INT IS NULL OR id = $5)
+             AND ($6::TEXT IS NULL OR EXISTS
+                  (SELECT 1 FROM sale_payments sp WHERE sp.sale_id = sales.id AND sp.method::TEXT = $6))
+             AND ($7::INT IS NULL OR cash_session_id = $7)
            ORDER BY created_at DESC
-           LIMIT $5 OFFSET $6"#,
+           LIMIT $8 OFFSET $9"#,
     )
     .bind(filter.status.as_deref())
     .bind(filter.customer_id)
     .bind(filter.date_from)
     .bind(filter.date_to)
+    .bind(filter.sale_id)
+    .bind(filter.payment_method.as_deref())
+    .bind(filter.cash_session_id)
     .bind(page_size)
     .bind(offset)
     .fetch_all(pool)
     .await?;
 
-    let total = sqlx::query_scalar!(
-        r#"SELECT COUNT(*) FROM sales
+    let total = sqlx::query_scalar::<_, i64>(
+        r#"SELECT COUNT(*)::BIGINT FROM sales
            WHERE ($1::TEXT IS NULL OR status::TEXT = $1)
              AND ($2::INT  IS NULL OR customer_id = $2)
              AND ($3::DATE IS NULL OR
                   (created_at AT TIME ZONE (SELECT timezone FROM app_settings WHERE id = 1))::DATE >= $3)
              AND ($4::DATE IS NULL OR
-                  (created_at AT TIME ZONE (SELECT timezone FROM app_settings WHERE id = 1))::DATE <= $4)"#,
-        filter.status,
-        filter.customer_id,
-        filter.date_from,
-        filter.date_to
+                  (created_at AT TIME ZONE (SELECT timezone FROM app_settings WHERE id = 1))::DATE <= $4)
+             AND ($5::INT IS NULL OR id = $5)
+             AND ($6::TEXT IS NULL OR EXISTS
+                  (SELECT 1 FROM sale_payments sp WHERE sp.sale_id = sales.id AND sp.method::TEXT = $6))
+             AND ($7::INT IS NULL OR cash_session_id = $7)"#,
     )
+    .bind(filter.status.as_deref())
+    .bind(filter.customer_id)
+    .bind(filter.date_from)
+    .bind(filter.date_to)
+    .bind(filter.sale_id)
+    .bind(filter.payment_method.as_deref())
+    .bind(filter.cash_session_id)
     .fetch_one(pool)
-    .await?
-    .unwrap_or(0);
+    .await?;
 
-    Ok((rows, total))
+    let total_amount = sqlx::query_scalar::<_, i64>(
+        r#"SELECT COALESCE(SUM(total), 0)::BIGINT FROM sales
+           WHERE status = 'completed'
+             AND ($1::TEXT IS NULL OR status::TEXT = $1)
+             AND ($2::INT IS NULL OR customer_id = $2)
+             AND ($3::DATE IS NULL OR
+                  (created_at AT TIME ZONE (SELECT timezone FROM app_settings WHERE id = 1))::DATE >= $3)
+             AND ($4::DATE IS NULL OR
+                  (created_at AT TIME ZONE (SELECT timezone FROM app_settings WHERE id = 1))::DATE <= $4)
+             AND ($5::INT IS NULL OR id = $5)
+             AND ($6::TEXT IS NULL OR EXISTS
+                  (SELECT 1 FROM sale_payments sp WHERE sp.sale_id = sales.id AND sp.method::TEXT = $6))
+             AND ($7::INT IS NULL OR cash_session_id = $7)"#,
+    )
+    .bind(filter.status.as_deref())
+    .bind(filter.customer_id)
+    .bind(filter.date_from)
+    .bind(filter.date_to)
+    .bind(filter.sale_id)
+    .bind(filter.payment_method.as_deref())
+    .bind(filter.cash_session_id)
+    .fetch_one(pool)
+    .await?;
+
+    Ok((rows, total, total_amount))
 }
 
 #[cfg(test)]

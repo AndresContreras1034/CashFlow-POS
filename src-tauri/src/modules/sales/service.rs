@@ -2,8 +2,8 @@ use sqlx::PgPool;
 
 use crate::errors::app_error::AppError;
 use crate::modules::sales::{
-    dto::{CreateSaleDto, PaginatedResponse, SaleFilterDto},
-    models::{Sale, SaleDetail},
+    dto::{CreateSaleDto, SaleFilterDto, SaleListResponse},
+    models::SaleDetail,
     repository::{self, CreateSaleError},
 };
 
@@ -89,12 +89,27 @@ pub async fn get_sale(pool: &PgPool, id: i32) -> Result<SaleDetail, AppError> {
 pub async fn list_sales(
     pool: &PgPool,
     filter: SaleFilterDto,
-) -> Result<PaginatedResponse<Sale>, AppError> {
+) -> Result<SaleListResponse, AppError> {
+    if filter
+        .payment_method
+        .as_deref()
+        .map_or(false, |method| !matches!(method, "cash" | "card" | "transfer"))
+    {
+        return Err(AppError::validation(
+            "El método de pago debe ser cash, card o transfer",
+        ));
+    }
     let page = filter.page.unwrap_or(1).max(1);
     let page_size = filter.page_size.unwrap_or(20).clamp(1, 100);
 
-    let (data, total) = repository::list_sales(pool, &filter)
+    let (data, total, total_amount) = repository::list_sales(pool, &filter)
         .await
         .map_err(AppError::from)?;
-    Ok(PaginatedResponse::new(data, total, page, page_size))
+    Ok(SaleListResponse::new(
+        data,
+        total,
+        page,
+        page_size,
+        total_amount,
+    ))
 }

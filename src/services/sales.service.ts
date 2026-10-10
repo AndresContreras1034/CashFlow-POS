@@ -1,10 +1,9 @@
 import { invoke } from '@tauri-apps/api/core';
 import type {
-  Sale,
   SaleDetail,
   CreateSaleDto,
   SaleFilterDto,
-  PaginatedResponse,
+  SaleListResponse,
 } from '../types';
 
 export async function createSale(dto: CreateSaleDto): Promise<SaleDetail> {
@@ -17,6 +16,6 @@ export async function getSale(id: number): Promise<SaleDetail> {
 
 export async function listSales(
   filter: SaleFilterDto = {}
-): Promise<PaginatedResponse<Sale>> {
+): Promise<SaleListResponse> {
   return invoke('list_sales', { filter });
 }

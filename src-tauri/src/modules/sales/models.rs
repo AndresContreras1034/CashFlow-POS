@@ -44,9 +44,18 @@ pub struct SaleItem {
     pub variant_id: i32,
     pub quantity: i32,
     pub unit_price: i64,
+    pub unit_cost: Option<i64>,
     pub discount: i64,
     pub tax: i64,
     pub subtotal: i64,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, FromRow)]
+pub struct SaleItemName {
+    pub item_id: i32,
+    pub product_name: String,
+    pub sku: Option<String>,
+    pub attributes: serde_json::Value,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, FromRow)]
@@ -65,4 +74,5 @@ pub struct SaleDetail {
     pub sale: Sale,
     pub items: Vec<SaleItem>,
     pub payments: Vec<SalePayment>,
+    pub item_names: Vec<SaleItemName>,
 }

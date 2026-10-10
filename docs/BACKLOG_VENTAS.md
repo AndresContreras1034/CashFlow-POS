@@ -1,48 +1,36 @@
 # Backlog de ventas
 
-Elementos pendientes basados en la interfaz y los servicios inspeccionados.
+Elementos pendientes y completados basados en la interfaz y los servicios inspeccionados.
 
 1. **Imprimir al confirmar la venta**
-   - **Estado:** pendiente.
-   - **Situación actual:** `Sales.tsx` registra la venta sin llamar a impresión.
-     La acción `printSaleTicket` se ejecuta desde el detalle del historial.
-   - **Trabajo propuesto:** ofrecer la impresión al terminar de confirmar la
-     venta, conservando el manejo visible de errores de impresión.
+   - **Estado:** implementado en punto de venta (impresión manual y preferencia de impresión automática).
+   - **Situación actual:** el banner permite imprimir manualmente; la opción
+     `pos.autoPrint` habilita impresión tras confirmar y muestra errores sin
+     revertir la venta.
 
 2. **Atajos de teclado para el punto de venta**
-   - **Estado:** pendiente.
-   - **Atajos solicitados:** F2 enfoca el escáner; Enter confirma; Esc limpia;
-     `+`/`-` modifican la cantidad; Supr quita la línea seleccionada.
-   - **Situación actual:** no se encontraron estos atajos específicos en
-     `Sales.tsx`; la pantalla dispone de controles con clic e inputs.
+   - **Estado:** parcialmente implementado: F2, F4, F9 y Esc; controles +/- por línea y vaciado con doble confirmación.
+   - **Atajos:** F2 enfoca el escáner, F4 enfoca efectivo, F9 confirma y Esc cierra resultados/aviso. No hay acciones destructivas globales con Enter/Esc/Supr.
+   - **Situación actual:** F2 enfoca el escáner, F4 el efectivo, F9 confirma si
+     está habilitado y Esc cierra resultados/aviso. Hay controles +/- por línea
+     y vaciado de carrito con doble clic dentro de 3 segundos.
 
 3. **Aviso cuando la cantidad supera el stock**
-   - **Estado:** pendiente.
-   - **Situación actual:** cada línea de carrito conserva `stock`, proveniente de
-     la variante, pero la tabla del carrito no lo muestra ni compara visualmente
-     con `quantity`. La validación definitiva de stock se realiza en el backend
-     al confirmar.
-   - **Trabajo propuesto:** mostrar stock disponible y advertir antes de
-     confirmar cuando la cantidad solicitada lo supere, sin sustituir la
-     validación del servidor.
+   - **Estado:** implementado con aviso no bloqueante; el servidor conserva la validación final.
+   - **Situación actual:** la línea muestra el stock recibido y un aviso no
+     bloqueante advierte cantidades superiores; la validación definitiva sigue
+     en backend.
 
 4. **Nombre del producto en el detalle del historial**
-   - **Estado:** pendiente.
-   - **Situación actual:** el detalle muestra `#variant_id`; las filas de ítems
-     devueltas por el servicio de ventas no incluyen el nombre del producto.
-   - **Trabajo propuesto:** devolver y mostrar un nombre legible junto a los
-     atributos de la variante, cuando estén disponibles.
+   - **Estado:** implementado con nombre y atributos; conserva fallback al identificador de variante.
+   - **Situación actual:** `get_sale` devuelve nombre y atributos de cada
+     producto; la interfaz conserva `#variant_id` como fallback.
 
 5. **Ampliar filtros y mostrar el total filtrado**
-   - **Estado:** pendiente.
-   - **Situación actual:** el historial filtra por estado y rango de fechas y
-     pagina los resultados. El valor `total` de la respuesta se usa para contar
-     páginas; no es la suma monetaria de las ventas filtradas. No se encontraron
-     presets Hoy/Ayer/Semana, búsqueda por número, filtro por método de pago ni
-     filtro por turno de caja.
-   - **Trabajo propuesto:** añadir esos presets y filtros, y mostrar la suma
-     monetaria del conjunto que cumpla los filtros, separada de la cantidad de
-     resultados.
+   - **Estado:** implementado (presets, número, método, turno y total de ventas completadas).
+   - **Situación actual:** incluye Hoy/Ayer/7 días, número de venta, método y
+     turno; informa cantidad de resultados y total monetario de ventas
+     completadas conforme a los filtros.
 
 6. **Venta en espera**
    - **Estado:** pendiente.
@@ -65,3 +53,18 @@ Elementos pendientes basados en la interfaz y los servicios inspeccionados.
    - **Trabajo propuesto:** permitir ingresar un porcentaje, calcular el importe
      correspondiente con la precisión monetaria configurada y presentar con
      claridad el valor aplicado.
+
+## Caja, conciliación y devoluciones
+
+- **Defecto — gravedad media:** el cierre deriva el esperado de movimientos
+  (`sale_in` neto y `sale_out`) más apertura; no contrasta sus pagos por venta
+  contra esos movimientos. La consulta de conciliación de solo lectura está en
+  `scripts/sql/caja_conciliacion.sql`.
+- **Anulación/devolución — pendiente:** no se encontró un flujo que cree
+  `SaleOut` o `sale_return`; hace falta definir autorización, reversión del
+  pago/caja, reposición de inventario, estado de la venta y auditoría, todo en
+  una transacción y con referencia a la venta original.
+- **Ventas históricas sin turno — gravedad media:** `cash_session_id` es NULL
+  en ventas anteriores a su incorporación y no se atribuyen a un turno en la
+  conciliación. No se debe inventar un backfill; conservarlas como no
+  conciliadas salvo evidencia fiable para asignarlas.

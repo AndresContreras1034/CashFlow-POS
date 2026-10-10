@@ -440,6 +440,10 @@ pub async fn register_manual_out(
 
     let mut tx = pool.begin().await.map_err(AppError::from)?;
 
+    let dto = crate::modules::inventory::dto::StockOutDto {
+        unit_cost: None,
+        ..dto
+    };
     let updated_variant = repository::apply_stock_out(&mut tx, dto, MovementType::ManualOut)
         .await
         .map_err(AppError::from)?;

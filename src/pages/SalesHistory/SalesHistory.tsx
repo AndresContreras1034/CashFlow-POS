@@ -3,6 +3,7 @@ import type { Sale, SaleDetail, SaleFilterDto, SaleStatus } from '../../types';
 import { listSales, getSale } from '../../services/sales.service';
 import { printSaleTicket } from '../../services/billing.service';
 import { formatMoney } from '../../utils/format';
+import { parseSaleNumber, presetRange, type SaleDatePreset } from '../../utils/salesFilters';
 import './SalesHistory.css';
 
 const statusLabel: Record<SaleStatus, string> = {
@@ -20,13 +21,20 @@ const paymentMethodLabel: Record<string, string> = {
 export default function SalesHistory() {
   const [sales, setSales] = useState<Sale[]>([]);
   const [total, setTotal] = useState(0);
+  const [totalAmount, setTotalAmount] = useState(0);
   const [page, setPage] = useState(1);
   const pageSize = 20;
 
   const [status, setStatus] = useState<string>('');
   const [dateFrom, setDateFrom] = useState('');
   const [dateTo, setDateTo] = useState('');
-  const [applied, setApplied] = useState({ status: '', dateFrom: '', dateTo: '' });
+  const [saleNumber, setSaleNumber] = useState('');
+  const [paymentMethod, setPaymentMethod] = useState('');
+  const [cashSessionId, setCashSessionId] = useState('');
+  const [applied, setApplied] = useState({
+    status: '', dateFrom: '', dateTo: '', saleId: null as number | null,
+    paymentMethod: '', cashSessionId: null as number | null,
+  });
   const reqRef = useRef(0);
 
   const [loading, setLoading] = useState(true);
@@ -48,6 +56,9 @@ export default function SalesHistory() {
         status: applied.status || null,
         date_from: applied.dateFrom || null,
         date_to: applied.dateTo || null,
+        sale_id: applied.saleId,
+        payment_method: applied.paymentMethod || null,
+        cash_session_id: applied.cashSessionId,
         page,
         page_size: pageSize,
       };
@@ -55,6 +66,7 @@ export default function SalesHistory() {
       if (id !== reqRef.current) return;
       setSales(res.data);
       setTotal(res.total);
+      setTotalAmount(res.total_amount);
     } catch (e) {
       if (id !== reqRef.current) return;
       setError(String(e));
@@ -69,6 +81,16 @@ export default function SalesHistory() {
 
   function applyFilters(e: React.FormEvent) {
     e.preventDefault();
+    const saleId = saleNumber.trim() ? parseSaleNumber(saleNumber) : null;
+    const sessionId = cashSessionId.trim() ? Number(cashSessionId) : null;
+    if (saleNumber.trim() && saleId === null) {
+      setError('Ingresa un número de venta válido');
+      return;
+    }
+    if (cashSessionId.trim() && (!Number.isSafeInteger(sessionId) || sessionId! <= 0)) {
+      setError('Ingresa un número de turno válido');
+      return;
+    }
     if (dateFrom && dateTo && dateFrom > dateTo) {
       reqRef.current += 1;
       setLoading(false);
@@ -76,7 +98,7 @@ export default function SalesHistory() {
       return;
     }
     setError(null);
-    setApplied({ status, dateFrom, dateTo });
+    setApplied({ status, dateFrom, dateTo, saleId, paymentMethod, cashSessionId: sessionId });
     setPage(1);
   }
 
@@ -84,7 +106,18 @@ export default function SalesHistory() {
     setStatus('');
     setDateFrom('');
     setDateTo('');
-    setApplied({ status: '', dateFrom: '', dateTo: '' });
+    setSaleNumber('');
+    setPaymentMethod('');
+    setCashSessionId('');
+    setApplied({ status: '', dateFrom: '', dateTo: '', saleId: null, paymentMethod: '', cashSessionId: null });
+    setPage(1);
+  }
+
+  function applyPreset(preset: SaleDatePreset) {
+    const range = presetRange(preset, new Date());
+    setDateFrom(range.from);
+    setDateTo(range.to);
+    setApplied((current) => ({ ...current, dateFrom: range.from, dateTo: range.to }));
     setPage(1);
   }
 
@@ -133,6 +166,11 @@ export default function SalesHistory() {
       {error && <div className="form-error">{error}</div>}
 
       <form className="sales-history-filters" onSubmit={applyFilters}>
+        <div className="sales-history-presets">
+          <button type="button" className="btn" onClick={() => applyPreset('today')}>Hoy</button>
+          <button type="button" className="btn" onClick={() => applyPreset('yesterday')}>Ayer</button>
+          <button type="button" className="btn" onClick={() => applyPreset('week')}>7 días</button>
+        </div>
         <div className="form-field">
           <label>Estado</label>
           <select className="form-input" value={status} onChange={(e) => setStatus(e.target.value)}>
@@ -160,6 +198,23 @@ export default function SalesHistory() {
             onChange={(e) => setDateTo(e.target.value)}
           />
         </div>
+        <div className="form-field">
+          <label>N° venta</label>
+          <input className="form-input" value={saleNumber} onChange={(e) => setSaleNumber(e.target.value)} placeholder="#12 o T-000012" />
+        </div>
+        <div className="form-field">
+          <label>Método de pago</label>
+          <select className="form-input" value={paymentMethod} onChange={(e) => setPaymentMethod(e.target.value)}>
+            <option value="">Todos</option>
+            <option value="cash">Efectivo</option>
+            <option value="card">Tarjeta</option>
+            <option value="transfer">Transferencia</option>
+          </select>
+        </div>
+        <div className="form-field">
+          <label>Turno #</label>
+          <input className="form-input" type="number" min={1} value={cashSessionId} onChange={(e) => setCashSessionId(e.target.value)} />
+        </div>
         <div className="sales-history-filter-actions">
           <button type="submit" className="btn btn-primary">Filtrar</button>
           <button type="button" className="btn" onClick={clearFilters}>Limpiar</button>
@@ -167,6 +222,9 @@ export default function SalesHistory() {
       </form>
 
       <div className="sales-history-card">
+        <p className="sales-history-meta">
+          {total} ventas · Total completadas: {formatMoney(totalAmount)}
+        </p>
         {loading ? (
           <p className="sales-history-meta">Cargando...</p>
         ) : sales.length === 0 ? (
@@ -276,7 +334,18 @@ export default function SalesHistory() {
                   <tbody>
                     {selected.items.map((item) => (
                       <tr key={item.id}>
-                        <td>#{item.variant_id}</td>
+                        <td>
+                          {selected.item_names.find((name) => name.item_id === item.id)?.product_name ??
+                            `#${item.variant_id}`}
+                          {(() => {
+                            const name = selected.item_names.find((entry) => entry.item_id === item.id);
+                            const attrs = name?.attributes ?? {};
+                            const text = Object.entries(attrs)
+                              .map(([key, value]) => `${key}: ${String(value)}`)
+                              .join(', ');
+                            return text ? <div className="sales-history-meta">{text}</div> : null;
+                          })()}
+                        </td>
                         <td>{item.quantity}</td>
                         <td>{formatMoney(item.unit_price)}</td>
                         <td>{formatMoney(item.discount)}</td>

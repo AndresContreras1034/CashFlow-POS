@@ -90,6 +90,8 @@ pub struct StockEntryDto {
 pub struct StockOutDto {
     pub variant_id: i32,
     pub quantity: i32,
+    #[serde(default)]
+    pub unit_cost: Option<i64>,
     pub reason: Option<MovementReason>,
     pub notes: Option<String>,
     pub created_by: Option<String>,

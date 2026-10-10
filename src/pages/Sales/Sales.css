@@ -578,3 +578,46 @@
     font-size: 20px;
   }
 }
+.sales-shortcuts,
+.sales-line-attrs,
+.sales-auto-print {
+  color: var(--text-secondary);
+}
+
+.sales-cart-heading,
+.sales-quantity-controls {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.sales-cart-heading {
+  justify-content: space-between;
+}
+
+.sales-quantity-controls .sales-qty-input {
+  width: 76px;
+}
+
+.sales-stock-warn,
+.sales-stock-warning,
+.sales-print-error {
+  color: var(--warning);
+}
+
+.sales-stock-warning {
+  margin: 12px 0;
+  padding: 10px;
+  background: var(--warning-dim);
+  border-radius: var(--radius);
+}
+
+.sales-auto-print {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.sales-print-error {
+  flex-basis: 100%;
+}

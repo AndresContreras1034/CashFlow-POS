@@ -103,10 +103,10 @@ no funcionalidades ya implementadas.
 
 ### A5-08 — Semántica histórica de `subtotal` y `discount` en auditoría
 
-- **Descripción:** los eventos de negocio de ventas guardan `subtotal` y
-  `discount` como valores de la venta al momento de crearla. Los eventos
-  anteriores a M2 conservan la semántica anterior de esos campos; la tabla de
-  auditoría es append-only y el código actual no recalcula eventos existentes.
+- **Descripción:** los eventos previos a M2 usan `subtotal` neto de línea y
+  `discount` global. Los eventos posteriores usan `subtotal` bruto y `discount`
+  total, con `discount_lines` y `discount_global` en metadata. La auditoría es
+  append-only y los eventos existentes no se recalculan.
 - **Impacto:** comparar directamente eventos históricos con ventas calculadas
   bajo la semántica posterior puede producir interpretaciones o conciliaciones
   incorrectas.

@@ -815,12 +815,13 @@ pub async fn apply_stock_out(
         "INSERT INTO inventory_movements
              (variant_id, movement_type, quantity, stock_before, stock_after,
               unit_cost, sale_id, reason, notes, created_by)
-         VALUES ($1, $2, $3, $4, $5, 0, $6, $7, $8, $9)",
+         VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)",
         dto.variant_id,
         movement_type as MovementType,
         dto.quantity,
         stock_before,
         stock_after,
+        dto.unit_cost.unwrap_or(0),
         dto.sale_id,
         dto.reason as Option<MovementReason>,
         dto.notes,

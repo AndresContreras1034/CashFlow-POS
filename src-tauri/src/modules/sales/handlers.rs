@@ -8,8 +8,8 @@ use crate::modules::audit::{
     models::AuditModule,
 };
 use crate::modules::sales::{
-    dto::{CreateSaleDto, PaginatedResponse, SaleFilterDto},
-    models::{Sale, SaleDetail},
+    dto::{CreateSaleDto, SaleFilterDto, SaleListResponse},
+    models::SaleDetail,
     service,
 };
 
@@ -39,7 +39,7 @@ pub async fn get_sale(pool: State<'_, DbPool>, id: i32) -> Result<SaleDetail, St
 pub async fn list_sales(
     pool: State<'_, DbPool>,
     filter: SaleFilterDto,
-) -> Result<PaginatedResponse<Sale>, String> {
+) -> Result<SaleListResponse, String> {
     service::list_sales(&pool, filter)
         .await
         .map_err(|e: AppError| e.to_string())

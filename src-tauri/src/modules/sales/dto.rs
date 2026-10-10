@@ -38,6 +38,9 @@ pub struct SaleFilterDto {
     pub customer_id: Option<i32>,
     pub date_from: Option<NaiveDate>,
     pub date_to: Option<NaiveDate>,
+    pub sale_id: Option<i32>,
+    pub payment_method: Option<String>,
+    pub cash_session_id: Option<i32>,
     pub page: Option<i64>,
     pub page_size: Option<i64>,
 }
@@ -49,6 +52,40 @@ pub struct PaginatedResponse<T> {
     pub page: i64,
     pub page_size: i64,
     pub total_pages: i64,
+}
+
+#[derive(Debug, Serialize)]
+pub struct SaleListResponse {
+    pub data: Vec<crate::modules::sales::models::Sale>,
+    pub total: i64,
+    pub page: i64,
+    pub page_size: i64,
+    pub total_pages: i64,
+    pub total_amount: i64,
+}
+
+impl SaleListResponse {
+    pub fn new(
+        data: Vec<crate::modules::sales::models::Sale>,
+        total: i64,
+        page: i64,
+        page_size: i64,
+        total_amount: i64,
+    ) -> Self {
+        let total_pages = if page_size > 0 {
+            (total + page_size - 1) / page_size
+        } else {
+            0
+        };
+        Self {
+            data,
+            total,
+            page,
+            page_size,
+            total_pages,
+            total_amount,
+        }
+    }
 }
 
 impl<T> PaginatedResponse<T> {

@@ -2,6 +2,7 @@ import { useState, useRef, useCallback, useEffect } from 'react';
 import type { CreateSalePaymentDto, PaymentMethod, VariantWithProduct } from '../../types';
 import { findByBarcode, searchVariants, getVariant } from '../../services/inventory.service';
 import { createSale } from '../../services/sales.service';
+import { printSaleTicket } from '../../services/billing.service';
 import { getCurrentCashSession } from '../../services/cash.service';
 import { formatMoney, parseMoneyInput, minorToInput, moneyStep } from '../../utils/format';
 import { actorField } from '../../utils/preferences';
@@ -35,12 +36,24 @@ export default function Sales() {
   const [isCourtesy, setIsCourtesy] = useState(false);
   const [courtesyReason, setCourtesyReason] = useState('');
   const [cashReceivedInput, setCashReceivedInput] = useState('');
+  const [autoPrint, setAutoPrint] = useState(() => {
+    try {
+      return localStorage.getItem('pos.autoPrint') === 'true';
+    } catch {
+      return false;
+    }
+  });
+  const [printError, setPrintError] = useState<string | null>(null);
+  const [clearPending, setClearPending] = useState(false);
 
   const [payments, setPayments] = useState<CreateSalePaymentDto[]>([
     { method: 'cash', amount: 0 },
   ]);
 
   const scanInputRef = useRef<HTMLInputElement>(null);
+  const cashInputRef = useRef<HTMLInputElement>(null);
+  const confirmButtonRef = useRef<HTMLButtonElement>(null);
+  const clearTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const attemptRef = useRef<{ fingerprint: string; key: string } | null>(null);
   const submittingRef = useRef(false);
 
@@ -75,6 +88,7 @@ export default function Sales() {
   const cashChange =
     cashReceived !== null && !cashShortage ? cashReceived - cashNet : null;
   const cashBlocked = cashOpen === false;
+  const oversold = cart.some((line) => line.quantity > line.stock);
 
   useEffect(() => {
     if (cashNet === 0 || courtesyMode) setCashReceivedInput('');
@@ -207,8 +221,55 @@ export default function Sales() {
     setIsCourtesy(false);
     setCourtesyReason('');
     setError(null);
+    setPrintError(null);
+    setClearPending(false);
+    if (clearTimerRef.current) clearTimeout(clearTimerRef.current);
     void refreshCash();
   }, [refreshCash]);
+
+  useEffect(() => {
+    function onKeyDown(event: KeyboardEvent) {
+      if (event.key === 'F2') {
+        event.preventDefault();
+        scanInputRef.current?.focus();
+      } else if (event.key === 'F4' && cashNet > 0 && !courtesyMode) {
+        event.preventDefault();
+        cashInputRef.current?.focus();
+      } else if (event.key === 'F9' && confirmButtonRef.current && !confirmButtonRef.current.disabled) {
+        event.preventDefault();
+        confirmButtonRef.current.click();
+      } else if (event.key === 'Escape') {
+        setSearchResults([]);
+        setNotice(null);
+      }
+    }
+    window.addEventListener('keydown', onKeyDown);
+    return () => window.removeEventListener('keydown', onKeyDown);
+  }, [cashNet, courtesyMode]);
+
+  useEffect(
+    () => () => {
+      if (clearTimerRef.current) clearTimeout(clearTimerRef.current);
+    },
+    []
+  );
+
+  function requestClearCart() {
+    if (!clearPending) {
+      setClearPending(true);
+      clearTimerRef.current = setTimeout(() => setClearPending(false), 3000);
+      return;
+    }
+    setCart([]);
+    setPayments([{ method: 'cash', amount: 0 }]);
+    setCashReceivedInput('');
+    setIsCourtesy(false);
+    setCourtesyReason('');
+    attemptRef.current = null;
+    setNotice(null);
+    setClearPending(false);
+    if (clearTimerRef.current) clearTimeout(clearTimerRef.current);
+  }
 
   async function handleConfirmSale() {
     if (submittingRef.current) return;
@@ -258,7 +319,7 @@ export default function Sales() {
         })),
         discount: courtesyMode ? subtotal : null,
         payments: courtesyMode ? [] : payments.filter((p) => p.amount > 0),
-        cash_received: courtesyMode ? null : cashReceived,
+        ...(cashReceived === null || courtesyMode ? {} : { cash_received: cashReceived }),
         courtesy_reason: courtesyMode ? trimmedCourtesyReason : null,
         ...actorField('created_by'),
       };
@@ -271,11 +332,19 @@ export default function Sales() {
       const sale = await createSale({ ...payload, idempotency_key: attempt.key });
       attemptRef.current = null;
       setLastSaleId(sale.id);
+      setPrintError(null);
       setCart([]);
       setPayments([{ method: 'cash', amount: 0 }]);
       setCashReceivedInput('');
       setIsCourtesy(false);
       setCourtesyReason('');
+      if (autoPrint) {
+        try {
+          await printSaleTicket(sale.id);
+        } catch (e) {
+          setPrintError(`Venta #${sale.id} registrada, pero no se pudo imprimir: ${String(e)}`);
+        }
+      }
     } catch (e) {
       const message = String(e);
       setError(message);
@@ -291,13 +360,29 @@ export default function Sales() {
   return (
     <div className="sales-page">
       <h1>Ventas</h1>
+      <p className="sales-shortcuts">Atajos: F2 escáner · F4 efectivo · F9 confirmar · Esc cerrar aviso</p>
 
       {error && <div className="form-error">{error}</div>}
+      {printError && !lastSaleId && <div className="form-error">{printError}</div>}
       {notice && <div className="sales-meta">{notice}</div>}
 
       {lastSaleId && (
         <div className="sales-success">
           Venta #{lastSaleId} registrada correctamente.
+          {printError && <div className="sales-print-error">{printError}</div>}
+          <button
+            className="btn"
+            onClick={async () => {
+              try {
+                setPrintError(null);
+                await printSaleTicket(lastSaleId);
+              } catch (e) {
+                setPrintError(`Venta #${lastSaleId} registrada, pero no se pudo imprimir: ${String(e)}`);
+              }
+            }}
+          >
+            Imprimir ticket
+          </button>
           <button className="btn" onClick={resetSale}>
             Nueva venta
           </button>
@@ -333,7 +418,14 @@ export default function Sales() {
       </div>
 
       <div className="sales-card">
-        <h2>Carrito</h2>
+        <div className="sales-cart-heading">
+          <h2>Carrito</h2>
+          {cart.length > 0 && (
+            <button className="btn" type="button" onClick={requestClearCart}>
+              {clearPending ? '¿Seguro?' : 'Vaciar carrito'}
+            </button>
+          )}
+        </div>
         {cart.length === 0 ? (
           <p className="sales-meta">Sin productos todavía.</p>
         ) : (
@@ -351,23 +443,30 @@ export default function Sales() {
             <tbody>
               {cart.map((line) => (
                 <tr key={line.variant_id}>
-                  <td>
+                  <td className={line.quantity > line.stock ? 'sales-stock-warn' : undefined}>
                     {line.product_name}
                     {attributesLabel(line.attributes) && (
                       <div className="sales-line-attrs">{attributesLabel(line.attributes)}</div>
                     )}
+                    <div className="sales-line-attrs">Stock: {line.stock}</div>
                   </td>
                   <td>{formatMoney(line.unit_price)}</td>
                   <td>
-                    <input
-                      className="form-input sales-qty-input"
-                      type="number"
-                      min={1}
-                      value={line.quantity}
-                      onChange={(e) =>
-                        updateQuantity(line.variant_id, parseInt(e.target.value || '1', 10))
-                      }
-                    />
+                    <div className="sales-quantity-controls">
+                      <button type="button" className="btn" aria-label="Disminuir cantidad"
+                        onClick={() => updateQuantity(line.variant_id, line.quantity - 1)}>−</button>
+                      <input
+                        className="form-input sales-qty-input"
+                        type="number"
+                        min={1}
+                        value={line.quantity}
+                        onChange={(e) =>
+                          updateQuantity(line.variant_id, parseInt(e.target.value || '1', 10))
+                        }
+                      />
+                      <button type="button" className="btn" aria-label="Aumentar cantidad"
+                        onClick={() => updateQuantity(line.variant_id, line.quantity + 1)}>+</button>
+                    </div>
                   </td>
                   <td>
                     <input
@@ -398,6 +497,21 @@ export default function Sales() {
       {cart.length > 0 && (
         <div className="sales-card">
           <h2>Pago</h2>
+          <label className="sales-auto-print">
+            <input
+              type="checkbox"
+              checked={autoPrint}
+              onChange={(event) => {
+                setAutoPrint(event.target.checked);
+                try {
+                  localStorage.setItem('pos.autoPrint', String(event.target.checked));
+                } catch (e) {
+                  setPrintError(`No se pudo guardar la preferencia de impresión: ${String(e)}`);
+                }
+              }}
+            />
+            Imprimir al confirmar
+          </label>
           <label className="sales-courtesy-toggle">
             <input
               type="checkbox"
@@ -474,6 +588,7 @@ export default function Sales() {
               <div className="sales-cash-input-row">
                 <label htmlFor="cash-received">Recibido en efectivo</label>
                 <input
+                  ref={cashInputRef}
                   id="cash-received"
                   className="form-input"
                   type="number"
@@ -543,8 +658,14 @@ export default function Sales() {
               </button>
             </div>
           )}
+          {oversold && (
+            <div className="sales-stock-warning">
+              Hay productos que superan el stock mostrado; el servidor confirmará.
+            </div>
+          )}
 
           <button
+            ref={confirmButtonRef}
             className="btn btn-primary sales-confirm-btn"
             disabled={
               confirming ||

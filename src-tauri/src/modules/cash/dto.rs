@@ -31,7 +31,7 @@ pub struct CreateMovementDto {
     pub amount: i64,
     pub notes: Option<String>,
     pub created_by: Option<String>,
-    // Reservado para cuando exista modules::sales; no se usa todavía.
+    // En movimientos de venta enlaza la operación que los originó.
     pub sale_id: Option<i32>,
 }
 
