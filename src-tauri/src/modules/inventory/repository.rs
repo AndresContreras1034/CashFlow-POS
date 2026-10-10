@@ -833,6 +833,55 @@ pub async fn apply_stock_out(
     Ok(variant)
 }
 
+/// Restores sold stock and records its return in the caller's transaction.
+pub async fn apply_stock_return(
+    conn: &mut PgConnection,
+    variant_id: i32,
+    quantity: i32,
+    unit_cost: Option<i64>,
+    sale_id: i32,
+    notes: &str,
+    created_by: &str,
+) -> Result<ProductVariant, sqlx::Error> {
+    let stock_before = sqlx::query_scalar::<_, i32>(
+        "SELECT stock FROM product_variants WHERE id = $1 FOR UPDATE",
+    )
+    .bind(variant_id)
+    .fetch_one(&mut *conn)
+    .await?;
+    let stock_after = stock_before
+        .checked_add(quantity)
+        .ok_or(sqlx::Error::Protocol("stock overflow on sale return".into()))?;
+
+    let variant = sqlx::query_as::<_, ProductVariant>(
+        "UPDATE product_variants SET stock = $1 WHERE id = $2 RETURNING *",
+    )
+    .bind(stock_after)
+    .bind(variant_id)
+    .fetch_one(&mut *conn)
+    .await?;
+
+    sqlx::query(
+        "INSERT INTO inventory_movements
+             (variant_id, movement_type, quantity, stock_before, stock_after,
+              unit_cost, sale_id, notes, created_by)
+         VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)",
+    )
+    .bind(variant_id)
+    .bind(MovementType::SaleReturn)
+    .bind(quantity)
+    .bind(stock_before)
+    .bind(stock_after)
+    .bind(unit_cost.unwrap_or(0))
+    .bind(sale_id)
+    .bind(notes)
+    .bind(created_by)
+    .execute(&mut *conn)
+    .await?;
+
+    Ok(variant)
+}
+
 /// Ajuste por conteo físico sobre la conexión/transacción del llamador.
 pub async fn apply_stock_adjustment(
     conn: &mut PgConnection,

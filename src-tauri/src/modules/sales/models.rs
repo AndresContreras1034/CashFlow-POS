@@ -35,6 +35,9 @@ pub struct Sale {
     pub courtesy_reason: Option<String>,
     pub created_by: String,
     pub created_at: DateTime<Utc>,
+    pub voided_at: Option<DateTime<Utc>>,
+    pub void_reason: Option<String>,
+    pub voided_by: Option<String>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, FromRow)]

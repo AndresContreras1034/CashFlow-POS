@@ -428,6 +428,9 @@ export interface Sale {
   change_given: number | null;
   created_by: string;
   created_at: string;
+  voided_at: string | null;
+  void_reason: string | null;
+  voided_by: string | null;
 }
 
 export interface SaleItem {
@@ -483,6 +486,12 @@ export interface CreateSaleDto {
   courtesy_reason?: string | null;
   created_by?: string | null;
   idempotency_key?: string | null;
+}
+
+export interface VoidSaleDto {
+  target_status: 'cancelled' | 'refunded';
+  reason: string;
+  performed_by?: string | null;
 }
 
 export interface SaleFilterDto {

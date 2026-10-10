@@ -1,8 +1,9 @@
 import { useEffect, useState, useCallback, useRef } from 'react';
-import type { Sale, SaleDetail, SaleFilterDto, SaleStatus } from '../../types';
-import { listSales, getSale } from '../../services/sales.service';
+import type { Sale, SaleDetail, SaleFilterDto, SaleStatus, VoidSaleDto } from '../../types';
+import { listSales, getSale, voidSale } from '../../services/sales.service';
 import { printSaleTicket } from '../../services/billing.service';
 import { formatMoney } from '../../utils/format';
+import { actorField } from '../../utils/preferences';
 import { parseSaleNumber, presetRange, type SaleDatePreset } from '../../utils/salesFilters';
 import './SalesHistory.css';
 
@@ -46,6 +47,10 @@ export default function SalesHistory() {
   const [printing, setPrinting] = useState(false);
   const [printError, setPrintError] = useState<string | null>(null);
   const [printSuccess, setPrintSuccess] = useState(false);
+  const [voidFormOpen, setVoidFormOpen] = useState(false);
+  const [voidTarget, setVoidTarget] = useState<VoidSaleDto['target_status']>('cancelled');
+  const [voidReason, setVoidReason] = useState('');
+  const [voiding, setVoiding] = useState(false);
 
   const load = useCallback(async () => {
     const id = ++reqRef.current;
@@ -157,6 +162,30 @@ export default function SalesHistory() {
     }
   }
 
+  async function handleVoid() {
+    if (!selected || voiding || !voidReason.trim()) return;
+    setVoiding(true);
+    setError(null);
+    try {
+      const updated = await voidSale(selected.id, {
+        target_status: voidTarget,
+        reason: voidReason.trim(),
+        ...actorField('performed_by'),
+      });
+      setSelected(updated);
+      setVoidFormOpen(false);
+      setVoidReason('');
+      await load();
+    } catch (e) {
+      setError(String(e));
+    } finally {
+      setVoiding(false);
+    }
+  }
+
+  const cashToReturn = selected?.payments
+    .filter((payment) => payment.method === 'cash')
+    .reduce((sum, payment) => sum + payment.amount, 0) ?? 0;
   const totalPages = Math.max(1, Math.ceil(total / pageSize));
 
   return (
@@ -314,6 +343,86 @@ export default function SalesHistory() {
                   {new Date(selected.created_at).toLocaleString('es-CO')} — {statusLabel[selected.status]}
                   {' · '}Vendedor: {selected.created_by}
                 </p>
+                {selected.status === 'completed' ? (
+                  <div className="sales-history-void-actions">
+                    {!voidFormOpen ? (
+                      <button
+                        className="btn btn-danger"
+                        type="button"
+                        onClick={() => {
+                          setVoidTarget('cancelled');
+                          setVoidReason('');
+                          setVoidFormOpen(true);
+                        }}
+                      >
+                        Anular / devolver
+                      </button>
+                    ) : (
+                      <div className="sales-history-void-form">
+                        <div className="form-field">
+                          <label htmlFor="sale-void-target">Operación</label>
+                          <select
+                            id="sale-void-target"
+                            className="form-input"
+                            value={voidTarget}
+                            onChange={(event) =>
+                              setVoidTarget(event.target.value as VoidSaleDto['target_status'])
+                            }
+                            disabled={voiding}
+                          >
+                            <option value="cancelled">Anulación</option>
+                            <option value="refunded">Devolución</option>
+                          </select>
+                        </div>
+                        <div className="form-field">
+                          <label htmlFor="sale-void-reason">Motivo</label>
+                          <textarea
+                            id="sale-void-reason"
+                            className="form-input"
+                            maxLength={200}
+                            value={voidReason}
+                            onChange={(event) => setVoidReason(event.target.value)}
+                            disabled={voiding}
+                          />
+                        </div>
+                        <p className="sales-history-void-notice">
+                          {cashToReturn > 0
+                            ? `Se repondrá el stock y se devolverán ${formatMoney(cashToReturn)} en efectivo del turno actual.`
+                            : 'Se repondrá el stock. Esta venta no tiene efectivo que devolver.'}
+                        </p>
+                        <div className="sales-history-modal-actions">
+                          <button
+                            className="btn btn-danger"
+                            type="button"
+                            onClick={() => void handleVoid()}
+                            disabled={voiding || !voidReason.trim()}
+                          >
+                            {voiding ? 'Procesando...' : 'Confirmar'}
+                          </button>
+                          <button
+                            className="btn"
+                            type="button"
+                            onClick={() => setVoidFormOpen(false)}
+                            disabled={voiding}
+                          >
+                            Cancelar
+                          </button>
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                ) : (
+                  <div className="sales-history-void-details">
+                    <strong>{statusLabel[selected.status]}</strong>
+                    <span>Motivo: {selected.void_reason ?? '—'}</span>
+                    <span>
+                      Fecha: {selected.voided_at
+                        ? new Date(selected.voided_at).toLocaleString('es-CO')
+                        : '—'}
+                    </span>
+                    <span>Operador: {selected.voided_by ?? '—'}</span>
+                  </div>
+                )}
                 {selected.courtesy_reason && (
                   <div className="sales-history-courtesy-reason">
                     <strong>Venta de cortesía</strong>

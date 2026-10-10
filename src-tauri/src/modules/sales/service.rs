@@ -2,9 +2,9 @@ use sqlx::PgPool;
 
 use crate::errors::app_error::AppError;
 use crate::modules::sales::{
-    dto::{CreateSaleDto, SaleFilterDto, SaleListResponse},
-    models::SaleDetail,
-    repository::{self, CreateSaleError},
+    dto::{CreateSaleDto, SaleFilterDto, SaleListResponse, VoidSaleDto},
+    models::{SaleDetail, SaleStatus},
+    repository::{self, CreateSaleError, VoidSaleError},
 };
 
 pub async fn create_sale(pool: &PgPool, dto: CreateSaleDto) -> Result<SaleDetail, AppError> {
@@ -84,6 +84,38 @@ pub async fn get_sale(pool: &PgPool, id: i32) -> Result<SaleDetail, AppError> {
         .await
         .map_err(AppError::from)?
         .ok_or_else(|| AppError::not_found("Venta no encontrada"))
+}
+
+pub async fn void_sale(
+    pool: &PgPool,
+    id: i32,
+    mut dto: VoidSaleDto,
+) -> Result<SaleDetail, AppError> {
+    if !matches!(dto.target_status, SaleStatus::Cancelled | SaleStatus::Refunded) {
+        return Err(AppError::validation(
+            "El estado destino debe ser anulación o devolución",
+        ));
+    }
+    dto.reason = dto.reason.trim().to_string();
+    let reason_length = dto.reason.chars().count();
+    if !(1..=200).contains(&reason_length) {
+        return Err(AppError::validation(
+            "El motivo debe tener entre 1 y 200 caracteres",
+        ));
+    }
+
+    repository::void_sale(pool, id, dto)
+        .await
+        .map_err(|error| match error {
+            VoidSaleError::Db(db_error) => AppError::from(db_error),
+            VoidSaleError::NotFound => AppError::not_found("La venta no existe"),
+            VoidSaleError::NotCompleted(_) => {
+                AppError::validation("La venta ya está anulada/devuelta")
+            }
+            VoidSaleError::CashSessionRequired => AppError::validation(
+                "Para devolver efectivo hay que tener un turno de caja abierto",
+            ),
+        })
 }
 
 pub async fn list_sales(

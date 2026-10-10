@@ -3,6 +3,7 @@ use serde::{Deserialize, Serialize};
 use uuid::Uuid;
 
 use crate::modules::sales::models::PaymentMethod;
+use crate::modules::sales::models::SaleStatus;
 
 #[derive(Debug, Deserialize)]
 pub struct CreateSaleItemDto {
@@ -30,6 +31,13 @@ pub struct CreateSaleDto {
     /// Reintentos con la misma clave devuelven la venta original.
     #[serde(default)]
     pub idempotency_key: Option<Uuid>,
+}
+
+#[derive(Debug, Deserialize)]
+pub struct VoidSaleDto {
+    pub target_status: SaleStatus,
+    pub reason: String,
+    pub performed_by: Option<String>,
 }
 
 #[derive(Debug, Deserialize, Default)]

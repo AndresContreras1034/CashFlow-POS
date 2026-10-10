@@ -60,10 +60,15 @@ Elementos pendientes y completados basados en la interfaz y los servicios inspec
   (`sale_in` neto y `sale_out`) más apertura; no contrasta sus pagos por venta
   contra esos movimientos. La consulta de conciliación de solo lectura está en
   `scripts/sql/caja_conciliacion.sql`.
-- **Anulación/devolución — pendiente:** no se encontró un flujo que cree
-  `SaleOut` o `sale_return`; hace falta definir autorización, reversión del
-  pago/caja, reposición de inventario, estado de la venta y auditoría, todo en
-  una transacción y con referencia a la venta original.
+- **Anulación/devolución total — implementada:** desde el historial se puede
+  anular una venta completada o marcarla como devuelta. Se reponen las líneas
+  completas y el efectivo neto se registra como `sale_out` en el turno abierto
+  actual (nunca se usa el importe de efectivo recibido); el proceso es atómico
+  y auditado. El orden de bloqueos es venta, turno si aplica y variantes por id.
+- **Pendiente F3:** autorización de supervisor. El flujo no admite devolución
+  parcial.
+- **Migración 021:** `sales_void_consistency_chk` se crea `NOT VALID`; revisar
+  los datos históricos y ejecutar `VALIDATE CONSTRAINT` posteriormente.
 - **Ventas históricas sin turno — gravedad media:** `cash_session_id` es NULL
   en ventas anteriores a su incorporación y no se atribuyen a un turno en la
   conciliación. No se debe inventar un backfill; conservarlas como no

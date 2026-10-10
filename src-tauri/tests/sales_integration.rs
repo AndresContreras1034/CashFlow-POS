@@ -1733,8 +1733,14 @@ async fn g04_total_filtrado_solo_suma_ventas_completadas(pool: PgPool) {
         .await.unwrap();
     let cancelled = service::create_sale(&pool, new_sale(vec![item(v, 1)], vec![pay(PaymentMethod::Card, 10_000)]))
         .await.unwrap();
-    sqlx::query("UPDATE sales SET status = 'cancelled' WHERE id = $1")
-        .bind(cancelled.sale.id).execute(&pool).await.unwrap();
+    sqlx::query(
+        "UPDATE sales SET status = 'cancelled', voided_at = NOW(), void_reason = 'test', \
+         voided_by = 'test' WHERE id = $1",
+    )
+    .bind(cancelled.sale.id)
+    .execute(&pool)
+    .await
+    .unwrap();
     let listed = service::list_sales(&pool, SaleFilterDto::default()).await.unwrap();
     assert_eq!(listed.total_amount, completed.sale.total);
 }

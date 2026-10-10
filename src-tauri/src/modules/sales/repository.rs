@@ -17,8 +17,8 @@ use crate::modules::inventory::{
     dto::StockOutDto, models::MovementType, repository as inventory_repo,
 };
 use crate::modules::sales::{
-    dto::{CreateSaleDto, SaleFilterDto},
-    models::{PaymentMethod, Sale, SaleDetail, SaleItem, SalePayment},
+    dto::{CreateSaleDto, SaleFilterDto, VoidSaleDto},
+    models::{PaymentMethod, Sale, SaleDetail, SaleItem, SalePayment, SaleStatus},
 };
 use crate::types::money::tax_included_in;
 
@@ -45,6 +45,19 @@ pub enum CreateSaleError {
         available: i32,
         requested: i32,
     },
+}
+
+pub enum VoidSaleError {
+    Db(sqlx::Error),
+    NotFound,
+    NotCompleted(SaleStatus),
+    CashSessionRequired,
+}
+
+impl From<sqlx::Error> for VoidSaleError {
+    fn from(error: sqlx::Error) -> Self {
+        Self::Db(error)
+    }
 }
 
 fn allocate_proportionally(amount: i64, weights: &[i64]) -> Vec<i64> {
@@ -315,7 +328,8 @@ pub async fn create_sale(pool: &PgPool, dto: CreateSaleDto) -> Result<SaleDetail
                 cash_received, change_given, created_by, gross_semantics)
            VALUES ($1, $2, $3, $4, $5, 'completed', $6, $7, $8, $9, $10, TRUE)
            RETURNING id, customer_id, subtotal, tax, discount, total, cash_received,
-                     change_given, status, notes, courtesy_reason, created_by, created_at"#,
+                     change_given, status, notes, courtesy_reason, created_by, created_at,
+                     voided_at, void_reason, voided_by"#,
     )
     .bind(dto.customer_id)
     .bind(gross_total)
@@ -483,7 +497,8 @@ pub async fn create_sale(pool: &PgPool, dto: CreateSaleDto) -> Result<SaleDetail
 pub async fn get_sale_by_id(pool: &PgPool, id: i32) -> Result<Option<SaleDetail>, sqlx::Error> {
     let sale = sqlx::query_as::<_, Sale>(
         r#"SELECT id, customer_id, subtotal, tax, discount, total,
-                  cash_received, change_given, status, notes, courtesy_reason, created_by, created_at
+                  cash_received, change_given, status, notes, courtesy_reason, created_by, created_at,
+                  voided_at, void_reason, voided_by
            FROM sales WHERE id = $1"#,
     )
     .bind(id)
@@ -529,6 +544,160 @@ pub async fn get_sale_by_id(pool: &PgPool, id: i32) -> Result<Option<SaleDetail>
     }))
 }
 
+pub async fn void_sale(
+    pool: &PgPool,
+    id: i32,
+    dto: VoidSaleDto,
+) -> Result<SaleDetail, VoidSaleError> {
+    let mut tx = pool.begin().await?;
+
+    let status = sqlx::query_scalar::<_, SaleStatus>(
+        "SELECT status FROM sales WHERE id = $1 FOR UPDATE",
+    )
+    .bind(id)
+    .fetch_optional(&mut *tx)
+    .await?
+    .ok_or(VoidSaleError::NotFound)?;
+    if status != SaleStatus::Completed {
+        return Err(VoidSaleError::NotCompleted(status));
+    }
+
+    let cash_net = sqlx::query_scalar::<_, i64>(
+        "SELECT COALESCE(SUM(amount), 0)::BIGINT FROM sale_payments \
+         WHERE sale_id = $1 AND method = 'cash'",
+    )
+    .bind(id)
+    .fetch_one(&mut *tx)
+    .await?;
+
+    let session_id = if cash_net > 0 {
+        Some(
+            sqlx::query_scalar::<_, i32>(
+                "SELECT id FROM cash_sessions WHERE status = 'open' FOR UPDATE",
+            )
+            .fetch_optional(&mut *tx)
+            .await?
+            .ok_or(VoidSaleError::CashSessionRequired)?,
+        )
+    } else {
+        None
+    };
+
+    let items = sqlx::query_as::<_, SaleItem>(
+        "SELECT id, sale_id, variant_id, quantity, unit_price, unit_cost, discount, tax, subtotal \
+         FROM sale_items WHERE sale_id = $1 ORDER BY id",
+    )
+    .bind(id)
+    .fetch_all(&mut *tx)
+    .await?;
+    let mut variant_ids = items.iter().map(|item| item.variant_id).collect::<Vec<_>>();
+    variant_ids.sort_unstable();
+    variant_ids.dedup();
+    if !variant_ids.is_empty() {
+        sqlx::query_scalar::<_, i32>(
+            "SELECT id FROM product_variants WHERE id = ANY($1) ORDER BY id FOR UPDATE",
+        )
+        .bind(&variant_ids)
+        .fetch_all(&mut *tx)
+        .await?;
+    }
+
+    let actor = declared_actor(&dto.performed_by);
+    let movement_actor = dto
+        .performed_by
+        .as_deref()
+        .map(str::trim)
+        .filter(|name| !name.is_empty())
+        .unwrap_or("system");
+    let label = match dto.target_status {
+        SaleStatus::Cancelled => "Anulación",
+        SaleStatus::Refunded => "Devolución",
+        SaleStatus::Completed => unreachable!("service validates target status"),
+    };
+    let notes = format!("{label} venta #{id}");
+    for item in &items {
+        inventory_repo::apply_stock_return(
+            &mut tx,
+            item.variant_id,
+            item.quantity,
+            item.unit_cost,
+            id,
+            &notes,
+            movement_actor,
+        )
+        .await?;
+    }
+
+    if let Some(session_id) = session_id {
+        let movement = cash_repo::create_movement(
+            &mut tx,
+            session_id,
+            CreateMovementDto {
+                movement_type: CashMovementType::SaleOut,
+                amount: cash_net,
+                notes: Some(notes.clone()),
+                created_by: Some(movement_actor.to_string()),
+                sale_id: Some(id),
+            },
+        )
+        .await?;
+        if movement.is_none() {
+            return Err(VoidSaleError::CashSessionRequired);
+        }
+    }
+
+    let updated = sqlx::query(
+        "UPDATE sales SET status = $2, voided_at = NOW(), void_reason = $3, voided_by = $4 \
+         WHERE id = $1 AND status = 'completed'",
+    )
+    .bind(id)
+    .bind(dto.target_status)
+    .bind(dto.reason.trim())
+    .bind(movement_actor)
+    .execute(&mut *tx)
+    .await?;
+    if updated.rows_affected() != 1 {
+        return Err(VoidSaleError::NotCompleted(status));
+    }
+
+    let action = match dto.target_status {
+        SaleStatus::Cancelled => "cancel",
+        SaleStatus::Refunded => "refund",
+        SaleStatus::Completed => unreachable!("service validates target status"),
+    };
+    let units = items.iter().map(|item| i64::from(item.quantity)).sum::<i64>();
+    audit_repo::insert_event(
+        &mut *tx,
+        NewAuditEvent {
+            correlation_id: Some(Uuid::new_v4()),
+            category: AuditCategory::Business,
+            module: AuditModule::Sales,
+            action: action.to_string(),
+            outcome: AuditOutcome::Success,
+            actor,
+            entity_type: Some("sale".to_string()),
+            entity_id: Some(id.to_string()),
+            summary: format!("{label} de venta #{id}"),
+            changes: Some(json!({
+                "status": { "from": "completed", "to": dto.target_status }
+            })),
+            metadata: Some(json!({
+                "reason": dto.reason.trim(),
+                "cash_refunded": cash_net,
+                "units": units,
+                "session_id": session_id
+            })),
+            error_message: None,
+        },
+    )
+    .await?;
+
+    tx.commit().await?;
+    get_sale_by_id(pool, id)
+        .await?
+        .ok_or(VoidSaleError::NotFound)
+}
+
 pub async fn list_sales(
     pool: &PgPool,
     filter: &SaleFilterDto,
@@ -539,7 +708,8 @@ pub async fn list_sales(
 
     let rows = sqlx::query_as::<_, Sale>(
         r#"SELECT id, customer_id, subtotal, tax, discount, total,
-                  cash_received, change_given, status, notes, courtesy_reason, created_by, created_at
+                  cash_received, change_given, status, notes, courtesy_reason, created_by, created_at,
+                  voided_at, void_reason, voided_by
            FROM sales
            WHERE ($1::TEXT IS NULL OR status::TEXT = $1)
              AND ($2::INT  IS NULL OR customer_id = $2)

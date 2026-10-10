@@ -116,3 +116,36 @@ no funcionalidades ya implementadas.
 - **Estado:** diferido (A5).
 - **Referencias:** `src-tauri/src/modules/sales/repository.rs`,
   `src-tauri/migrations/012_audit.sql`.
+
+### F1-01 — Anulación y devolución sin autorización de supervisor
+
+- **Descripción:** la operación de anulación/devolución valida estado y motivo,
+  pero no requiere permiso o autorización de supervisor. La identidad
+  `performed_by` sigue siendo declarada por el cliente.
+- **Impacto:** un operador puede revertir una venta sin una autorización
+  diferenciada.
+- **Mitigación propuesta:** añadir autorización en el backend y auditoría de
+  quién aprobó la operación.
+- **Estado:** abierto; permisos de supervisor quedan para F3.
+
+### F1-02 — No hay devolución parcial
+
+- **Descripción:** la operación actual cambia el estado de la venta completa,
+  repone todas sus líneas y devuelve el importe neto de todos sus pagos en
+  efectivo; no permite devolver una parte de los artículos o del efectivo.
+- **Impacto:** no se puede representar una devolución parcial usando este
+  flujo.
+- **Mitigación propuesta:** diseñar una entidad/operación de devolución parcial
+  que conserve cantidades, pagos y movimientos acumulados por venta.
+- **Estado:** abierto; alcance actual limitado a devolución total.
+
+### F1-03 — Constraint histórico creado NOT VALID
+
+- **Descripción:** `sales_void_consistency_chk` se crea `NOT VALID`; PostgreSQL
+  no verifica las filas existentes al crearla, aunque comprueba las nuevas y
+  modificadas.
+- **Impacto:** datos históricos inconsistentes pueden permanecer hasta validar
+  la restricción.
+- **Mitigación propuesta:** revisar el histórico y ejecutar
+  `VALIDATE CONSTRAINT sales_void_consistency_chk` cuando sea seguro.
+- **Estado:** pendiente de validación histórica.

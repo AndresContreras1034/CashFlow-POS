@@ -145,16 +145,31 @@ pruebas se hayan ejecutado en esta ronda.
 - **Prueba:** `declared_actor_trims_and_drops_blank_names` prueba la
   normalización, no la autenticación de la identidad.
 
-## Anulación y devolución
+## F1 — Anulación y devolución total
 
-- **Regla:** **DECISIÓN PENDIENTE: ver sección final**.
-- **Dónde se aplica actualmente:** `src-tauri/src/modules/sales/models.rs`
-  define estados `cancelled` y `refunded`; `src-tauri/src/modules/cash/models.rs`
-  define `SaleOut`, y `src-tauri/src/modules/cash/service.rs` restringe el
-  comando manual a movimientos manuales. Estas definiciones no constituyen por
-  sí solas un flujo de anulación o devolución de venta.
-- **Prueba:** no se identificó en las pruebas de ventas consultadas una prueba
-  que cubra un flujo completo de anulación/devolución.
+- **Regla:** solo se permite cambiar una venta `completed`. La anulación la
+  marca `cancelled`; la devolución total la marca `refunded`. Ambas reponen
+  todas las cantidades vendidas y registran únicamente la suma neta de pagos
+  `cash` como `sale_out`; `cash_received` no se usa para calcular el reembolso.
+  Si hay efectivo, el movimiento se registra en el turno abierto actual; sin
+  efectivo no se requiere un turno abierto. La operación, sus movimientos,
+  estado y auditoría son atómicos. Se exige motivo de 1 a 200 caracteres.
+- **Orden de bloqueos:** fila de venta, turno abierto si corresponde y después
+  variantes ordenadas por identificador.
+- **Dónde se aplica:** `src-tauri/migrations/021_sales_void.sql`;
+  `src-tauri/src/modules/sales/repository.rs`;
+  `src-tauri/src/modules/inventory/repository.rs`;
+  `src-tauri/src/modules/cash/repository.rs`.
+- **Pruebas:** `v01_efectivo_con_vuelto_anula_y_cierra_en_cero`,
+  `v02_pago_mixto_devuelve_solo_efectivo_neto`,
+  `v06_venta_de_turno_cerrado_se_devuelve_en_turno_actual`,
+  `v09_anulaciones_concurrentes_reponen_una_sola_vez`,
+  `v10_fallo_de_auditoria_revierte_operacion_completa`.
+- **CHECK pendiente:** `sales_void_consistency_chk` se crea `NOT VALID` para
+  no validar filas históricas al instalar la migración; sí comprueba
+  inserciones y actualizaciones nuevas. Ejecutar `VALIDATE CONSTRAINT`
+  posteriormente, tras revisar que las filas históricas satisfacen la regla.
+- **Alcance:** no hay devolución parcial en este flujo.
 
 ## Estado de la auditoría
 
@@ -173,11 +188,4 @@ pruebas hayan sido ejecutadas durante la elaboración de este documento.
 | 7 | Idempotencia mediante clave UUID con devolución de venta existente. | Verificado en migración, repositorio y pruebas `c01`, `c02`, `c06`, `e10`; el payload no se compara. |
 | 8 | Los rechazos de validación no se registran como eventos de fallo de auditoría. | Verificado en wrapper de auditoría y prueba `d06`. |
 | 9 | El actor se deriva del campo declarado por el cliente; autenticación pendiente A5. | Verificado en DTO, handler, helper y A5-01; la prueba del helper no verifica autenticación. |
-| 10 | Existe una decisión y cobertura para un flujo completo de anulación/devolución. | **Pendiente:** decisión y prueba de flujo no identificadas; DECISIÓN PENDIENTE: ver sección final. |
-
-### Sección final — decisión pendiente sobre anulación/devolución
-
-**DECISIÓN PENDIENTE:** definir la regla de negocio para anulación y devolución,
-incluidos los estados permitidos, el efecto sobre pagos y caja, la restitución
-de inventario, la autorización y la auditoría. No se documenta una decisión
-como implementada porque no se encontró un flujo completo que la materialice.
+| 10 | Anulación y devolución total de venta completada son atómicas, restituyen stock y devuelven el neto efectivo en el turno actual. | Implementado; pruebas `v01`–`v11` añadidas. Validación del constraint histórico queda pendiente. |
