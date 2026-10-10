@@ -24,7 +24,8 @@
                 "import",
                 "licensing",
                 "billing",
-                "system"
+                "system",
+                "debts"
               ]
             }
           }

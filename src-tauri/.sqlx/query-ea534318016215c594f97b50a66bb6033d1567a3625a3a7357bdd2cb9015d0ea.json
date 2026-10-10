@@ -1,0 +1,107 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "SELECT id, debt_id, amount, paid_on,\n                  method AS \"method: DebtPaymentMethod\",\n                  reference, notes, idempotency_key,\n                  voided_at, voided_by, void_reason, created_by, created_at\n           FROM debt_payments WHERE idempotency_key = $1",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "id",
+        "type_info": "Int4"
+      },
+      {
+        "ordinal": 1,
+        "name": "debt_id",
+        "type_info": "Int4"
+      },
+      {
+        "ordinal": 2,
+        "name": "amount",
+        "type_info": "Int8"
+      },
+      {
+        "ordinal": 3,
+        "name": "paid_on",
+        "type_info": "Date"
+      },
+      {
+        "ordinal": 4,
+        "name": "method: DebtPaymentMethod",
+        "type_info": {
+          "Custom": {
+            "name": "debt_payment_method",
+            "kind": {
+              "Enum": [
+                "cash",
+                "card",
+                "transfer",
+                "check",
+                "other"
+              ]
+            }
+          }
+        }
+      },
+      {
+        "ordinal": 5,
+        "name": "reference",
+        "type_info": "Varchar"
+      },
+      {
+        "ordinal": 6,
+        "name": "notes",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 7,
+        "name": "idempotency_key",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 8,
+        "name": "voided_at",
+        "type_info": "Timestamptz"
+      },
+      {
+        "ordinal": 9,
+        "name": "voided_by",
+        "type_info": "Varchar"
+      },
+      {
+        "ordinal": 10,
+        "name": "void_reason",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 11,
+        "name": "created_by",
+        "type_info": "Varchar"
+      },
+      {
+        "ordinal": 12,
+        "name": "created_at",
+        "type_info": "Timestamptz"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid"
+      ]
+    },
+    "nullable": [
+      false,
+      false,
+      false,
+      false,
+      false,
+      true,
+      true,
+      false,
+      true,
+      true,
+      true,
+      false,
+      false
+    ]
+  },
+  "hash": "ea534318016215c594f97b50a66bb6033d1567a3625a3a7357bdd2cb9015d0ea"
+}

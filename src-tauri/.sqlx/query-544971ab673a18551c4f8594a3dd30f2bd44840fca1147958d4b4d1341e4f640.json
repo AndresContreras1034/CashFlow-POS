@@ -1,0 +1,20 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "SELECT debt_today() AS \"today!\"",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "today!",
+        "type_info": "Date"
+      }
+    ],
+    "parameters": {
+      "Left": []
+    },
+    "nullable": [
+      null
+    ]
+  },
+  "hash": "544971ab673a18551c4f8594a3dd30f2bd44840fca1147958d4b4d1341e4f640"
+}

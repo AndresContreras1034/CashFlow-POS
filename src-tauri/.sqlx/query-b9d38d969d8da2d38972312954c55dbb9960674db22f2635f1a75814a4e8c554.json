@@ -1,0 +1,148 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "SELECT id, creditor_name,\n                  category AS \"category: DebtCategory\",\n                  subcategory,\n                  nature AS \"nature: DebtNature\",\n                  concept, original_amount, issued_on, due_on, document_ref, notes,\n                  idempotency_key, voided_at, voided_by, void_reason,\n                  created_by, created_at, updated_at\n           FROM debts WHERE id = $1 FOR UPDATE",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "id",
+        "type_info": "Int4"
+      },
+      {
+        "ordinal": 1,
+        "name": "creditor_name",
+        "type_info": "Varchar"
+      },
+      {
+        "ordinal": 2,
+        "name": "category: DebtCategory",
+        "type_info": {
+          "Custom": {
+            "name": "debt_category",
+            "kind": {
+              "Enum": [
+                "maintenance",
+                "business_operation",
+                "fixed_services",
+                "other_obligations"
+              ]
+            }
+          }
+        }
+      },
+      {
+        "ordinal": 3,
+        "name": "subcategory",
+        "type_info": "Varchar"
+      },
+      {
+        "ordinal": 4,
+        "name": "nature: DebtNature",
+        "type_info": {
+          "Custom": {
+            "name": "debt_nature",
+            "kind": {
+              "Enum": [
+                "operating",
+                "financial_loan",
+                "tax",
+                "other"
+              ]
+            }
+          }
+        }
+      },
+      {
+        "ordinal": 5,
+        "name": "concept",
+        "type_info": "Varchar"
+      },
+      {
+        "ordinal": 6,
+        "name": "original_amount",
+        "type_info": "Int8"
+      },
+      {
+        "ordinal": 7,
+        "name": "issued_on",
+        "type_info": "Date"
+      },
+      {
+        "ordinal": 8,
+        "name": "due_on",
+        "type_info": "Date"
+      },
+      {
+        "ordinal": 9,
+        "name": "document_ref",
+        "type_info": "Varchar"
+      },
+      {
+        "ordinal": 10,
+        "name": "notes",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 11,
+        "name": "idempotency_key",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 12,
+        "name": "voided_at",
+        "type_info": "Timestamptz"
+      },
+      {
+        "ordinal": 13,
+        "name": "voided_by",
+        "type_info": "Varchar"
+      },
+      {
+        "ordinal": 14,
+        "name": "void_reason",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 15,
+        "name": "created_by",
+        "type_info": "Varchar"
+      },
+      {
+        "ordinal": 16,
+        "name": "created_at",
+        "type_info": "Timestamptz"
+      },
+      {
+        "ordinal": 17,
+        "name": "updated_at",
+        "type_info": "Timestamptz"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Int4"
+      ]
+    },
+    "nullable": [
+      false,
+      false,
+      false,
+      true,
+      false,
+      false,
+      false,
+      false,
+      true,
+      true,
+      true,
+      false,
+      true,
+      true,
+      true,
+      false,
+      false,
+      false
+    ]
+  },
+  "hash": "b9d38d969d8da2d38972312954c55dbb9960674db22f2635f1a75814a4e8c554"
+}

@@ -1,0 +1,34 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "SELECT COUNT(*) AS \"count!\",\n                  COALESCE(SUM(amount), 0)::BIGINT AS \"paid!\",\n                  MIN(paid_on) AS first_paid_on\n           FROM debt_payments\n           WHERE debt_id = $1 AND voided_at IS NULL",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "count!",
+        "type_info": "Int8"
+      },
+      {
+        "ordinal": 1,
+        "name": "paid!",
+        "type_info": "Int8"
+      },
+      {
+        "ordinal": 2,
+        "name": "first_paid_on",
+        "type_info": "Date"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Int4"
+      ]
+    },
+    "nullable": [
+      null,
+      null,
+      null
+    ]
+  },
+  "hash": "73d4a16a3336e9eaad2aed72e0c0a2e3df909b063ad7b0f8d0edb43ce0e13c0e"
+}

@@ -1,0 +1,15 @@
+resultado_cargo_lib.txt:test logging::tests::a_single_error_never_produces_a_summary ... ok
+resultado_cargo_lib.txt:test logging::tests::error_field_is_shown_as_motivo ... ok
+resultado_cargo_lib.txt:test logging::tests::repeated_errors_are_suppressed_then_summarized_by_next_event ... ok
+resultado_cargo_lib.txt:test logging::tests::same_error_after_the_window_prints_again ... ok
+resultado_cargo_lib.txt:test modules::audit::failure::tests::technical_errors_are_audited ... ok
+resultado_cargo_lib.txt:test modules::developer::layer::tests::captures_warn_and_error_with_error_field ... ok
+resultado_cargo_lib.txt:test modules::inventory::label::tests::missing_barcode_is_an_error ... ok
+resultado_cargo_lib.txt:test modules::inventory::import::tests::result_rows_are_capped_errors_first ... ok
+resultado_cargo_lib.txt:test result: ok. 94 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.02s
+resultado_sales_integration.txt:warning: linker stdout: Creando biblioteca C:\Users\AndresContreras\Downloads\CashFlow-POS\src-tauri\target\debug\deps\pos_lib.dll.lib y objeto C:\Users\AndresContreras\Downloads\CashFlow-POS\src-tauri\target\debug\deps\pos_lib.dll.exp
+resultado_sales_integration.txt:warning: `pos` (lib) generated 1 warning
+resultado_sales_integration.txt:test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+resultado_inventory_integration.txt:warning: linker stdout: Creando biblioteca C:\Users\AndresContreras\Downloads\CashFlow-POS\src-tauri\target\debug\deps\pos_lib.dll.lib y objeto C:\Users\AndresContreras\Downloads\CashFlow-POS\src-tauri\target\debug\deps\pos_lib.dll.exp
+resultado_inventory_integration.txt:warning: `pos` (lib) generated 1 warning
+resultado_inventory_integration.txt:test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
