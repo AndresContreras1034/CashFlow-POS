@@ -41,6 +41,12 @@ pub async fn create_sale(pool: &PgPool, dto: CreateSaleDto) -> Result<SaleDetail
             CreateSaleError::AmountOverflow => {
                 AppError::validation("El importe de la venta supera el rango permitido")
             }
+            CreateSaleError::VariantNotFound => {
+                AppError::validation("La variante solicitada no existe")
+            }
+            CreateSaleError::VariantUnavailable => {
+                AppError::validation("La variante no está disponible para la venta")
+            }
             CreateSaleError::InsufficientStock {
                 variant_id,
                 available,
@@ -64,7 +70,7 @@ pub async fn list_sales(
     filter: SaleFilterDto,
 ) -> Result<PaginatedResponse<Sale>, AppError> {
     let page = filter.page.unwrap_or(1).max(1);
-    let page_size = filter.page_size.unwrap_or(20);
+    let page_size = filter.page_size.unwrap_or(20).clamp(1, 100);
 
     let (data, total) = repository::list_sales(pool, &filter)
         .await

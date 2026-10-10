@@ -29,6 +29,8 @@ pub enum CreateSaleError {
     PaymentMismatch,
     InvalidDiscount,
     AmountOverflow,
+    VariantNotFound,
+    VariantUnavailable,
     InsufficientStock {
         variant_id: i32,
         available: i32,
@@ -90,6 +92,34 @@ pub async fn create_sale(pool: &PgPool, dto: CreateSaleDto) -> Result<SaleDetail
             .await?;
     let currency_decimals = settings.currency_decimals as u8;
 
+    let mut variant_ids: Vec<i32> = dto.items.iter().map(|item| item.variant_id).collect();
+    variant_ids.sort_unstable();
+    variant_ids.dedup();
+
+    let variants = sqlx::query!(
+        r#"SELECT pv.id, pv.price,
+                  pv.is_active AS "variant_active!",
+                  p.is_active AS "product_active!"
+           FROM product_variants pv
+           JOIN products p ON p.id = pv.product_id
+           WHERE pv.id = ANY($1)
+           ORDER BY pv.id
+           FOR UPDATE OF pv"#,
+        &variant_ids
+    )
+    .fetch_all(&mut *tx)
+    .await?;
+
+    if variants.len() != variant_ids.len() {
+        return Err(CreateSaleError::VariantNotFound);
+    }
+    if variants
+        .iter()
+        .any(|variant| !variant.variant_active || !variant.product_active)
+    {
+        return Err(CreateSaleError::VariantUnavailable);
+    }
+
     // 1. Precio server-side por cada ítem — nunca se confía en el precio del cliente
     struct LineItem {
         variant_id: i32,
@@ -103,12 +133,11 @@ pub async fn create_sale(pool: &PgPool, dto: CreateSaleDto) -> Result<SaleDetail
     let mut subtotal_total: i64 = 0;
 
     for item in &dto.items {
-        let price = sqlx::query_scalar!(
-            "SELECT price FROM product_variants WHERE id = $1",
-            item.variant_id
-        )
-        .fetch_one(&mut *tx)
-        .await?;
+        let price = variants
+            .iter()
+            .find(|variant| variant.id == item.variant_id)
+            .ok_or(CreateSaleError::VariantNotFound)?
+            .price;
 
         let discount = item.discount.unwrap_or(0);
         let gross = price
@@ -385,8 +414,10 @@ pub async fn list_sales(
            FROM sales
            WHERE ($1::TEXT IS NULL OR status::TEXT = $1)
              AND ($2::INT  IS NULL OR customer_id = $2)
-             AND ($3::DATE IS NULL OR created_at::DATE >= $3)
-             AND ($4::DATE IS NULL OR created_at::DATE <= $4)
+             AND ($3::DATE IS NULL OR
+                  (created_at AT TIME ZONE (SELECT timezone FROM app_settings WHERE id = 1))::DATE >= $3)
+             AND ($4::DATE IS NULL OR
+                  (created_at AT TIME ZONE (SELECT timezone FROM app_settings WHERE id = 1))::DATE <= $4)
            ORDER BY created_at DESC
            LIMIT $5 OFFSET $6"#,
         filter.status,
@@ -403,8 +434,10 @@ pub async fn list_sales(
         r#"SELECT COUNT(*) FROM sales
            WHERE ($1::TEXT IS NULL OR status::TEXT = $1)
              AND ($2::INT  IS NULL OR customer_id = $2)
-             AND ($3::DATE IS NULL OR created_at::DATE >= $3)
-             AND ($4::DATE IS NULL OR created_at::DATE <= $4)"#,
+             AND ($3::DATE IS NULL OR
+                  (created_at AT TIME ZONE (SELECT timezone FROM app_settings WHERE id = 1))::DATE >= $3)
+             AND ($4::DATE IS NULL OR
+                  (created_at AT TIME ZONE (SELECT timezone FROM app_settings WHERE id = 1))::DATE <= $4)"#,
         filter.status,
         filter.customer_id,
         filter.date_from,

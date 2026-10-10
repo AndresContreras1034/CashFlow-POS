@@ -11,7 +11,22 @@ node_modules
 dist
 dist-ssr
 *.local
-src-tauri/.env
+
+# Secretos y entorno local
+.env
+.env.*
+!.env.example
+**/.env
+**/.env.*
+!**/.env.example
+licencia-*.json
+
+# Volcados de auditoría y resultados locales
+auditoria_*.txt
+resultado_*.txt
+resumen_resultados.txt
+exportar_auditoria.txt
+/audit_logs.txt
 
 # Editor directories and files
 .vscode/*
