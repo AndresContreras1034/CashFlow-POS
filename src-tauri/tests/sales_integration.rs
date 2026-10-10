@@ -68,11 +68,11 @@ async fn seed_variant(pool: &PgPool, price: i64, stock: i32) -> i32 {
     seed_variant_full(pool, price, stock, false, true, true).await
 }
 
-async fn open_cash(pool: &PgPool) {
-    sqlx::query("INSERT INTO cash_sessions (opening_amount) VALUES (0)")
-        .execute(pool)
+async fn open_cash(pool: &PgPool) -> i32 {
+    sqlx::query_scalar("INSERT INTO cash_sessions (opening_amount) VALUES (0) RETURNING id")
+        .fetch_one(pool)
         .await
-        .unwrap();
+        .unwrap()
 }
 
 async fn count(pool: &PgPool, table: &str) -> i64 {
@@ -145,7 +145,7 @@ async fn assert_untouched(pool: &PgPool, variant_id: i32, expected_stock: i32) {
 #[sqlx::test(migrations = "./migrations")]
 async fn a01_venta_en_efectivo_valida(pool: PgPool) {
     let v = seed_variant(&pool, 10_000, 10).await;
-    open_cash(&pool).await;
+    let session_id = open_cash(&pool).await;
 
     let d = service::create_sale(
         &pool,
@@ -175,6 +175,19 @@ async fn a01_venta_en_efectivo_valida(pool: PgPool) {
             .unwrap();
     assert_eq!(ctype, "sale_in");
     assert_eq!(camount, 20_000);
+    let (sale_session_id, movement_session_id): (i32, i32) = sqlx::query_as(
+        "SELECT s.cash_session_id, cm.session_id
+         FROM sales s JOIN cash_movements cm ON cm.sale_id = s.id
+         WHERE s.id = $1",
+    )
+    .bind(d.sale.id)
+    .fetch_one(&pool)
+    .await
+    .unwrap();
+    assert_eq!(
+        (sale_session_id, movement_session_id),
+        (session_id, session_id)
+    );
 
     let audit: i64 = sqlx::query_scalar(
         "SELECT COUNT(*) FROM audit_events
@@ -186,21 +199,20 @@ async fn a01_venta_en_efectivo_valida(pool: PgPool) {
     assert_eq!(audit, 1);
 }
 
-/// Documenta el comportamiento ACTUAL (decisión M3 pendiente): una venta sin
-/// efectivo se registra aunque no haya turno de caja abierto.
 #[sqlx::test(migrations = "./migrations")]
-async fn a02_venta_con_tarjeta_no_requiere_turno_hoy(pool: PgPool) {
+async fn a02_venta_con_tarjeta_exige_turno(pool: PgPool) {
     let v = seed_variant(&pool, 10_000, 10).await;
 
-    service::create_sale(
+    let message = service::create_sale(
         &pool,
         new_sale(vec![item(v, 1)], vec![pay(PaymentMethod::Card, 10_000)]),
     )
     .await
-    .expect("hoy la venta con tarjeta se registra sin turno");
+    .expect_err("una venta con tarjeta también exige turno")
+    .to_string();
 
-    assert_eq!(count(&pool, "cash_movements").await, 0);
-    assert_eq!(stock_of(&pool, v).await, 9);
+    assert!(message.contains("turno de caja"), "{message}");
+    assert_untouched(&pool, v, 10).await;
 }
 
 #[sqlx::test(migrations = "./migrations")]
@@ -222,6 +234,7 @@ async fn a03_efectivo_sin_turno_revierte_todo(pool: PgPool) {
 #[sqlx::test(migrations = "./migrations")]
 async fn a04_stock_insuficiente_revierte_todo(pool: PgPool) {
     let v = seed_variant(&pool, 10_000, 1).await;
+    open_cash(&pool).await;
 
     let msg = service::create_sale(
         &pool,
@@ -241,6 +254,7 @@ async fn a04_stock_insuficiente_revierte_todo(pool: PgPool) {
 #[sqlx::test(migrations = "./migrations")]
 async fn a05_allow_negative_permite_vender_sin_stock(pool: PgPool) {
     let v = seed_variant_full(&pool, 10_000, 1, true, true, true).await;
+    open_cash(&pool).await;
 
     service::create_sale(
         &pool,
@@ -256,6 +270,7 @@ async fn a05_allow_negative_permite_vender_sin_stock(pool: PgPool) {
 async fn a06_varios_items_con_descuentos_cuadran(pool: PgPool) {
     let a = seed_variant(&pool, 10_000, 10).await;
     let b = seed_variant(&pool, 5_000, 10).await;
+    open_cash(&pool).await;
 
     // bruto 25.000 - descuento de línea 1.000 = 24.000; - global 2.000 = 22.000
     let mut dto = new_sale(
@@ -300,6 +315,7 @@ async fn a06_varios_items_con_descuentos_cuadran(pool: PgPool) {
 #[sqlx::test(migrations = "./migrations")]
 async fn a07_misma_variante_en_dos_lineas(pool: PgPool) {
     let v = seed_variant(&pool, 10_000, 5).await;
+    open_cash(&pool).await;
 
     service::create_sale(
         &pool,
@@ -323,6 +339,7 @@ async fn a07_misma_variante_en_dos_lineas(pool: PgPool) {
 #[sqlx::test(migrations = "./migrations")]
 async fn a08_pagos_que_no_cuadran(pool: PgPool) {
     let v = seed_variant(&pool, 10_000, 10).await;
+    open_cash(&pool).await;
 
     let msg = service::create_sale(
         &pool,
@@ -339,6 +356,7 @@ async fn a08_pagos_que_no_cuadran(pool: PgPool) {
 #[sqlx::test(migrations = "./migrations")]
 async fn a09_descuento_mayor_al_bruto(pool: PgPool) {
     let v = seed_variant(&pool, 10_000, 10).await;
+    open_cash(&pool).await;
 
     let msg = service::create_sale(
         &pool,
@@ -362,6 +380,7 @@ async fn a09_descuento_mayor_al_bruto(pool: PgPool) {
 #[sqlx::test(migrations = "./migrations")]
 async fn a10_cantidad_cero_se_rechaza(pool: PgPool) {
     let v = seed_variant(&pool, 10_000, 10).await;
+    open_cash(&pool).await;
 
     let msg = service::create_sale(
         &pool,
@@ -378,6 +397,7 @@ async fn a10_cantidad_cero_se_rechaza(pool: PgPool) {
 #[sqlx::test(migrations = "./migrations")]
 async fn a11_get_sale_devuelve_lo_creado(pool: PgPool) {
     let v = seed_variant(&pool, 10_000, 10).await;
+    open_cash(&pool).await;
     let created = service::create_sale(
         &pool,
         new_sale(vec![item(v, 2)], vec![pay(PaymentMethod::Transfer, 20_000)]),
@@ -397,6 +417,7 @@ async fn a11_get_sale_devuelve_lo_creado(pool: PgPool) {
 #[sqlx::test(migrations = "./migrations")]
 async fn a12_paginacion_basica(pool: PgPool) {
     let v = seed_variant(&pool, 10_000, 10).await;
+    open_cash(&pool).await;
     for _ in 0..3 {
         service::create_sale(
             &pool,
@@ -469,6 +490,7 @@ async fn a13_un_fallo_en_cualquier_paso_revierte_toda_la_venta(pool: PgPool) {
 #[sqlx::test(migrations = "./migrations")]
 async fn a14_dos_ventas_no_sobrevenden_la_ultima_unidad(pool: PgPool) {
     let v = seed_variant(&pool, 10_000, 1).await;
+    open_cash(&pool).await;
 
     let (r1, r2) = tokio::join!(
         service::create_sale(
@@ -496,6 +518,7 @@ async fn a14_dos_ventas_no_sobrevenden_la_ultima_unidad(pool: PgPool) {
 #[sqlx::test(migrations = "./migrations")]
 async fn b01_variante_inactiva_no_se_puede_vender(pool: PgPool) {
     let v = seed_variant_full(&pool, 10_000, 10, false, false, true).await;
+    open_cash(&pool).await;
 
     let result = service::create_sale(
         &pool,
@@ -517,6 +540,7 @@ async fn b01_variante_inactiva_no_se_puede_vender(pool: PgPool) {
 #[sqlx::test(migrations = "./migrations")]
 async fn b02_producto_inactivo_no_se_puede_vender(pool: PgPool) {
     let v = seed_variant_full(&pool, 10_000, 10, false, true, false).await;
+    open_cash(&pool).await;
 
     let result = service::create_sale(
         &pool,
@@ -537,6 +561,7 @@ async fn b02_producto_inactivo_no_se_puede_vender(pool: PgPool) {
 /// N3. Una variante inexistente no debe mostrar el error crudo de la base.
 #[sqlx::test(migrations = "./migrations")]
 async fn b03_variante_inexistente_da_mensaje_de_negocio(pool: PgPool) {
+    open_cash(&pool).await;
     let msg = service::create_sale(
         &pool,
         new_sale(
@@ -560,6 +585,7 @@ async fn b03_variante_inexistente_da_mensaje_de_negocio(pool: PgPool) {
 #[sqlx::test(migrations = "./migrations")]
 async fn b04_mismo_producto_concurrente_no_se_bloquea(pool: PgPool) {
     let a = seed_variant(&pool, 10_000, 1_000).await;
+    open_cash(&pool).await;
 
     for round in 0..20 {
         let (r1, r2) = tokio::join!(
@@ -590,6 +616,7 @@ async fn b04_mismo_producto_concurrente_no_se_bloquea(pool: PgPool) {
 async fn b05_orden_cruzado_de_variantes_no_se_bloquea(pool: PgPool) {
     let a = seed_variant(&pool, 10_000, 1_000).await;
     let b = seed_variant(&pool, 5_000, 1_000).await;
+    open_cash(&pool).await;
 
     for round in 0..20 {
         let (r1, r2) = tokio::join!(
@@ -625,6 +652,7 @@ async fn b05_orden_cruzado_de_variantes_no_se_bloquea(pool: PgPool) {
 #[sqlx::test(migrations = "./migrations")]
 async fn b06_page_size_se_normaliza_en_la_respuesta(pool: PgPool) {
     let v = seed_variant(&pool, 10_000, 10).await;
+    open_cash(&pool).await;
     for _ in 0..3 {
         service::create_sale(
             &pool,
@@ -734,6 +762,7 @@ async fn c01_reintento_secuencial_devuelve_la_misma_venta(pool: PgPool) {
 #[sqlx::test(migrations = "./migrations")]
 async fn c02_reintentos_simultaneos_crean_una_sola_venta(pool: PgPool) {
     let v = seed_variant(&pool, 10_000, 10).await;
+    open_cash(&pool).await;
     let key = Uuid::new_v4();
     let make = || {
         keyed(
@@ -761,6 +790,7 @@ async fn c02_reintentos_simultaneos_crean_una_sola_venta(pool: PgPool) {
 #[sqlx::test(migrations = "./migrations")]
 async fn c03_claves_distintas_crean_ventas_distintas(pool: PgPool) {
     let v = seed_variant(&pool, 10_000, 10).await;
+    open_cash(&pool).await;
 
     for _ in 0..2 {
         service::create_sale(
@@ -782,6 +812,7 @@ async fn c03_claves_distintas_crean_ventas_distintas(pool: PgPool) {
 #[sqlx::test(migrations = "./migrations")]
 async fn c04_sin_clave_no_hay_deduplicacion(pool: PgPool) {
     let v = seed_variant(&pool, 10_000, 10).await;
+    open_cash(&pool).await;
 
     for _ in 0..2 {
         service::create_sale(
@@ -798,6 +829,7 @@ async fn c04_sin_clave_no_hay_deduplicacion(pool: PgPool) {
 #[sqlx::test(migrations = "./migrations")]
 async fn c05_un_fallo_no_consume_la_clave(pool: PgPool) {
     let v = seed_variant(&pool, 10_000, 1).await;
+    open_cash(&pool).await;
     let key = Uuid::new_v4();
 
     let failed = service::create_sale(
@@ -832,4 +864,55 @@ async fn c05_un_fallo_no_consume_la_clave(pool: PgPool) {
     assert_eq!(count(&pool, "sales").await, 1);
     assert_eq!(stock_of(&pool, v).await, 3);
     assert!(ok.sale.id > 0);
+}
+
+#[sqlx::test(migrations = "./migrations")]
+async fn c06_reintento_idempotente_tras_cerrar_turno_devuelve_venta_original(pool: PgPool) {
+    let v = seed_variant(&pool, 10_000, 10).await;
+    let session_id = open_cash(&pool).await;
+    let key = Uuid::new_v4();
+    let make = || {
+        keyed(
+            key,
+            vec![item(v, 1)],
+            vec![pay(PaymentMethod::Card, 10_000)],
+        )
+    };
+
+    let first = service::create_sale(&pool, make()).await.unwrap();
+    sqlx::query("UPDATE cash_sessions SET status = 'closed', closed_at = NOW() WHERE id = $1")
+        .bind(session_id)
+        .execute(&pool)
+        .await
+        .unwrap();
+
+    let retry = service::create_sale(&pool, make())
+        .await
+        .expect("reintentar una venta existente no debe exigir una caja abierta");
+
+    assert_eq!(retry.sale.id, first.sale.id);
+    assert_eq!(count(&pool, "sales").await, 1);
+    assert_eq!(stock_of(&pool, v).await, 9);
+}
+
+#[sqlx::test(migrations = "./migrations")]
+async fn a15_venta_con_tarjeta_guarda_turno_sin_movimiento_de_caja(pool: PgPool) {
+    let v = seed_variant(&pool, 10_000, 10).await;
+    let session_id = open_cash(&pool).await;
+
+    let sale = service::create_sale(
+        &pool,
+        new_sale(vec![item(v, 1)], vec![pay(PaymentMethod::Card, 10_000)]),
+    )
+    .await
+    .unwrap();
+    let linked_session_id: i32 =
+        sqlx::query_scalar("SELECT cash_session_id FROM sales WHERE id = $1")
+            .bind(sale.sale.id)
+            .fetch_one(&pool)
+            .await
+            .unwrap();
+
+    assert_eq!(linked_session_id, session_id);
+    assert_eq!(count(&pool, "cash_movements").await, 0);
 }

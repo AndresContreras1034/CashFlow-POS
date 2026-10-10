@@ -59,8 +59,7 @@ export default function Sales() {
   );
   const paymentsTotal = payments.reduce((sum, p) => sum + (p.amount || 0), 0);
   const remaining = subtotal - paymentsTotal;
-  const hasCashPayment = payments.some((p) => p.method === 'cash' && p.amount > 0);
-  const cashBlocked = hasCashPayment && cashOpen === false;
+  const cashBlocked = cashOpen === false;
 
   function addToCart(v: VariantWithProduct) {
     setNotice(null);
@@ -414,8 +413,7 @@ export default function Sales() {
 
           {cashBlocked && (
             <div className="form-error">
-              No hay un turno de caja abierto: no se puede cobrar en efectivo.
-              Abre la caja o cambia el medio de pago.
+              No hay un turno de caja abierto: no se pueden registrar ventas.
               <button className="btn" onClick={() => void refreshCash()}>
                 Reintentar
               </button>

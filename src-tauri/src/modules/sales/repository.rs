@@ -70,9 +70,8 @@ impl From<sqlx::Error> for CreateSaleError {
     }
 }
 
-/// Crea la venta completa — venta, ítems, pagos, salida de inventario y
-/// movimiento de caja si aplica — dentro de UNA sola transacción. Si algo
-/// falla en cualquier paso, todo se revierte automáticamente al dropear `tx`.
+/// Crea la venta completa y la asocia al turno abierto dentro de una sola
+/// transacción. Si cualquier paso falla, todo se revierte al dropear `tx`.
 pub async fn create_sale(pool: &PgPool, dto: CreateSaleDto) -> Result<SaleDetail, CreateSaleError> {
     let mut tx = pool.begin().await?;
 
@@ -95,6 +94,12 @@ pub async fn create_sale(pool: &PgPool, dto: CreateSaleDto) -> Result<SaleDetail
                 .ok_or(CreateSaleError::Db(sqlx::Error::RowNotFound));
         }
     }
+
+    let cash_session_id: i32 =
+        sqlx::query_scalar("SELECT id FROM cash_sessions WHERE status = 'open' FOR UPDATE")
+            .fetch_optional(&mut *tx)
+            .await?
+            .ok_or(CreateSaleError::NoOpenCashSession)?;
 
     let created_by = dto
         .created_by
@@ -231,13 +236,12 @@ pub async fn create_sale(pool: &PgPool, dto: CreateSaleDto) -> Result<SaleDetail
     .fetch_one(&mut *tx)
     .await?;
 
-    if let Some(key) = dto.idempotency_key {
-        sqlx::query("UPDATE sales SET idempotency_key = $1 WHERE id = $2")
-            .bind(key)
-            .bind(sale.id)
-            .execute(&mut *tx)
-            .await?;
-    }
+    sqlx::query("UPDATE sales SET idempotency_key = $1, cash_session_id = $2 WHERE id = $3")
+        .bind(dto.idempotency_key)
+        .bind(cash_session_id)
+        .bind(sale.id)
+        .execute(&mut *tx)
+        .await?;
 
     // 3. Insertar sale_items y descontar stock de cada uno
     let mut items = Vec::new();
@@ -307,28 +311,17 @@ pub async fn create_sale(pool: &PgPool, dto: CreateSaleDto) -> Result<SaleDetail
         payments.push(saved);
     }
 
-    // 5. Pago en efectivo -> movimiento de caja en el turno abierto
+    // 5. Pago en efectivo -> movimiento de caja del turno bloqueado al inicio
     let cash_amount: i64 = dto
         .payments
         .iter()
         .filter(|p| p.method == PaymentMethod::Cash)
         .map(|p| p.amount)
         .sum();
-    let mut cash_session_id: Option<i32> = None;
-
     if cash_amount > 0 {
-        let session_id = sqlx::query_scalar!("SELECT id FROM cash_sessions WHERE status = 'open'")
-            .fetch_optional(&mut *tx)
-            .await?;
-
-        let Some(session_id) = session_id else {
-            return Err(CreateSaleError::NoOpenCashSession);
-        };
-        cash_session_id = Some(session_id);
-
         let movement = cash_repo::create_movement(
             &mut tx,
-            session_id,
+            cash_session_id,
             CreateMovementDto {
                 movement_type: CashMovementType::SaleIn,
                 amount: cash_amount,
@@ -339,8 +332,7 @@ pub async fn create_sale(pool: &PgPool, dto: CreateSaleDto) -> Result<SaleDetail
         )
         .await?;
 
-        // El turno se cerró entre la lectura y el lock: sin movimiento de
-        // caja no hay venta en efectivo. Se revierte todo al soltar `tx`.
+        // Defensa adicional: sin movimiento de caja se revierte la venta.
         if movement.is_none() {
             return Err(CreateSaleError::NoOpenCashSession);
         }

@@ -29,9 +29,9 @@ pub async fn create_sale(pool: &PgPool, dto: CreateSaleDto) -> Result<SaleDetail
         .await
         .map_err(|e| match e {
             CreateSaleError::Db(err) => AppError::from(err),
-            CreateSaleError::NoOpenCashSession => {
-                AppError::validation("Hay un pago en efectivo pero no hay un turno de caja abierto")
-            }
+            CreateSaleError::NoOpenCashSession => AppError::validation(
+                "No hay un turno de caja abierto. Abre la caja para registrar ventas.",
+            ),
             CreateSaleError::PaymentMismatch => {
                 AppError::validation("El total de los pagos no coincide con el total de la venta")
             }
