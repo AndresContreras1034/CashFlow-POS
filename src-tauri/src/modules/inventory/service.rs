@@ -151,6 +151,26 @@ pub async fn deactivate_product(pool: &PgPool, id: i32) -> Result<Product, AppEr
 // VARIANTES
 // ============================================================
 
+/// Paso mínimo de un importe según la moneda de Ajustes (en centésimas).
+/// Con 0 decimales el paso es 100; con 2 decimales, 1.
+async fn money_step(pool: &PgPool) -> Result<i64, AppError> {
+    let decimals: i16 =
+        sqlx::query_scalar("SELECT currency_decimals FROM app_settings WHERE id = 1")
+            .fetch_one(pool)
+            .await
+            .map_err(AppError::from)?;
+    Ok(if decimals == 0 { 100 } else { 1 })
+}
+
+fn validate_money_step(value: i64, step: i64, label: &str) -> Result<(), AppError> {
+    if value % step != 0 {
+        return Err(AppError::validation(&format!(
+            "{label} no admite fracciones con la moneda configurada"
+        )));
+    }
+    Ok(())
+}
+
 pub async fn list_variants(
     pool: &PgPool,
     product_id: i32,
@@ -218,6 +238,10 @@ pub async fn create_variant(
         return Err(AppError::validation("El costo no puede ser negativo"));
     }
 
+    let step = money_step(pool).await?;
+    validate_money_step(dto.price, step, "El precio")?;
+    validate_money_step(dto.cost.unwrap_or(0), step, "El costo")?;
+
     // Verificar que el producto existe
     repository::get_product_by_id(pool, dto.product_id)
         .await
@@ -244,10 +268,18 @@ pub async fn update_variant(
     id: i32,
     dto: UpdateVariantDto,
 ) -> Result<ProductVariant, AppError> {
+    let step = money_step(pool).await?;
     if let Some(price) = dto.price {
         if price < 0 {
             return Err(AppError::validation("El precio no puede ser negativo"));
         }
+        validate_money_step(price, step, "El precio")?;
+    }
+    if let Some(cost) = dto.cost {
+        if cost < 0 {
+            return Err(AppError::validation("El costo no puede ser negativo"));
+        }
+        validate_money_step(cost, step, "El costo")?;
     }
 
     repository::update_variant(pool, id, dto)
