@@ -1,7 +1,8 @@
-import { useState, useRef, useCallback } from 'react';
+import { useState, useRef, useCallback, useEffect } from 'react';
 import type { CreateSalePaymentDto, PaymentMethod, VariantWithProduct } from '../../types';
-import { findByBarcode, searchVariants } from '../../services/inventory.service';
+import { findByBarcode, searchVariants, getVariant } from '../../services/inventory.service';
 import { createSale } from '../../services/sales.service';
+import { getCurrentCashSession } from '../../services/cash.service';
 import { formatMoney, parseMoneyInput, minorToInput, moneyStep } from '../../utils/format';
 import { actorField } from '../../utils/preferences';
 import './Sales.css';
@@ -27,7 +28,9 @@ export default function Sales() {
   const [searchResults, setSearchResults] = useState<VariantWithProduct[]>([]);
   const [cart, setCart] = useState<CartLine[]>([]);
   const [error, setError] = useState<string | null>(null);
+  const [notice, setNotice] = useState<string | null>(null);
   const [confirming, setConfirming] = useState(false);
+  const [cashOpen, setCashOpen] = useState<boolean | null>(null);
   const [lastSaleId, setLastSaleId] = useState<number | null>(null);
 
   const [payments, setPayments] = useState<CreateSalePaymentDto[]>([
@@ -38,14 +41,29 @@ export default function Sales() {
   const attemptRef = useRef<{ fingerprint: string; key: string } | null>(null);
   const submittingRef = useRef(false);
 
+  const refreshCash = useCallback(async () => {
+    try {
+      setCashOpen((await getCurrentCashSession()) !== null);
+    } catch {
+      setCashOpen(null);
+    }
+  }, []);
+
+  useEffect(() => {
+    void refreshCash();
+  }, [refreshCash]);
+
   const subtotal = cart.reduce(
     (sum, line) => sum + line.unit_price * line.quantity - line.discount,
     0
   );
   const paymentsTotal = payments.reduce((sum, p) => sum + (p.amount || 0), 0);
   const remaining = subtotal - paymentsTotal;
+  const hasCashPayment = payments.some((p) => p.method === 'cash' && p.amount > 0);
+  const cashBlocked = hasCashPayment && cashOpen === false;
 
   function addToCart(v: VariantWithProduct) {
+    setNotice(null);
     setCart((prev) => {
       const existing = prev.find((l) => l.variant_id === v.id);
       if (existing) {
@@ -73,6 +91,7 @@ export default function Sales() {
 
   async function handleScanSubmit(e: React.FormEvent) {
     e.preventDefault();
+    setNotice(null);
     if (!scanValue.trim()) return;
     setError(null);
 
@@ -84,7 +103,9 @@ export default function Sales() {
       // Si no hay match exacto, cae a búsqueda por texto
       try {
         const results = await searchVariants(scanValue.trim());
-        if (results.length === 1) {
+        if (results.length === 0) {
+          setNotice(`No se encontró ningún producto para «${scanValue.trim()}»`);
+        } else if (results.length === 1) {
           addToCart(results[0]);
         } else {
           setSearchResults(results);
@@ -133,6 +154,24 @@ export default function Sales() {
     setPayments((prev) => prev.filter((_, i) => i !== index));
   }
 
+  async function detectPriceChanges(): Promise<string[]> {
+    const changes: string[] = [];
+    for (const line of cart) {
+      const fresh = await getVariant(line.variant_id);
+      if (fresh.price !== line.unit_price) {
+        changes.push(
+          `${line.product_name}: ${formatMoney(line.unit_price)} → ${formatMoney(fresh.price)}`
+        );
+        setCart((prev) =>
+          prev.map((l) =>
+            l.variant_id === line.variant_id ? { ...l, unit_price: fresh.price } : l
+          )
+        );
+      }
+    }
+    return changes;
+  }
+
   function fillRemainingOnFirstPayment() {
     setPayments((prev) => {
       if (prev.length === 0) return prev;
@@ -147,7 +186,8 @@ export default function Sales() {
     setPayments([{ method: 'cash', amount: 0 }]);
     setLastSaleId(null);
     setError(null);
-  }, []);
+    void refreshCash();
+  }, [refreshCash]);
 
   async function handleConfirmSale() {
     if (submittingRef.current) return;
@@ -157,18 +197,25 @@ export default function Sales() {
       setError('Agrega al menos un producto al carrito');
       return;
     }
-    if (remaining !== 0) {
-      setError(
-        remaining > 0
-          ? `Faltan ${formatMoney(remaining)} por cubrir en los pagos`
-          : `Los pagos exceden el total en ${formatMoney(-remaining)}`
-      );
-      return;
-    }
-
     submittingRef.current = true;
     setConfirming(true);
     try {
+      const priceChanges = await detectPriceChanges();
+      if (priceChanges.length > 0) {
+        setError(
+          `Los precios cambiaron: ${priceChanges.join('; ')}. Revisa el total y los pagos.`
+        );
+        return;
+      }
+      if (remaining !== 0) {
+        setError(
+          remaining > 0
+            ? `Faltan ${formatMoney(remaining)} por cubrir en los pagos`
+            : `Los pagos exceden el total en ${formatMoney(-remaining)}`
+        );
+        return;
+      }
+
       const payload = {
         items: cart.map((l) => ({
           variant_id: l.variant_id,
@@ -190,7 +237,11 @@ export default function Sales() {
       setCart([]);
       setPayments([{ method: 'cash', amount: 0 }]);
     } catch (e) {
-      setError(String(e));
+      const message = String(e);
+      setError(message);
+      if (message.toLowerCase().includes('turno de caja')) {
+        void refreshCash();
+      }
     } finally {
       submittingRef.current = false;
       setConfirming(false);
@@ -202,6 +253,7 @@ export default function Sales() {
       <h1>Ventas</h1>
 
       {error && <div className="form-error">{error}</div>}
+      {notice && <div className="sales-meta">{notice}</div>}
 
       {lastSaleId && (
         <div className="sales-success">
@@ -360,9 +412,19 @@ export default function Sales() {
               : `Sobran ${formatMoney(-remaining)}`}
           </div>
 
+          {cashBlocked && (
+            <div className="form-error">
+              No hay un turno de caja abierto: no se puede cobrar en efectivo.
+              Abre la caja o cambia el medio de pago.
+              <button className="btn" onClick={() => void refreshCash()}>
+                Reintentar
+              </button>
+            </div>
+          )}
+
           <button
             className="btn btn-primary sales-confirm-btn"
-            disabled={confirming || remaining !== 0}
+            disabled={confirming || remaining !== 0 || cashBlocked}
             onClick={handleConfirmSale}
           >
             {confirming ? 'Registrando...' : 'Confirmar venta'}

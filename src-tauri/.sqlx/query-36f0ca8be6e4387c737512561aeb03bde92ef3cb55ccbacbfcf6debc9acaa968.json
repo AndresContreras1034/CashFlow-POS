@@ -1,0 +1,40 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "SELECT pv.id, pv.price,\n                  pv.is_active AS \"variant_active!\",\n                  p.is_active AS \"product_active!\"\n           FROM product_variants pv\n           JOIN products p ON p.id = pv.product_id\n           WHERE pv.id = ANY($1)\n           ORDER BY pv.id\n           FOR UPDATE OF pv",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "id",
+        "type_info": "Int4"
+      },
+      {
+        "ordinal": 1,
+        "name": "price",
+        "type_info": "Int8"
+      },
+      {
+        "ordinal": 2,
+        "name": "variant_active!",
+        "type_info": "Bool"
+      },
+      {
+        "ordinal": 3,
+        "name": "product_active!",
+        "type_info": "Bool"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Int4Array"
+      ]
+    },
+    "nullable": [
+      false,
+      false,
+      false,
+      false
+    ]
+  },
+  "hash": "36f0ca8be6e4387c737512561aeb03bde92ef3cb55ccbacbfcf6debc9acaa968"
+}

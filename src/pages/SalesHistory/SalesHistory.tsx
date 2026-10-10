@@ -1,4 +1,4 @@
-import { useEffect, useState, useCallback } from 'react';
+import { useEffect, useState, useCallback, useRef } from 'react';
 import type { Sale, SaleDetail, SaleFilterDto, SaleStatus } from '../../types';
 import { listSales, getSale } from '../../services/sales.service';
 import { printSaleTicket } from '../../services/billing.service';
@@ -26,6 +26,8 @@ export default function SalesHistory() {
   const [status, setStatus] = useState<string>('');
   const [dateFrom, setDateFrom] = useState('');
   const [dateTo, setDateTo] = useState('');
+  const [applied, setApplied] = useState({ status: '', dateFrom: '', dateTo: '' });
+  const reqRef = useRef(0);
 
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -38,25 +40,28 @@ export default function SalesHistory() {
   const [printSuccess, setPrintSuccess] = useState(false);
 
   const load = useCallback(async () => {
+    const id = ++reqRef.current;
     setLoading(true);
     setError(null);
     try {
       const filter: SaleFilterDto = {
-        status: status || null,
-        date_from: dateFrom || null,
-        date_to: dateTo || null,
+        status: applied.status || null,
+        date_from: applied.dateFrom || null,
+        date_to: applied.dateTo || null,
         page,
         page_size: pageSize,
       };
       const res = await listSales(filter);
+      if (id !== reqRef.current) return;
       setSales(res.data);
       setTotal(res.total);
     } catch (e) {
+      if (id !== reqRef.current) return;
       setError(String(e));
     } finally {
-      setLoading(false);
+      if (id === reqRef.current) setLoading(false);
     }
-  }, [status, dateFrom, dateTo, page]);
+  }, [applied, page]);
 
   useEffect(() => {
     load();
@@ -64,14 +69,22 @@ export default function SalesHistory() {
 
   function applyFilters(e: React.FormEvent) {
     e.preventDefault();
+    if (dateFrom && dateTo && dateFrom > dateTo) {
+      reqRef.current += 1;
+      setLoading(false);
+      setError('La fecha inicial no puede ser posterior a la final');
+      return;
+    }
+    setError(null);
+    setApplied({ status, dateFrom, dateTo });
     setPage(1);
-    load();
   }
 
   function clearFilters() {
     setStatus('');
     setDateFrom('');
     setDateTo('');
+    setApplied({ status: '', dateFrom: '', dateTo: '' });
     setPage(1);
   }
 
