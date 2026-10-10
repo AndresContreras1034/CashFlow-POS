@@ -180,3 +180,25 @@ no funcionalidades ya implementadas.
   generar retrospectivamente informes solo si los datos existentes permiten
   reconstruirlos con fidelidad, sin presentarlos como snapshots contemporáneos.
 - **Estado:** conocido; histórico anterior a 022.
+
+### A5-09 — Ventas en espera locales a un equipo
+
+- **Descripción:** las ventas en espera se guardan en `localStorage` del equipo
+  con la clave `pos.heldCarts.v1`; no hay sincronización con otras cajas.
+- **Impacto:** un carrito guardado en un equipo no estará disponible en otra
+  caja y puede perderse si se limpia el almacenamiento local.
+- **Mitigación propuesta:** evaluar sincronización autenticada entre cajas o
+  exportación controlada, manteniendo claro que estos carritos no son ventas
+  registradas.
+- **Estado:** riesgo abierto; implementación local limitada a cinco carritos.
+
+### A5-10 — Producto eliminado en una venta en espera
+
+- **Descripción:** al retomar se consulta cada variante. Si ya no existe, está
+  inactiva o la consulta falla, la línea permanece marcada y bloquea la
+  confirmación hasta que el operador la revise o la elimine.
+- **Impacto:** una venta en espera con productos eliminados requiere revisión
+  manual y no puede confirmarse tal cual.
+- **Mitigación propuesta:** ofrecer una resolución administrativa explícita que
+  permita sustituir o quitar el producto con registro de la decisión.
+- **Estado:** riesgo abierto; revalidación manual en la pantalla de ventas.

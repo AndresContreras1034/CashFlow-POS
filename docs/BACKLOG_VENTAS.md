@@ -33,11 +33,15 @@ Elementos pendientes y completados basados en la interfaz y los servicios inspec
      completadas conforme a los filtros.
 
 6. **Venta en espera**
-   - **Estado:** pendiente.
-   - **Situación actual:** no se encontró una acción para guardar y recuperar
-     carritos pendientes en la pantalla de ventas.
-   - **Trabajo propuesto:** permitir suspender una venta y retomarla sin
-     registrarla como venta ni descontar existencias mientras siga pendiente.
+   - **Estado:** implementado en frontend.
+   - **Situación actual:** hasta cinco carritos se guardan localmente bajo
+     `pos.heldCarts.v1`, asociados al turno abierto. No son ventas registradas
+     ni reservan stock; se descartan al cambiar o quedar sin turno. Al retomar,
+     se revalidan precios y stock y los pagos deben armarse de nuevo.
+   - **Riesgos abiertos:** el almacenamiento es por equipo, no se comparte
+     entre cajas; si un producto fue eliminado o no se puede revalidar, requiere
+     revisión manual.
+   - **Lógica de carrito:** cálculos puros centralizados en `src/utils/cart.ts`.
 
 7. **Asociar un cliente a la venta**
    - **Estado:** pendiente en la interfaz.

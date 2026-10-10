@@ -218,3 +218,17 @@ pruebas hayan sido ejecutadas durante la elaboración de este documento.
 | 8 | Los rechazos de validación no se registran como eventos de fallo de auditoría. | Verificado en wrapper de auditoría y prueba `d06`. |
 | 9 | El actor se deriva del campo declarado por el cliente; autenticación pendiente A5. | Verificado en DTO, handler, helper y A5-01; la prueba del helper no verifica autenticación. |
 | 10 | Anulación y devolución total de venta completada son atómicas, restituyen stock y devuelven el neto efectivo en el turno actual. | Implementado; pruebas `v01`–`v11` añadidas. Validación del constraint histórico queda pendiente. |
+
+## Fase 5.4 — Ventas en espera locales
+
+- **Regla:** los carritos se guardan en `localStorage` bajo
+  `pos.heldCarts.v1`, con un máximo de cinco. Se asocian al identificador del
+  turno abierto, no reservan stock y se eliminan al cambiar de turno o quedar
+  sin turno. Retomarlos revalida precios y stock y exige que el operador revise
+  el contenido; los pagos se vuelven a capturar.
+- **Estado de negocio:** una venta en espera no es una venta registrada y no
+  genera pagos ni movimientos de inventario.
+- **Lógica de carrito:** los cálculos puros viven en `src/utils/cart.ts`;
+  almacenamiento, validación y poda por turno en `src/utils/heldSales.ts`.
+- **Pruebas:** `src/utils/cart.test.ts` y
+  `src/utils/heldSales.test.ts`.

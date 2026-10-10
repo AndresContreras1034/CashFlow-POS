@@ -6,17 +6,19 @@ import { printSaleTicket } from '../../services/billing.service';
 import { getCurrentCashSession } from '../../services/cash.service';
 import { formatMoney, parseMoneyInput, minorToInput, moneyStep } from '../../utils/format';
 import { actorField } from '../../utils/preferences';
+import {
+  computeCheckout,
+  retryFingerprint,
+  type CartLine,
+} from '../../utils/cart';
+import {
+  addHeld,
+  heldTotal,
+  pruneHeld,
+  removeHeld,
+  type HeldSale,
+} from '../../utils/heldSales';
 import './Sales.css';
-
-interface CartLine {
-  variant_id: number;
-  product_name: string;
-  attributes: Record<string, string>;
-  unit_price: number;
-  quantity: number;
-  discount: number;
-  stock: number; // referencia visual, la validación real es del backend
-}
 
 function attributesLabel(attrs: Record<string, string>) {
   const entries = Object.entries(attrs || {});
@@ -32,6 +34,12 @@ export default function Sales() {
   const [notice, setNotice] = useState<string | null>(null);
   const [confirming, setConfirming] = useState(false);
   const [cashOpen, setCashOpen] = useState<boolean | null>(null);
+  const [cashSessionId, setCashSessionId] = useState<number | null>(null);
+  const [heldSales, setHeldSales] = useState<HeldSale[]>([]);
+  const [heldReviewPending, setHeldReviewPending] = useState(false);
+  const [heldReviewAcknowledged, setHeldReviewAcknowledged] = useState(false);
+  const [heldReviewChanges, setHeldReviewChanges] = useState<string[]>([]);
+  const [heldLineIssues, setHeldLineIssues] = useState<Record<number, string>>({});
   const [lastSaleId, setLastSaleId] = useState<number | null>(null);
   const [isCourtesy, setIsCourtesy] = useState(false);
   const [courtesyReason, setCourtesyReason] = useState('');
@@ -56,12 +64,23 @@ export default function Sales() {
   const clearTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const attemptRef = useRef<{ fingerprint: string; key: string } | null>(null);
   const submittingRef = useRef(false);
+  const resumingHeldRef = useRef(false);
 
   const refreshCash = useCallback(async () => {
     try {
-      setCashOpen((await getCurrentCashSession()) !== null);
+      const current = await getCurrentCashSession();
+      const currentSessionId = current?.id ?? null;
+      setCashOpen(current !== null);
+      setCashSessionId(currentSessionId);
+      try {
+        const pruned = pruneHeld(window.localStorage, currentSessionId);
+        setHeldSales(pruned);
+      } catch (storageError) {
+        setNotice(String(storageError));
+      }
     } catch {
       setCashOpen(null);
+      setCashSessionId(null);
     }
   }, []);
 
@@ -69,33 +88,39 @@ export default function Sales() {
     void refreshCash();
   }, [refreshCash]);
 
-  const subtotal = cart.reduce(
-    (sum, line) => sum + line.unit_price * line.quantity - line.discount,
-    0
-  );
-  const courtesyMode = cart.length > 0 && (isCourtesy || subtotal === 0);
-  const total = courtesyMode ? 0 : subtotal;
-  const paymentsTotal = payments.reduce((sum, p) => sum + (p.amount || 0), 0);
-  const remaining = courtesyMode ? 0 : total - paymentsTotal;
-  const cashNet = payments.reduce(
-    (sum, payment) => sum + (payment.method === 'cash' ? payment.amount : 0),
-    0
-  );
   const cashReceived =
     cashReceivedInput.trim() === '' ? null : parseMoneyInput(cashReceivedInput);
   const cashReceivedInvalid = cashReceivedInput.trim() !== '' && cashReceived === null;
-  const cashShortage = cashReceived !== null && cashReceived < cashNet;
-  const cashChange =
-    cashReceived !== null && !cashShortage ? cashReceived - cashNet : null;
+  const {
+    subtotal,
+    courtesyMode,
+    total,
+    remaining,
+    cashNet,
+    cashShortage,
+    cashChange,
+    oversold,
+    hasInvalidDiscount,
+  } = computeCheckout({ lines: cart, payments, isCourtesyFlag: isCourtesy, cashReceived });
   const cashBlocked = cashOpen === false;
-  const oversold = cart.some((line) => line.quantity > line.stock);
+  const heldIssuesRemain = cart.some((line) => heldLineIssues[line.variant_id] !== undefined);
 
   useEffect(() => {
     if (cashNet === 0 || courtesyMode) setCashReceivedInput('');
   }, [cashNet, courtesyMode]);
 
   function addToCart(v: VariantWithProduct) {
+    if (resumingHeldRef.current) {
+      setNotice('Espera a que termine la validación de la venta en espera.');
+      return;
+    }
     setNotice(null);
+    setHeldLineIssues((prev) => {
+      if (prev[v.id] === undefined) return prev;
+      const next = { ...prev };
+      delete next[v.id];
+      return next;
+    });
     setCart((prev) => {
       const existing = prev.find((l) => l.variant_id === v.id);
       if (existing) {
@@ -165,7 +190,14 @@ export default function Sales() {
   }
 
   function removeLine(variantId: number) {
+    if (heldLineIssues[variantId] !== undefined) setError(null);
     setCart((prev) => prev.filter((l) => l.variant_id !== variantId));
+    setHeldLineIssues((prev) => {
+      if (prev[variantId] === undefined) return prev;
+      const next = { ...prev };
+      delete next[variantId];
+      return next;
+    });
   }
 
   function updatePaymentMethod(index: number, method: PaymentMethod) {
@@ -184,6 +216,137 @@ export default function Sales() {
 
   function removePaymentLine(index: number) {
     setPayments((prev) => prev.filter((_, i) => i !== index));
+  }
+
+  const clearCurrentCart = useCallback(() => {
+    attemptRef.current = null;
+    setCart([]);
+    setPayments([{ method: 'cash', amount: 0 }]);
+    setCashReceivedInput('');
+    setIsCourtesy(false);
+    setCourtesyReason('');
+    setHeldReviewPending(false);
+    setHeldReviewAcknowledged(false);
+    setHeldReviewChanges([]);
+    setHeldLineIssues({});
+  }, []);
+
+  function saveCurrentCart() {
+    if (cashSessionId === null || cashOpen !== true) {
+      setNotice('Se requiere un turno de caja abierto para guardar en espera.');
+      return;
+    }
+    try {
+      const result = addHeld(window.localStorage, {
+        session_id: cashSessionId,
+        is_courtesy: isCourtesy,
+        courtesy_reason: courtesyReason,
+        lines: cart,
+      });
+      if (!result.ok || !result.list) {
+        setNotice(result.error ?? 'No se pudo guardar la venta en espera.');
+        return;
+      }
+      setHeldSales(result.list);
+      clearCurrentCart();
+      setNotice('Carrito guardado en espera. No se registró la venta.');
+      scanInputRef.current?.focus();
+    } catch (storageError) {
+      setNotice(`No se pudo guardar la venta en espera: ${String(storageError)}`);
+    }
+  }
+
+  function discardHeldSale(id: string) {
+    try {
+      const result = removeHeld(window.localStorage, id);
+      if (!result.ok || !result.list) {
+        setNotice(result.error ?? 'No se pudo descartar la venta en espera.');
+        return;
+      }
+      setHeldSales(result.list);
+      setNotice('Venta en espera descartada.');
+    } catch (storageError) {
+      setNotice(`No se pudo descartar la venta en espera: ${String(storageError)}`);
+    }
+  }
+
+  async function resumeHeldSale(entry: HeldSale) {
+    if (resumingHeldRef.current) return;
+    if (cart.length > 0) {
+      setNotice('Vacía el carrito antes de retomar una venta en espera');
+      return;
+    }
+
+    resumingHeldRef.current = true;
+    try {
+      const refreshedLines: CartLine[] = [];
+      const changes: string[] = [];
+      const issues: Record<number, string> = {};
+      for (const line of entry.lines) {
+        try {
+          const fresh = await getVariant(line.variant_id);
+          refreshedLines.push({
+            ...line,
+            attributes: fresh.attributes,
+            unit_price: fresh.price,
+            stock: fresh.stock,
+          });
+          if (fresh.price !== line.unit_price) {
+            changes.push(
+              `${line.product_name}: ${formatMoney(line.unit_price)} -> ${formatMoney(fresh.price)}`
+            );
+          }
+          if (fresh.stock !== line.stock) {
+            changes.push(`${line.product_name}: stock ${line.stock} -> ${fresh.stock}`);
+          }
+          if (!fresh.is_active) {
+            issues[line.variant_id] =
+              `${line.product_name}: la variante está inactiva. Elimínala o revísala antes de confirmar.`;
+          }
+        } catch (lookupError) {
+          refreshedLines.push(line);
+          issues[line.variant_id] =
+            `${line.product_name}: no se pudo validar la variante (${String(lookupError)}). Elimínala o revísala antes de confirmar.`;
+        }
+      }
+
+      setCart(refreshedLines);
+      setPayments([{ method: 'cash', amount: 0 }]);
+      setCashReceivedInput('');
+      setIsCourtesy(entry.is_courtesy);
+      setCourtesyReason(entry.courtesy_reason);
+      setHeldLineIssues(issues);
+      setHeldReviewPending(true);
+      setHeldReviewAcknowledged(false);
+      setHeldReviewChanges(
+        changes.length > 0
+          ? changes
+          : ['Precios sin cambios; revisa disponibilidad, cantidades y descuentos antes de confirmar.']
+      );
+      setError(
+        Object.keys(issues).length > 0
+          ? 'Hay productos que requieren revisión antes de confirmar.'
+          : null
+      );
+      setNotice('Venta en espera cargada. Revisa los cambios y vuelve a armar los pagos.');
+
+      try {
+        const result = removeHeld(window.localStorage, entry.id);
+        if (result.ok && result.list) {
+          setHeldSales(result.list);
+        } else {
+          setNotice(
+            `${result.error ?? 'No se pudo quitar la venta en espera del almacenamiento.'} El carrito ya está cargado.`
+          );
+        }
+      } catch (storageError) {
+        setNotice(
+          `No se pudo quitar la venta en espera del almacenamiento: ${String(storageError)}. El carrito ya está cargado.`
+        );
+      }
+    } finally {
+      resumingHeldRef.current = false;
+    }
   }
 
   async function detectPriceChanges(): Promise<string[]> {
@@ -213,19 +376,14 @@ export default function Sales() {
   }
 
   const resetSale = useCallback(() => {
-    attemptRef.current = null;
-    setCart([]);
-    setPayments([{ method: 'cash', amount: 0 }]);
-    setCashReceivedInput('');
+    clearCurrentCart();
     setLastSaleId(null);
-    setIsCourtesy(false);
-    setCourtesyReason('');
     setError(null);
     setPrintError(null);
     setClearPending(false);
     if (clearTimerRef.current) clearTimeout(clearTimerRef.current);
     void refreshCash();
-  }, [refreshCash]);
+  }, [refreshCash, clearCurrentCart]);
 
   useEffect(() => {
     function onKeyDown(event: KeyboardEvent) {
@@ -260,12 +418,7 @@ export default function Sales() {
       clearTimerRef.current = setTimeout(() => setClearPending(false), 3000);
       return;
     }
-    setCart([]);
-    setPayments([{ method: 'cash', amount: 0 }]);
-    setCashReceivedInput('');
-    setIsCourtesy(false);
-    setCourtesyReason('');
-    attemptRef.current = null;
+    clearCurrentCart();
     setNotice(null);
     setClearPending(false);
     if (clearTimerRef.current) clearTimeout(clearTimerRef.current);
@@ -275,6 +428,18 @@ export default function Sales() {
     if (submittingRef.current) return;
     setError(null);
 
+    if (hasInvalidDiscount) {
+      setError('El descuento de una línea no puede superar su importe');
+      return;
+    }
+    if (heldReviewPending && !heldReviewAcknowledged) {
+      setError('Revisa la venta retomada antes de confirmar');
+      return;
+    }
+    if (heldIssuesRemain) {
+      setError('Revisa o elimina los productos marcados antes de confirmar');
+      return;
+    }
     if (cart.length === 0) {
       setError('Agrega al menos un producto al carrito');
       return;
@@ -323,7 +488,7 @@ export default function Sales() {
         courtesy_reason: courtesyMode ? trimmedCourtesyReason : null,
         ...actorField('created_by'),
       };
-      const fingerprint = JSON.stringify(payload);
+      const fingerprint = retryFingerprint(payload);
       if (attemptRef.current?.fingerprint !== fingerprint) {
         attemptRef.current = { fingerprint, key: crypto.randomUUID() };
       }
@@ -333,11 +498,7 @@ export default function Sales() {
       attemptRef.current = null;
       setLastSaleId(sale.id);
       setPrintError(null);
-      setCart([]);
-      setPayments([{ method: 'cash', amount: 0 }]);
-      setCashReceivedInput('');
-      setIsCourtesy(false);
-      setCourtesyReason('');
+      clearCurrentCart();
       if (autoPrint) {
         try {
           await printSaleTicket(sale.id);
@@ -365,6 +526,25 @@ export default function Sales() {
       {error && <div className="form-error">{error}</div>}
       {printError && !lastSaleId && <div className="form-error">{printError}</div>}
       {notice && <div className="sales-meta">{notice}</div>}
+      {heldReviewPending && (
+        <div className="sales-held-review">
+          <strong>Resumen de revalidación</strong>
+          <ul>
+            {heldReviewChanges.map((change) => <li key={change}>{change}</li>)}
+          </ul>
+          <label>
+            <input
+              type="checkbox"
+              checked={heldReviewAcknowledged}
+              onChange={(event) => {
+                setHeldReviewAcknowledged(event.target.checked);
+                if (event.target.checked) setError(null);
+              }}
+            />
+            Revisé los cambios, productos, cantidades y descuentos.
+          </label>
+        </div>
+      )}
 
       {lastSaleId && (
         <div className="sales-success">
@@ -417,13 +597,68 @@ export default function Sales() {
         )}
       </div>
 
+      <div className="sales-card sales-held-section">
+        <h2>Ventas en espera ({heldSales.length}/5) - no están registradas ni reservan stock</h2>
+        {heldSales.length === 0 ? (
+          <p className="sales-meta">No hay ventas en espera para este turno.</p>
+        ) : (
+          <ul className="sales-held-list">
+            {heldSales.map((entry) => (
+              <li className="sales-held-item" key={entry.id}>
+                <div className="sales-held-info">
+                  <strong>
+                    {new Date(entry.saved_at).toLocaleTimeString('es-CO', {
+                      hour: '2-digit',
+                      minute: '2-digit',
+                    })}
+                  </strong>
+                  <span>{entry.lines.length} líneas</span>
+                  <span>{formatMoney(heldTotal(entry))}</span>
+                </div>
+                <div className="sales-held-actions">
+                  <button
+                    className="btn"
+                    type="button"
+                    onClick={() => void resumeHeldSale(entry)}
+                  >
+                    Retomar
+                  </button>
+                  <button
+                    className="btn btn-danger"
+                    type="button"
+                    onClick={() => discardHeldSale(entry.id)}
+                  >
+                    Descartar
+                  </button>
+                </div>
+              </li>
+            ))}
+          </ul>
+        )}
+      </div>
+
       <div className="sales-card">
         <div className="sales-cart-heading">
           <h2>Carrito</h2>
           {cart.length > 0 && (
-            <button className="btn" type="button" onClick={requestClearCart}>
-              {clearPending ? '¿Seguro?' : 'Vaciar carrito'}
-            </button>
+            <div className="sales-held-actions">
+              <button
+                className="btn"
+                type="button"
+                onClick={saveCurrentCart}
+                disabled={cashSessionId === null || cashOpen !== true}
+                title={
+                  cashSessionId === null || cashOpen !== true
+                    ? 'Abre un turno de caja para guardar en espera'
+                    : undefined
+                }
+              >
+                Guardar en espera
+              </button>
+              <button className="btn" type="button" onClick={requestClearCart}>
+                {clearPending ? '¿Seguro?' : 'Vaciar carrito'}
+              </button>
+            </div>
           )}
         </div>
         {cart.length === 0 ? (
@@ -449,6 +684,18 @@ export default function Sales() {
                       <div className="sales-line-attrs">{attributesLabel(line.attributes)}</div>
                     )}
                     <div className="sales-line-attrs">Stock: {line.stock}</div>
+                    {heldLineIssues[line.variant_id] && (
+                      <div className="sales-held-line-issue">
+                        {heldLineIssues[line.variant_id]}
+                        <button
+                          type="button"
+                          className="btn btn-danger"
+                          onClick={() => removeLine(line.variant_id)}
+                        >
+                          Eliminar producto
+                        </button>
+                      </div>
+                    )}
                   </td>
                   <td>{formatMoney(line.unit_price)}</td>
                   <td>
@@ -663,6 +910,11 @@ export default function Sales() {
               Hay productos que superan el stock mostrado; el servidor confirmará.
             </div>
           )}
+          {hasInvalidDiscount && (
+            <div className="form-error">
+              El descuento de una línea no puede superar su importe
+            </div>
+          )}
 
           <button
             ref={confirmButtonRef}
@@ -672,6 +924,9 @@ export default function Sales() {
               remaining !== 0 ||
               cashShortage ||
               cashReceivedInvalid ||
+              hasInvalidDiscount ||
+              heldIssuesRemain ||
+              (heldReviewPending && !heldReviewAcknowledged) ||
               cashBlocked ||
               (courtesyMode && !courtesyReason.trim())
             }
