@@ -17,7 +17,7 @@ use crate::modules::inventory::{
 };
 use crate::modules::sales::{
     dto::{CreateSaleDto, SaleFilterDto},
-    models::{PaymentMethod, Sale, SaleDetail, SaleItem, SalePayment, SaleStatus},
+    models::{PaymentMethod, Sale, SaleDetail, SaleItem, SalePayment},
 };
 use crate::types::money::tax_included_in;
 
@@ -26,6 +26,11 @@ use crate::types::money::tax_included_in;
 pub enum CreateSaleError {
     Db(sqlx::Error),
     NoOpenCashSession,
+    CourtesyReasonRequired,
+    CourtesyReasonTooLong,
+    CourtesyZeroGross,
+    CourtesyHasPayments,
+    NoPayments,
     PaymentMismatch,
     InvalidDiscount,
     AmountOverflow,
@@ -106,10 +111,16 @@ pub async fn create_sale(pool: &PgPool, dto: CreateSaleDto) -> Result<SaleDetail
         .clone()
         .unwrap_or_else(|| "system".to_string());
     let actor = declared_actor(&dto.created_by);
-    let global_discount = dto.discount.unwrap_or(0);
-    if global_discount < 0 {
+    let requested_discount = dto.discount.unwrap_or(0);
+    if requested_discount < 0 {
         return Err(CreateSaleError::InvalidDiscount);
     }
+    let requested_courtesy_reason = dto
+        .courtesy_reason
+        .as_deref()
+        .map(str::trim)
+        .filter(|reason| !reason.is_empty())
+        .map(str::to_string);
 
     let settings =
         sqlx::query!("SELECT tax_rate_bps, currency_decimals FROM app_settings WHERE id = 1")
@@ -156,6 +167,7 @@ pub async fn create_sale(pool: &PgPool, dto: CreateSaleDto) -> Result<SaleDetail
     }
     let mut lines = Vec::new();
     let mut subtotal_total: i64 = 0;
+    let mut gross_total: i64 = 0;
 
     for item in &dto.items {
         let price = variants
@@ -167,6 +179,9 @@ pub async fn create_sale(pool: &PgPool, dto: CreateSaleDto) -> Result<SaleDetail
         let discount = item.discount.unwrap_or(0);
         let gross = price
             .checked_mul(item.quantity as i64)
+            .ok_or(CreateSaleError::AmountOverflow)?;
+        gross_total = gross_total
+            .checked_add(gross)
             .ok_or(CreateSaleError::AmountOverflow)?;
         if discount < 0 || discount > gross {
             return Err(CreateSaleError::InvalidDiscount);
@@ -186,10 +201,30 @@ pub async fn create_sale(pool: &PgPool, dto: CreateSaleDto) -> Result<SaleDetail
         });
     }
 
+    let global_discount = requested_discount;
     if global_discount > subtotal_total {
         return Err(CreateSaleError::InvalidDiscount);
     }
     let total = subtotal_total - global_discount;
+    let courtesy_reason = if total == 0 {
+        if gross_total == 0 {
+            return Err(CreateSaleError::CourtesyZeroGross);
+        }
+        if !dto.payments.is_empty() {
+            return Err(CreateSaleError::CourtesyHasPayments);
+        }
+        let reason = requested_courtesy_reason
+            .ok_or(CreateSaleError::CourtesyReasonRequired)?;
+        if reason.chars().count() > 200 {
+            return Err(CreateSaleError::CourtesyReasonTooLong);
+        }
+        Some(reason)
+    } else {
+        if dto.payments.is_empty() {
+            return Err(CreateSaleError::NoPayments);
+        }
+        None
+    };
     let total_tax = tax_included_in(total, settings.tax_rate_bps, currency_decimals);
     let allocated_discounts = allocate_proportionally(
         global_discount,
@@ -219,20 +254,21 @@ pub async fn create_sale(pool: &PgPool, dto: CreateSaleDto) -> Result<SaleDetail
     }
 
     // 2. Insertar sale
-    let sale = sqlx::query_as!(
-        Sale,
-        r#"INSERT INTO sales (customer_id, subtotal, tax, discount, total, status, notes, created_by)
-           VALUES ($1, $2, $3, $4, $5, 'completed', $6, $7)
-           RETURNING id, customer_id, subtotal, tax, discount, total,
-                     status AS "status: SaleStatus", notes, created_by, created_at"#,
-        dto.customer_id,
-        subtotal_total,
-        total_tax,
-        global_discount,
-        total,
-        dto.notes,
-        created_by
+    let sale = sqlx::query_as::<_, Sale>(
+        r#"INSERT INTO sales
+               (customer_id, subtotal, tax, discount, total, status, notes, courtesy_reason, created_by)
+           VALUES ($1, $2, $3, $4, $5, 'completed', $6, $7, $8)
+           RETURNING id, customer_id, subtotal, tax, discount, total, status, notes,
+                     courtesy_reason, created_by, created_at"#,
     )
+    .bind(dto.customer_id)
+    .bind(subtotal_total)
+    .bind(total_tax)
+    .bind(global_discount)
+    .bind(total)
+    .bind(dto.notes)
+    .bind(courtesy_reason.clone())
+    .bind(&created_by)
     .fetch_one(&mut *tx)
     .await?;
 
@@ -369,6 +405,8 @@ pub async fn create_sale(pool: &PgPool, dto: CreateSaleDto) -> Result<SaleDetail
                 "customer_id": sale.customer_id,
                 "cash_session_id": cash_session_id,
                 "idempotency_key": dto.idempotency_key,
+                "courtesy": sale.courtesy_reason.is_some(),
+                "courtesy_reason": sale.courtesy_reason,
             })),
             error_message: None,
         },
@@ -384,13 +422,12 @@ pub async fn create_sale(pool: &PgPool, dto: CreateSaleDto) -> Result<SaleDetail
 }
 
 pub async fn get_sale_by_id(pool: &PgPool, id: i32) -> Result<Option<SaleDetail>, sqlx::Error> {
-    let sale = sqlx::query_as!(
-        Sale,
+    let sale = sqlx::query_as::<_, Sale>(
         r#"SELECT id, customer_id, subtotal, tax, discount, total,
-                  status AS "status: SaleStatus", notes, created_by, created_at
+                  status, notes, courtesy_reason, created_by, created_at
            FROM sales WHERE id = $1"#,
-        id
     )
+    .bind(id)
     .fetch_optional(pool)
     .await?;
 
@@ -428,10 +465,9 @@ pub async fn list_sales(
     let page_size = filter.page_size.unwrap_or(20).clamp(1, 100);
     let offset = (page - 1) * page_size;
 
-    let rows = sqlx::query_as!(
-        Sale,
+    let rows = sqlx::query_as::<_, Sale>(
         r#"SELECT id, customer_id, subtotal, tax, discount, total,
-                  status AS "status: SaleStatus", notes, created_by, created_at
+                  status, notes, courtesy_reason, created_by, created_at
            FROM sales
            WHERE ($1::TEXT IS NULL OR status::TEXT = $1)
              AND ($2::INT  IS NULL OR customer_id = $2)
@@ -441,13 +477,13 @@ pub async fn list_sales(
                   (created_at AT TIME ZONE (SELECT timezone FROM app_settings WHERE id = 1))::DATE <= $4)
            ORDER BY created_at DESC
            LIMIT $5 OFFSET $6"#,
-        filter.status,
-        filter.customer_id,
-        filter.date_from,
-        filter.date_to,
-        page_size,
-        offset
     )
+    .bind(filter.status.as_deref())
+    .bind(filter.customer_id)
+    .bind(filter.date_from)
+    .bind(filter.date_to)
+    .bind(page_size)
+    .bind(offset)
     .fetch_all(pool)
     .await?;
 

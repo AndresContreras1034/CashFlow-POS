@@ -14,6 +14,7 @@ use crate::modules::settings::repository as settings_repo;
 // Filas intermedias solo para esta consulta.
 // ------------------------------------------------------------
 
+#[derive(sqlx::FromRow)]
 struct SaleRow {
     id: i32,
     subtotal: i64,
@@ -21,6 +22,7 @@ struct SaleRow {
     discount: i64,
     total: i64,
     status: SaleStatus,
+    courtesy_reason: Option<String>,
     created_by: String,
     created_at: DateTime<Utc>,
 }
@@ -45,21 +47,21 @@ struct PaymentRow {
 // ------------------------------------------------------------
 
 async fn fetch_ticket_data(pool: &PgPool, sale_id: i32) -> Result<TicketData, String> {
-    let sale = sqlx::query_as!(
-        SaleRow,
+    let sale = sqlx::query_as::<_, SaleRow>(
         r#"SELECT
                id,
                subtotal,
                tax,
                discount,
                total,
-               status as "status: SaleStatus",
+               status,
+               courtesy_reason,
                created_by,
                created_at
            FROM sales
            WHERE id = $1"#,
-        sale_id
     )
+    .bind(sale_id)
     .fetch_optional(pool)
     .await
     .map_err(|e| format!("Error consultando la venta: {e}"))?
@@ -153,6 +155,7 @@ async fn fetch_ticket_data(pool: &PgPool, sale_id: i32) -> Result<TicketData, St
         created_at: sale.created_at,
         created_by: sale.created_by,
         status: sale.status,
+        courtesy_reason: sale.courtesy_reason,
 
         lines,
         payments,

@@ -32,6 +32,8 @@ export default function Sales() {
   const [confirming, setConfirming] = useState(false);
   const [cashOpen, setCashOpen] = useState<boolean | null>(null);
   const [lastSaleId, setLastSaleId] = useState<number | null>(null);
+  const [isCourtesy, setIsCourtesy] = useState(false);
+  const [courtesyReason, setCourtesyReason] = useState('');
 
   const [payments, setPayments] = useState<CreateSalePaymentDto[]>([
     { method: 'cash', amount: 0 },
@@ -57,8 +59,10 @@ export default function Sales() {
     (sum, line) => sum + line.unit_price * line.quantity - line.discount,
     0
   );
+  const courtesyMode = cart.length > 0 && (isCourtesy || subtotal === 0);
+  const total = courtesyMode ? 0 : subtotal;
   const paymentsTotal = payments.reduce((sum, p) => sum + (p.amount || 0), 0);
-  const remaining = subtotal - paymentsTotal;
+  const remaining = courtesyMode ? 0 : total - paymentsTotal;
   const cashBlocked = cashOpen === false;
 
   function addToCart(v: VariantWithProduct) {
@@ -175,7 +179,7 @@ export default function Sales() {
     setPayments((prev) => {
       if (prev.length === 0) return prev;
       const [first, ...rest] = prev;
-      return [{ ...first, amount: subtotal }, ...rest];
+      return [{ ...first, amount: total }, ...rest];
     });
   }
 
@@ -184,6 +188,8 @@ export default function Sales() {
     setCart([]);
     setPayments([{ method: 'cash', amount: 0 }]);
     setLastSaleId(null);
+    setIsCourtesy(false);
+    setCourtesyReason('');
     setError(null);
     void refreshCash();
   }, [refreshCash]);
@@ -206,12 +212,17 @@ export default function Sales() {
         );
         return;
       }
-      if (remaining !== 0) {
+      if (!courtesyMode && remaining !== 0) {
         setError(
           remaining > 0
             ? `Faltan ${formatMoney(remaining)} por cubrir en los pagos`
             : `Los pagos exceden el total en ${formatMoney(-remaining)}`
         );
+        return;
+      }
+      const trimmedCourtesyReason = courtesyReason.trim();
+      if (courtesyMode && !trimmedCourtesyReason) {
+        setError('Escribe el motivo de la venta de cortesía');
         return;
       }
 
@@ -221,7 +232,9 @@ export default function Sales() {
           quantity: l.quantity,
           discount: l.discount || null,
         })),
-        payments: payments.filter((p) => p.amount > 0),
+        discount: courtesyMode ? subtotal : null,
+        payments: courtesyMode ? [] : payments.filter((p) => p.amount > 0),
+        courtesy_reason: courtesyMode ? trimmedCourtesyReason : null,
         ...actorField('created_by'),
       };
       const fingerprint = JSON.stringify(payload);
@@ -235,6 +248,8 @@ export default function Sales() {
       setLastSaleId(sale.id);
       setCart([]);
       setPayments([{ method: 'cash', amount: 0 }]);
+      setIsCourtesy(false);
+      setCourtesyReason('');
     } catch (e) {
       const message = String(e);
       setError(message);
@@ -357,54 +372,86 @@ export default function Sales() {
       {cart.length > 0 && (
         <div className="sales-card">
           <h2>Pago</h2>
+          <label className="sales-courtesy-toggle">
+            <input
+              type="checkbox"
+              checked={courtesyMode}
+              disabled={subtotal === 0}
+              onChange={(e) => {
+                const checked = e.target.checked;
+                setIsCourtesy(checked);
+                setPayments(checked ? [] : [{ method: 'cash', amount: 0 }]);
+              }}
+            />
+            Venta de cortesía (total $0)
+          </label>
+          {courtesyMode && (
+            <div className="form-field">
+              <label htmlFor="courtesy-reason">Motivo de la cortesía</label>
+              <textarea
+                id="courtesy-reason"
+                className="form-input sales-courtesy-reason"
+                maxLength={200}
+                value={courtesyReason}
+                onChange={(e) => setCourtesyReason(e.target.value)}
+              />
+              <span className="sales-meta">{courtesyReason.length}/200</span>
+            </div>
+          )}
           <div className="sales-total-row">
             <span>Total a pagar</span>
-            <span className="sales-total-value">{formatMoney(subtotal)}</span>
+            <span className="sales-total-value">{formatMoney(total)}</span>
           </div>
 
-          {payments.map((p, i) => (
-            <div className="sales-payment-row" key={i}>
-              <select
-                className="form-input"
-                value={p.method}
-                onChange={(e) => updatePaymentMethod(i, e.target.value as PaymentMethod)}
-              >
-                <option value="cash">Efectivo</option>
-                <option value="card">Tarjeta</option>
-                <option value="transfer">Transferencia</option>
-              </select>
-              <input
-                className="form-input"
-                type="number"
-                min={0}
-                step={moneyStep()}
-                placeholder="0"
-                value={p.amount ? minorToInput(p.amount) : ''}
-                onChange={(e) => updatePaymentAmount(i, e.target.value)}
-              />
-              {payments.length > 1 && (
-                <button className="btn btn-danger" onClick={() => removePaymentLine(i)}>
-                  ✕
+          {!courtesyMode && (
+            <>
+              {payments.map((p, i) => (
+                <div className="sales-payment-row" key={i}>
+                  <select
+                    className="form-input"
+                    value={p.method}
+                    onChange={(e) => updatePaymentMethod(i, e.target.value as PaymentMethod)}
+                  >
+                    <option value="cash">Efectivo</option>
+                    <option value="card">Tarjeta</option>
+                    <option value="transfer">Transferencia</option>
+                  </select>
+                  <input
+                    className="form-input"
+                    type="number"
+                    min={0}
+                    step={moneyStep()}
+                    placeholder="0"
+                    value={p.amount ? minorToInput(p.amount) : ''}
+                    onChange={(e) => updatePaymentAmount(i, e.target.value)}
+                  />
+                  {payments.length > 1 && (
+                    <button className="btn btn-danger" onClick={() => removePaymentLine(i)}>
+                      ✕
+                    </button>
+                  )}
+                </div>
+              ))}
+
+              <div className="sales-payment-actions">
+                <button className="btn" onClick={addPaymentLine}>
+                  + Agregar forma de pago
                 </button>
-              )}
-            </div>
-          ))}
-
-          <div className="sales-payment-actions">
-            <button className="btn" onClick={addPaymentLine}>
-              + Agregar forma de pago
-            </button>
-            <button className="btn" onClick={fillRemainingOnFirstPayment}>
-              Llenar con el total
-            </button>
-          </div>
+                <button className="btn" onClick={fillRemainingOnFirstPayment}>
+                  Llenar con el total
+                </button>
+              </div>
+            </>
+          )}
 
           <div
             className={
               'sales-remaining ' + (remaining === 0 ? 'sales-remaining-ok' : 'sales-remaining-pending')
             }
           >
-            {remaining === 0
+            {courtesyMode
+              ? 'Sin pago: venta de cortesía'
+              : remaining === 0
               ? 'Pagos completos'
               : remaining > 0
               ? `Falta ${formatMoney(remaining)}`
@@ -422,7 +469,12 @@ export default function Sales() {
 
           <button
             className="btn btn-primary sales-confirm-btn"
-            disabled={confirming || remaining !== 0 || cashBlocked}
+            disabled={
+              confirming ||
+              remaining !== 0 ||
+              cashBlocked ||
+              (courtesyMode && !courtesyReason.trim())
+            }
             onClick={handleConfirmSale}
           >
             {confirming ? 'Registrando...' : 'Confirmar venta'}

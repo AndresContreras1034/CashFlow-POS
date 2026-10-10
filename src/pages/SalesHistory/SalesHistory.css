@@ -27,6 +27,30 @@
   margin: 0;
 }
 
+.sales-history-courtesy {
+  display: inline-block;
+  margin-left: 8px;
+  padding: 3px 8px;
+  border-radius: 999px;
+  background: var(--accent-dim);
+  color: var(--accent);
+  font-size: 11px;
+  font-weight: 700;
+}
+
+.sales-history-courtesy-reason {
+  margin: 16px 0;
+  padding: 12px 14px;
+  border: 1px solid var(--accent);
+  border-radius: var(--radius-sm);
+  background: var(--accent-dim);
+}
+
+.sales-history-courtesy-reason p {
+  margin: 6px 0 0;
+  color: var(--text-secondary);
+}
+
 .form-error {
   margin-bottom: 18px;
   padding: 12px 14px;

@@ -193,7 +193,12 @@ export default function SalesHistory() {
                         {statusLabel[s.status]}
                       </span>
                     </td>
-                    <td>{formatMoney(s.total)}</td>
+                    <td>
+                      {formatMoney(s.total)}
+                      {s.courtesy_reason && (
+                        <span className="sales-history-courtesy">Cortesía</span>
+                      )}
+                    </td>
                     <td>{s.created_by}</td>
                   </tr>
                 ))}
@@ -251,6 +256,12 @@ export default function SalesHistory() {
                   {new Date(selected.created_at).toLocaleString('es-CO')} — {statusLabel[selected.status]}
                   {' · '}Vendedor: {selected.created_by}
                 </p>
+                {selected.courtesy_reason && (
+                  <div className="sales-history-courtesy-reason">
+                    <strong>Venta de cortesía</strong>
+                    <p>Motivo: {selected.courtesy_reason}</p>
+                  </div>
+                )}
 
                 <table className="sales-history-table">
                   <thead>

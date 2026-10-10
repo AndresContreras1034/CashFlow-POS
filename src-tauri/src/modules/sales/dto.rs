@@ -24,6 +24,7 @@ pub struct CreateSaleDto {
     pub payments: Vec<CreateSalePaymentDto>,
     pub discount: Option<i64>,
     pub notes: Option<String>,
+    pub courtesy_reason: Option<String>,
     pub created_by: Option<String>,
     /// Reintentos con la misma clave devuelven la venta original.
     #[serde(default)]

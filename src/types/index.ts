@@ -422,6 +422,7 @@ export interface Sale {
   total: number;
   status: SaleStatus;
   notes: string | null;
+  courtesy_reason: string | null;
   created_by: string;
   created_at: string;
 }
@@ -466,6 +467,7 @@ export interface CreateSaleDto {
   payments: CreateSalePaymentDto[];
   discount?: number | null;
   notes?: string | null;
+  courtesy_reason?: string | null;
   created_by?: string | null;
   idempotency_key?: string | null;
 }

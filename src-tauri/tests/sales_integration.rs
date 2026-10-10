@@ -110,6 +110,7 @@ fn new_sale(items: Vec<CreateSaleItemDto>, payments: Vec<CreateSalePaymentDto>) 
         payments,
         discount: None,
         notes: None,
+        courtesy_reason: None,
         created_by: Some("test".to_string()),
         idempotency_key: None,
     }
@@ -915,4 +916,285 @@ async fn a15_venta_con_tarjeta_guarda_turno_sin_movimiento_de_caja(pool: PgPool)
 
     assert_eq!(linked_session_id, session_id);
     assert_eq!(count(&pool, "cash_movements").await, 0);
+}
+
+#[sqlx::test(migrations = "./migrations")]
+async fn a16_venta_de_cortesia_guarda_motivo_y_no_registra_pago(pool: PgPool) {
+    let variant_id = seed_variant(&pool, 10_000, 5).await;
+    let session_id = open_cash(&pool).await;
+    let mut dto = new_sale(vec![item(variant_id, 1)], vec![]);
+    dto.discount = Some(10_000);
+    dto.courtesy_reason = Some("Apoyo a cliente".to_string());
+
+    let created = service::create_sale(&pool, dto)
+        .await
+        .expect("la cortesía debe registrarse sin pago");
+
+    assert_eq!(created.sale.total, 0);
+    assert_eq!(created.sale.discount, created.sale.subtotal);
+    assert_eq!(
+        created.sale.courtesy_reason.as_deref(),
+        Some("Apoyo a cliente")
+    );
+    let saved_session_id: i32 =
+        sqlx::query_scalar("SELECT cash_session_id FROM sales WHERE id = $1")
+            .bind(created.sale.id)
+            .fetch_one(&pool)
+            .await
+            .unwrap();
+    assert_eq!(saved_session_id, session_id);
+    assert!(created.payments.is_empty());
+    assert_eq!(count(&pool, "sale_payments").await, 0);
+    assert_eq!(stock_of(&pool, variant_id).await, 4);
+    assert_eq!(count(&pool, "cash_movements").await, 0);
+
+    let fetched = service::get_sale(&pool, created.sale.id)
+        .await
+        .expect("el detalle debe incluir el motivo");
+    assert_eq!(
+        fetched.sale.courtesy_reason.as_deref(),
+        Some("Apoyo a cliente")
+    );
+    let listed = service::list_sales(&pool, SaleFilterDto::default())
+        .await
+        .unwrap();
+    assert_eq!(
+        listed.data[0].courtesy_reason.as_deref(),
+        Some("Apoyo a cliente")
+    );
+
+    let metadata: serde_json::Value =
+        sqlx::query_scalar("SELECT metadata FROM audit_events WHERE action = 'create'")
+            .fetch_one(&pool)
+            .await
+            .unwrap();
+    assert_eq!(metadata["courtesy"], true);
+    assert_eq!(metadata["courtesy_reason"], "Apoyo a cliente");
+}
+
+#[sqlx::test(migrations = "./migrations")]
+async fn a17_total_cero_sin_motivo_de_cortesia_se_rechaza(pool: PgPool) {
+    let variant_id = seed_variant(&pool, 10_000, 5).await;
+    open_cash(&pool).await;
+    let mut dto = new_sale(vec![item(variant_id, 1)], vec![]);
+    dto.discount = Some(10_000);
+
+    let message = service::create_sale(&pool, dto)
+        .await
+        .expect_err("una venta total cero requiere motivo")
+        .to_string();
+
+    assert!(message.contains("cortesía"), "{message}");
+    assert_untouched(&pool, variant_id, 5).await;
+}
+
+#[sqlx::test(migrations = "./migrations")]
+async fn d01_venta_con_valor_y_motivo_sin_pago_se_rechaza(pool: PgPool) {
+    let variant_id = seed_variant(&pool, 10_000, 5).await;
+    open_cash(&pool).await;
+
+    let mut dto = new_sale(vec![item(variant_id, 1)], vec![]);
+    dto.courtesy_reason = Some("Motivo recibido".to_string());
+    let message = service::create_sale(&pool, dto)
+        .await
+        .expect_err("una venta con valor requiere pago")
+        .to_string();
+    assert!(message.contains("al menos un pago"), "{message}");
+    assert_untouched(&pool, variant_id, 5).await;
+}
+
+#[sqlx::test(migrations = "./migrations")]
+async fn d02_venta_con_valor_y_motivo_se_guarda_como_venta_normal(pool: PgPool) {
+    let variant_id = seed_variant(&pool, 10_000, 5).await;
+    open_cash(&pool).await;
+    let mut dto = new_sale(
+        vec![item(variant_id, 1)],
+        vec![pay(PaymentMethod::Card, 10_000)],
+    );
+    dto.courtesy_reason = Some("Motivo que debe descartarse".to_string());
+
+    let created = service::create_sale(&pool, dto)
+        .await
+        .expect("debe registrarse como venta normal");
+    let saved_reason: Option<String> =
+        sqlx::query_scalar("SELECT courtesy_reason FROM sales WHERE id = $1")
+            .bind(created.sale.id)
+            .fetch_one(&pool)
+            .await
+            .unwrap();
+
+    assert_eq!(created.sale.total, 10_000);
+    assert_eq!(saved_reason, None);
+    assert_eq!(created.sale.courtesy_reason, None);
+}
+
+#[sqlx::test(migrations = "./migrations")]
+async fn d03_total_cero_con_pago_se_rechaza(pool: PgPool) {
+    let variant_id = seed_variant(&pool, 10_000, 5).await;
+    open_cash(&pool).await;
+    let mut dto = new_sale(
+        vec![item(variant_id, 1)],
+        vec![pay(PaymentMethod::Card, 1)],
+    );
+    dto.discount = Some(10_000);
+    dto.courtesy_reason = Some("Apoyo".to_string());
+
+    let message = service::create_sale(&pool, dto)
+        .await
+        .expect_err("una cortesía no debe incluir pagos")
+        .to_string();
+    assert!(message.contains("no puede incluir pagos"), "{message}");
+    assert_untouched(&pool, variant_id, 5).await;
+}
+
+#[sqlx::test(migrations = "./migrations")]
+async fn d04_motivo_de_cortesia_solo_espacios_se_rechaza(pool: PgPool) {
+    let variant_id = seed_variant(&pool, 10_000, 5).await;
+    open_cash(&pool).await;
+    let mut dto = new_sale(vec![item(variant_id, 1)], vec![]);
+    dto.discount = Some(10_000);
+    dto.courtesy_reason = Some("   ".to_string());
+
+    let message = service::create_sale(&pool, dto)
+        .await
+        .expect_err("el motivo no puede estar vacío")
+        .to_string();
+    assert!(message.to_lowercase().contains("motivo"), "{message}");
+    assert_untouched(&pool, variant_id, 5).await;
+}
+
+#[sqlx::test(migrations = "./migrations")]
+async fn d05_motivo_de_200_caracteres_se_acepta(pool: PgPool) {
+    let variant_id = seed_variant(&pool, 10_000, 5).await;
+    open_cash(&pool).await;
+    let reason = "a".repeat(200);
+    let mut dto = new_sale(vec![item(variant_id, 1)], vec![]);
+    dto.discount = Some(10_000);
+    dto.courtesy_reason = Some(reason.clone());
+
+    let created = service::create_sale(&pool, dto)
+        .await
+        .expect("un motivo de 200 caracteres debe aceptarse");
+    assert_eq!(created.sale.courtesy_reason.as_deref(), Some(reason.as_str()));
+}
+
+#[sqlx::test(migrations = "./migrations")]
+async fn d06_motivo_de_201_caracteres_se_rechaza_sin_evento_de_fallo(pool: PgPool) {
+    let variant_id = seed_variant(&pool, 10_000, 5).await;
+    open_cash(&pool).await;
+    let mut dto = new_sale(vec![item(variant_id, 1)], vec![]);
+    dto.discount = Some(10_000);
+    dto.courtesy_reason = Some("a".repeat(201));
+
+    let message = service::create_sale(&pool, dto)
+        .await
+        .expect_err("un motivo de 201 caracteres debe rechazarse")
+        .to_string();
+    assert!(message.contains("200 caracteres"), "{message}");
+    let failure_events: i64 = sqlx::query_scalar(
+        "SELECT COUNT(*) FROM audit_events WHERE outcome::TEXT = 'failure'",
+    )
+    .fetch_one(&pool)
+    .await
+    .unwrap();
+    assert_eq!(failure_events, 0);
+    assert_untouched(&pool, variant_id, 5).await;
+}
+
+#[sqlx::test(migrations = "./migrations")]
+async fn d07_motivo_con_acentos_se_guarda_sin_espacios_laterales(pool: PgPool) {
+    let variant_id = seed_variant(&pool, 10_000, 5).await;
+    open_cash(&pool).await;
+    let mut dto = new_sale(vec![item(variant_id, 1)], vec![]);
+    dto.discount = Some(10_000);
+    dto.courtesy_reason = Some("  Apoyo a José  ".to_string());
+
+    let created = service::create_sale(&pool, dto)
+        .await
+        .expect("el motivo con acentos debe aceptarse");
+    assert_eq!(
+        created.sale.courtesy_reason.as_deref(),
+        Some("Apoyo a José")
+    );
+}
+
+#[sqlx::test(migrations = "./migrations")]
+async fn d08_bruto_cero_se_rechaza_como_cortesia(pool: PgPool) {
+    let variant_id = seed_variant(&pool, 0, 5).await;
+    open_cash(&pool).await;
+    let mut dto = new_sale(vec![item(variant_id, 1)], vec![]);
+    dto.courtesy_reason = Some("Apoyo".to_string());
+
+    let message = service::create_sale(&pool, dto)
+        .await
+        .expect_err("una cortesía requiere importe bruto mayor a cero")
+        .to_string();
+    assert!(message.contains("importe bruto"), "{message}");
+    assert_untouched(&pool, variant_id, 5).await;
+}
+
+#[sqlx::test(migrations = "./migrations")]
+async fn d09_descuento_de_linea_total_permite_cortesia(pool: PgPool) {
+    let variant_id = seed_variant(&pool, 10_000, 5).await;
+    open_cash(&pool).await;
+    let mut line = item(variant_id, 1);
+    line.discount = Some(10_000);
+    let mut dto = new_sale(vec![line], vec![]);
+    dto.courtesy_reason = Some("Apoyo".to_string());
+
+    let created = service::create_sale(&pool, dto)
+        .await
+        .expect("el descuento total de línea debe permitir cortesía");
+    assert_eq!(created.sale.total, 0);
+    assert_eq!(created.sale.discount, 0);
+    assert_eq!(created.sale.courtesy_reason.as_deref(), Some("Apoyo"));
+}
+
+#[sqlx::test(migrations = "./migrations")]
+async fn d10_descuento_parcial_sin_pagos_se_rechaza(pool: PgPool) {
+    let variant_id = seed_variant(&pool, 10_000, 5).await;
+    open_cash(&pool).await;
+    let mut dto = new_sale(vec![item(variant_id, 1)], vec![]);
+    dto.discount = Some(1_000);
+    dto.courtesy_reason = Some("No debe convertir la venta".to_string());
+
+    let message = service::create_sale(&pool, dto)
+        .await
+        .expect_err("el descuento parcial deja saldo y requiere pago")
+        .to_string();
+    assert!(message.contains("al menos un pago"), "{message}");
+    assert_untouched(&pool, variant_id, 5).await;
+}
+
+#[sqlx::test(migrations = "./migrations")]
+async fn d11_cortesia_sin_turno_abierto_se_rechaza(pool: PgPool) {
+    let variant_id = seed_variant(&pool, 10_000, 5).await;
+    let mut dto = new_sale(vec![item(variant_id, 1)], vec![]);
+    dto.discount = Some(10_000);
+    dto.courtesy_reason = Some("Apoyo".to_string());
+
+    let message = service::create_sale(&pool, dto)
+        .await
+        .expect_err("la cortesía también requiere turno abierto")
+        .to_string();
+    assert!(message.contains("turno de caja"), "{message}");
+    assert_untouched(&pool, variant_id, 5).await;
+}
+
+#[sqlx::test(migrations = "./migrations")]
+async fn d12_reintento_idempotente_de_cortesia_devuelve_la_misma_venta(pool: PgPool) {
+    let variant_id = seed_variant(&pool, 10_000, 5).await;
+    open_cash(&pool).await;
+    let key = Uuid::new_v4();
+    let make = || {
+        let mut dto = keyed(key, vec![item(variant_id, 1)], vec![]);
+        dto.discount = Some(10_000);
+        dto.courtesy_reason = Some("Apoyo".to_string());
+        dto
+    };
+
+    let first = service::create_sale(&pool, make()).await.unwrap();
+    let retry = service::create_sale(&pool, make()).await.unwrap();
+    assert_eq!(first.sale.id, retry.sale.id);
+    assert_eq!(count(&pool, "sales").await, 1);
 }

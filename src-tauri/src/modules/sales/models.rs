@@ -30,6 +30,7 @@ pub struct Sale {
     pub total: i64,
     pub status: SaleStatus,
     pub notes: Option<String>,
+    pub courtesy_reason: Option<String>,
     pub created_by: String,
     pub created_at: DateTime<Utc>,
 }

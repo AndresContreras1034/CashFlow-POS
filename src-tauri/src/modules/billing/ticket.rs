@@ -78,6 +78,16 @@ pub fn build_sale_ticket(data: &TicketData) -> Vec<u8> {
             &format!("Vendedor: {}", ascii_safe(&data.created_by)),
         );
     }
+    if let Some(reason) = &data.courtesy_reason {
+        align_center(&mut b);
+        bold_on(&mut b);
+        push_line(&mut b, "VENTA DE CORTESIA");
+        bold_off(&mut b);
+        align_left(&mut b);
+        for line in wrap(&format!("Motivo: {}", ascii_safe(reason)), CHARS_PER_LINE) {
+            push_line(&mut b, &line);
+        }
+    }
 
     // Cliente y Documento: SIN conectar a ningún dato real, se llenan a mano.
     push_line(&mut b, "Cliente: _______________________");
@@ -112,7 +122,7 @@ pub fn build_sale_ticket(data: &TicketData) -> Vec<u8> {
     push_line(&mut b, &"-".repeat(CHARS_PER_LINE));
 
     // ---- Forma de pago ----
-    if data.show_payment_method {
+    if data.show_payment_method && !data.payments.is_empty() {
         align_center(&mut b);
         push_line(&mut b, "FORMA DE PAGO");
         align_left(&mut b);
@@ -359,6 +369,7 @@ mod tests {
             created_at: Utc.timestamp_opt(0, 0).single().unwrap(),
             created_by: "Operador".into(),
             status: SaleStatus::Completed,
+            courtesy_reason: Some("Apoyo a cliente".into()),
             lines: Vec::new(),
             payments: Vec::new(),
             subtotal: 1000,
@@ -379,5 +390,47 @@ mod tests {
         ] {
             assert!(!ticket.contains(hidden), "unexpected ticket text: {hidden}");
         }
+        assert!(ticket.contains("VENTA DE CORTESIA"));
+        assert!(ticket.contains("Motivo: Apoyo a cliente"));
+    }
+
+    #[test]
+    fn courtesy_ticket_omits_payment_block_when_payment_method_is_enabled() {
+        let data = TicketData {
+            business_name: "Tienda".into(),
+            tax_id: None,
+            address: None,
+            phone: None,
+            ticket_header: None,
+            ticket_footer: None,
+            tax_name: "IVA".into(),
+            currency_decimals: 0,
+            show_logo: false,
+            show_tax_id: false,
+            show_address: false,
+            show_phone: false,
+            show_cashier: false,
+            show_tax_breakdown: false,
+            show_discounts: false,
+            show_payment_method: true,
+            sale_id: 2,
+            ticket_number: "V-2".into(),
+            created_at: Utc.timestamp_opt(0, 0).single().unwrap(),
+            created_by: "Operador".into(),
+            status: SaleStatus::Completed,
+            courtesy_reason: Some("Apoyo a cliente".into()),
+            lines: Vec::new(),
+            payments: Vec::new(),
+            subtotal: 1000,
+            discount: 1000,
+            tax: 0,
+            total: 0,
+        };
+
+        let ticket = String::from_utf8(build_sale_ticket(&data)).unwrap();
+        assert!(ticket.contains("VENTA DE CORTESIA"));
+        assert!(ticket.contains("Motivo:"));
+        assert!(!ticket.contains("Efectivo:"));
+        assert!(!ticket.contains("Total recibido"));
     }
 }

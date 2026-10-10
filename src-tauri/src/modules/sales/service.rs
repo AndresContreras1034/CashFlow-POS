@@ -11,9 +11,6 @@ pub async fn create_sale(pool: &PgPool, dto: CreateSaleDto) -> Result<SaleDetail
     if dto.items.is_empty() {
         return Err(AppError::validation("La venta debe tener al menos un ítem"));
     }
-    if dto.payments.is_empty() {
-        return Err(AppError::validation("La venta debe tener al menos un pago"));
-    }
     if dto.items.iter().any(|i| i.quantity <= 0) {
         return Err(AppError::validation(
             "La cantidad de cada ítem debe ser mayor a cero",
@@ -32,6 +29,21 @@ pub async fn create_sale(pool: &PgPool, dto: CreateSaleDto) -> Result<SaleDetail
             CreateSaleError::NoOpenCashSession => AppError::validation(
                 "No hay un turno de caja abierto. Abre la caja para registrar ventas.",
             ),
+            CreateSaleError::CourtesyReasonRequired => {
+                AppError::validation("La venta de cortesía requiere un motivo")
+            }
+            CreateSaleError::CourtesyReasonTooLong => {
+                AppError::validation("El motivo de cortesía no puede superar 200 caracteres")
+            }
+            CreateSaleError::CourtesyZeroGross => AppError::validation(
+                "Una venta de cortesía debe tener un importe bruto mayor a cero",
+            ),
+            CreateSaleError::CourtesyHasPayments => {
+                AppError::validation("Una venta de cortesía no puede incluir pagos")
+            }
+            CreateSaleError::NoPayments => {
+                AppError::validation("La venta debe tener al menos un pago")
+            }
             CreateSaleError::PaymentMismatch => {
                 AppError::validation("El total de los pagos no coincide con el total de la venta")
             }

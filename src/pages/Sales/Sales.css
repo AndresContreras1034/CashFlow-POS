@@ -262,6 +262,27 @@
    TOTAL
    ============================================================ */
 
+.sales-courtesy-toggle {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  margin-bottom: 14px;
+  color: var(--text-primary);
+  font-size: 14px;
+  font-weight: 600;
+}
+
+.sales-courtesy-toggle input {
+  width: 18px;
+  height: 18px;
+  accent-color: var(--accent);
+}
+
+.sales-courtesy-reason {
+  min-height: 84px;
+  resize: vertical;
+}
+
 .sales-total-row {
   display: flex;
   align-items: center;
