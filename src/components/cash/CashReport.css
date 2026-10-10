@@ -1,0 +1,82 @@
+.cash-report-header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 16px;
+}
+
+.cash-report-header h2 {
+  margin-bottom: 0;
+}
+
+.cash-report-badge {
+  padding: 5px 9px;
+  border-radius: var(--radius-sm);
+  background: var(--accent-dim);
+  color: var(--accent);
+  font-size: 11px;
+  font-weight: 700;
+  white-space: nowrap;
+}
+
+.cash-report-sections {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+  gap: 20px;
+}
+
+.cash-report-sections > section {
+  padding: 14px;
+  background: var(--bg-elevated);
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-sm);
+}
+
+.cash-report-sections h3 {
+  margin: 0 0 10px;
+  color: var(--text-primary);
+  font-size: 13px;
+}
+
+.cash-report dl {
+  display: flex;
+  flex-direction: column;
+  gap: 7px;
+  margin: 0;
+}
+
+.cash-report dl > div {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  font-size: 12.5px;
+}
+
+.cash-report dt {
+  color: var(--text-secondary);
+}
+
+.cash-report dd {
+  margin: 0;
+  color: var(--text-primary);
+  font-weight: 600;
+  text-align: right;
+}
+
+.cash-report .cash-report-total {
+  padding-top: 8px;
+  border-top: 1px solid var(--border);
+  font-weight: 700;
+}
+
+.cash-report-note {
+  margin: 12px 0 0;
+  color: var(--text-muted);
+  font-size: 11.5px;
+}
+
+@media (max-width: 600px) {
+  .cash-report-header {
+    flex-direction: column;
+  }
+}

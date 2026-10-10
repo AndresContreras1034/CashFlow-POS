@@ -15,6 +15,10 @@ use crate::modules::cash::{
         OpenSessionDto,
     },
     models::{CashMovement, CashMovementType, CashSession, CashSessionWithTotals},
+    models::{
+        CashReportPaymentMethods, CashReportSales, CashReportTotals, CashReportVoids,
+        CashSessionReport,
+    },
 };
 
 /// Errores de negocio propios del cierre de turno — se distinguen de
@@ -233,6 +237,21 @@ pub async fn close_session(
     .fetch_one(&mut *tx)
     .await?;
 
+    let report = build_session_report(&mut *tx, id, "Z").await?;
+    if report.cash.expected_amount != expected_amount {
+        return Err(CloseSessionError::Db(sqlx::Error::Protocol(format!(
+            "El esperado del informe Z ({}) no coincide con el esperado del cierre ({expected_amount})",
+            report.cash.expected_amount
+        ))));
+    }
+    sqlx::query(
+        "INSERT INTO cash_session_reports (session_id, report) VALUES ($1, $2)",
+    )
+    .bind(id)
+    .bind(sqlx::types::Json(report))
+    .execute(&mut *tx)
+    .await?;
+
     audit_repo::insert_event(
         &mut *tx,
         NewAuditEvent {
@@ -263,6 +282,198 @@ pub async fn close_session(
     tx.commit().await?;
 
     Ok(Some(updated))
+}
+
+#[derive(sqlx::FromRow)]
+struct SessionReportRow {
+    session_id: i32,
+    opened_by: String,
+    closed_by: Option<String>,
+    opened_at_local: String,
+    closed_at_local: Option<String>,
+    generated_at_local: String,
+    opening_amount: i64,
+    cash_sales: i64,
+    cash_refunds: i64,
+    manual_in: i64,
+    manual_out: i64,
+    expected_amount: i64,
+    counted_amount: Option<i64>,
+    difference: Option<i64>,
+    sales_count: i64,
+    gross_total: i64,
+    discount_total: i64,
+    net_total: i64,
+    method_cash: i64,
+    method_card: i64,
+    method_transfer: i64,
+    courtesy_count: i64,
+    courtesy_gross: i64,
+    cancelled_count: i64,
+    cancelled_total: i64,
+    refunded_count: i64,
+    refunded_total: i64,
+}
+
+pub async fn build_session_report(
+    conn: &mut PgConnection,
+    session_id: i32,
+    kind: &str,
+) -> Result<CashSessionReport, sqlx::Error> {
+    let row = sqlx::query_as::<_, SessionReportRow>(
+        r#"SELECT
+               s.id AS session_id,
+               s.opened_by,
+               s.closed_by,
+               to_char(
+                   s.opened_at AT TIME ZONE (SELECT timezone FROM app_settings WHERE id = 1),
+                   'DD/MM/YYYY HH24:MI'
+               ) AS opened_at_local,
+               to_char(
+                   s.closed_at AT TIME ZONE (SELECT timezone FROM app_settings WHERE id = 1),
+                   'DD/MM/YYYY HH24:MI'
+               ) AS closed_at_local,
+               to_char(
+                   NOW() AT TIME ZONE (SELECT timezone FROM app_settings WHERE id = 1),
+                   'DD/MM/YYYY HH24:MI'
+               ) AS generated_at_local,
+               s.opening_amount,
+               COALESCE(m.cash_sales, 0)::BIGINT AS cash_sales,
+               COALESCE(m.cash_refunds, 0)::BIGINT AS cash_refunds,
+               COALESCE(m.manual_in, 0)::BIGINT AS manual_in,
+               COALESCE(m.manual_out, 0)::BIGINT AS manual_out,
+               COALESCE(
+                   s.expected_amount,
+                   s.opening_amount
+                       + COALESCE(m.cash_sales, 0)
+                       + COALESCE(m.manual_in, 0)
+                       - COALESCE(m.cash_refunds, 0)
+                       - COALESCE(m.manual_out, 0)
+               )::BIGINT AS expected_amount,
+               s.counted_amount,
+               s.difference,
+               (SELECT COUNT(*)::BIGINT FROM sales sale
+                WHERE sale.cash_session_id = s.id AND sale.status = 'completed') AS sales_count,
+               COALESCE((SELECT SUM(sale.subtotal)::BIGINT FROM sales sale
+                WHERE sale.cash_session_id = s.id AND sale.status = 'completed'), 0)::BIGINT
+                   AS gross_total,
+               COALESCE((SELECT SUM(sale.discount)::BIGINT FROM sales sale
+                WHERE sale.cash_session_id = s.id AND sale.status = 'completed'), 0)::BIGINT
+                   AS discount_total,
+               COALESCE((SELECT SUM(sale.total)::BIGINT FROM sales sale
+                WHERE sale.cash_session_id = s.id AND sale.status = 'completed'), 0)::BIGINT
+                   AS net_total,
+               COALESCE((SELECT SUM(payment.amount)::BIGINT
+                FROM sale_payments payment
+                JOIN sales sale ON sale.id = payment.sale_id
+                WHERE sale.cash_session_id = s.id AND sale.status = 'completed'
+                  AND payment.method = 'cash'), 0)::BIGINT AS method_cash,
+               COALESCE((SELECT SUM(payment.amount)::BIGINT
+                FROM sale_payments payment
+                JOIN sales sale ON sale.id = payment.sale_id
+                WHERE sale.cash_session_id = s.id AND sale.status = 'completed'
+                  AND payment.method = 'card'), 0)::BIGINT AS method_card,
+               COALESCE((SELECT SUM(payment.amount)::BIGINT
+                FROM sale_payments payment
+                JOIN sales sale ON sale.id = payment.sale_id
+                WHERE sale.cash_session_id = s.id AND sale.status = 'completed'
+                  AND payment.method = 'transfer'), 0)::BIGINT AS method_transfer,
+               (SELECT COUNT(*)::BIGINT FROM sales sale
+                WHERE sale.cash_session_id = s.id AND sale.status = 'completed'
+                  AND sale.total = 0) AS courtesy_count,
+               COALESCE((SELECT SUM(sale.subtotal)::BIGINT FROM sales sale
+                WHERE sale.cash_session_id = s.id AND sale.status = 'completed'
+                  AND sale.total = 0), 0)::BIGINT AS courtesy_gross,
+               (SELECT COUNT(*)::BIGINT FROM sales sale
+                WHERE sale.status = 'cancelled'
+                  AND sale.voided_at >= s.opened_at
+                  AND sale.voided_at <= COALESCE(s.closed_at, NOW())) AS cancelled_count,
+               COALESCE((SELECT SUM(sale.total)::BIGINT FROM sales sale
+                WHERE sale.status = 'cancelled'
+                  AND sale.voided_at >= s.opened_at
+                  AND sale.voided_at <= COALESCE(s.closed_at, NOW())), 0)::BIGINT
+                   AS cancelled_total,
+               (SELECT COUNT(*)::BIGINT FROM sales sale
+                WHERE sale.status = 'refunded'
+                  AND sale.voided_at >= s.opened_at
+                  AND sale.voided_at <= COALESCE(s.closed_at, NOW())) AS refunded_count,
+               COALESCE((SELECT SUM(sale.total)::BIGINT FROM sales sale
+                WHERE sale.status = 'refunded'
+                  AND sale.voided_at >= s.opened_at
+                  AND sale.voided_at <= COALESCE(s.closed_at, NOW())), 0)::BIGINT
+                   AS refunded_total
+           FROM cash_sessions s
+           LEFT JOIN LATERAL (
+               SELECT
+                   COALESCE(SUM(amount) FILTER (WHERE movement_type = 'sale_in'), 0)::BIGINT
+                       AS cash_sales,
+                   COALESCE(SUM(amount) FILTER (WHERE movement_type = 'sale_out'), 0)::BIGINT
+                       AS cash_refunds,
+                   COALESCE(SUM(amount) FILTER (WHERE movement_type = 'manual_in'), 0)::BIGINT
+                       AS manual_in,
+                   COALESCE(SUM(amount) FILTER (WHERE movement_type = 'manual_out'), 0)::BIGINT
+                       AS manual_out
+               FROM cash_movements WHERE session_id = s.id
+           ) m ON TRUE
+           WHERE s.id = $1"#,
+    )
+    .bind(session_id)
+    .fetch_optional(&mut *conn)
+    .await?
+    .ok_or(sqlx::Error::RowNotFound)?;
+
+    Ok(CashSessionReport {
+        schema_version: 1,
+        kind: kind.to_string(),
+        session_id: row.session_id,
+        opened_by: row.opened_by,
+        closed_by: row.closed_by,
+        opened_at_local: row.opened_at_local,
+        closed_at_local: row.closed_at_local,
+        generated_at_local: row.generated_at_local,
+        cash: CashReportTotals {
+            opening_amount: row.opening_amount,
+            cash_sales: row.cash_sales,
+            cash_refunds: row.cash_refunds,
+            manual_in: row.manual_in,
+            manual_out: row.manual_out,
+            expected_amount: row.expected_amount,
+            counted_amount: row.counted_amount,
+            difference: row.difference,
+        },
+        sales: CashReportSales {
+            count: row.sales_count,
+            gross_total: row.gross_total,
+            discount_total: row.discount_total,
+            net_total: row.net_total,
+            by_method: CashReportPaymentMethods {
+                cash: row.method_cash,
+                card: row.method_card,
+                transfer: row.method_transfer,
+            },
+            courtesy_count: row.courtesy_count,
+            courtesy_gross: row.courtesy_gross,
+        },
+        voids: CashReportVoids {
+            cancelled_count: row.cancelled_count,
+            cancelled_total: row.cancelled_total,
+            refunded_count: row.refunded_count,
+            refunded_total: row.refunded_total,
+        },
+    })
+}
+
+pub async fn get_stored_report(
+    pool: &PgPool,
+    session_id: i32,
+) -> Result<Option<CashSessionReport>, sqlx::Error> {
+    let report = sqlx::query_scalar::<_, sqlx::types::Json<CashSessionReport>>(
+        "SELECT report FROM cash_session_reports WHERE session_id = $1",
+    )
+    .bind(session_id)
+    .fetch_optional(pool)
+    .await?;
+    Ok(report.map(|json| json.0))
 }
 
 // ============================================================

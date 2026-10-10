@@ -153,7 +153,7 @@ export default function SalesHistory() {
     setPrintError(null);
     setPrintSuccess(false);
     try {
-      await printSaleTicket(selected.id);
+      await printSaleTicket(selected.id, true);
       setPrintSuccess(true);
     } catch (e) {
       setPrintError(String(e));
@@ -328,7 +328,7 @@ export default function SalesHistory() {
                       onClick={handlePrint}
                       disabled={printing}
                     >
-                      {printing ? 'Imprimiendo…' : '🖨️ Imprimir'}
+                      {printing ? 'Imprimiendo…' : 'Reimprimir (COPIA)'}
                     </button>
                     <button className="btn" onClick={closeDetail}>✕</button>
                   </div>

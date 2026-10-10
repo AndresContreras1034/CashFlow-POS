@@ -35,6 +35,44 @@ pub async fn get_session(pool: &PgPool, id: i32) -> Result<CashSession, AppError
         .ok_or_else(|| AppError::not_found("Turno de caja no encontrado"))
 }
 
+pub async fn get_session_report(
+    pool: &PgPool,
+    id: i32,
+) -> Result<crate::modules::cash::models::CashSessionReport, AppError> {
+    let mut tx = pool.begin().await.map_err(AppError::from)?;
+    sqlx::query("SET TRANSACTION ISOLATION LEVEL REPEATABLE READ READ ONLY")
+        .execute(&mut *tx)
+        .await
+        .map_err(AppError::from)?;
+
+    let status = sqlx::query_scalar::<_, String>(
+        "SELECT status FROM cash_sessions WHERE id = $1",
+    )
+    .bind(id)
+    .fetch_optional(&mut *tx)
+    .await
+    .map_err(AppError::from)?
+    .ok_or_else(|| AppError::not_found("Turno de caja no encontrado"))?;
+
+    if status == "open" {
+        let report = repository::build_session_report(&mut tx, id, "X")
+            .await
+            .map_err(AppError::from)?;
+        tx.commit().await.map_err(AppError::from)?;
+        return Ok(report);
+    }
+
+    tx.commit().await.map_err(AppError::from)?;
+    repository::get_stored_report(pool, id)
+        .await
+        .map_err(AppError::from)?
+        .ok_or_else(|| {
+            AppError::validation(
+                "Este turno se cerró antes de existir el informe Z; no hay un informe guardado.",
+            )
+        })
+}
+
 pub async fn list_sessions(
     pool: &PgPool,
     filter: CashSessionFilterDto,

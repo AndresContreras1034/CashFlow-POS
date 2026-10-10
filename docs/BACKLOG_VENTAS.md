@@ -73,3 +73,13 @@ Elementos pendientes y completados basados en la interfaz y los servicios inspec
   en ventas anteriores a su incorporación y no se atribuyen a un turno en la
   conciliación. No se debe inventar un backfill; conservarlas como no
   conciliadas salvo evidencia fiable para asignarlas.
+- **Informes X/Z — implementados:** X es una vista en vivo del turno abierto;
+  Z se genera y persiste al cerrar. Ventas completadas se agrupan por
+  `cash_session_id`, mientras que anulaciones/devoluciones se agrupan por el
+  turno donde ocurrió `voided_at`. El snapshot se guarda en
+  `cash_session_reports` como JSONB, no como columna del turno.
+- **Informes históricos — limitación:** los turnos cerrados antes de 022 no
+  tienen un Z guardado y la interfaz informa que no está disponible.
+- **Riesgos pendientes:** la tabla del informe no es inmutable por trigger
+  (F4); además, el ticket de venta imprime su hora en UTC. Este hallazgo no se
+  corrige en esta fase.

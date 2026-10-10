@@ -205,9 +205,11 @@ pub fn run() {
             close_cash_session,
             get_current_cash_session,
             get_cash_session,
+            get_cash_session_report,
             list_cash_sessions,
             register_cash_movement,
             list_cash_movements,
+            print_cash_report,
             // =================================================
             // Sales
             // =================================================

@@ -359,6 +359,54 @@ export interface CashSessionWithTotals {
   current_balance: number;
 }
 
+export interface CashReportTotals {
+  opening_amount: number;
+  cash_sales: number;
+  cash_refunds: number;
+  manual_in: number;
+  manual_out: number;
+  expected_amount: number;
+  counted_amount: number | null;
+  difference: number | null;
+}
+
+export interface CashReportPaymentMethods {
+  cash: number;
+  card: number;
+  transfer: number;
+}
+
+export interface CashReportSales {
+  count: number;
+  gross_total: number;
+  discount_total: number;
+  net_total: number;
+  by_method: CashReportPaymentMethods;
+  courtesy_count: number;
+  courtesy_gross: number;
+}
+
+export interface CashReportVoids {
+  cancelled_count: number;
+  cancelled_total: number;
+  refunded_count: number;
+  refunded_total: number;
+}
+
+export interface CashSessionReport {
+  schema_version: number;
+  kind: 'X' | 'Z';
+  session_id: number;
+  opened_by: string;
+  closed_by: string | null;
+  opened_at_local: string;
+  closed_at_local: string | null;
+  generated_at_local: string;
+  cash: CashReportTotals;
+  sales: CashReportSales;
+  voids: CashReportVoids;
+}
+
 export interface CashMovement {
   id: number;
   session_id: number;

@@ -71,3 +71,56 @@ pub struct CashMovement {
     pub created_by: String,
     pub created_at: DateTime<Utc>,
 }
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct CashSessionReport {
+    pub schema_version: i32,
+    pub kind: String,
+    pub session_id: i32,
+    pub opened_by: String,
+    pub closed_by: Option<String>,
+    pub opened_at_local: String,
+    pub closed_at_local: Option<String>,
+    pub generated_at_local: String,
+    pub cash: CashReportTotals,
+    pub sales: CashReportSales,
+    pub voids: CashReportVoids,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct CashReportTotals {
+    pub opening_amount: i64,
+    pub cash_sales: i64,
+    pub cash_refunds: i64,
+    pub manual_in: i64,
+    pub manual_out: i64,
+    pub expected_amount: i64,
+    pub counted_amount: Option<i64>,
+    pub difference: Option<i64>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct CashReportSales {
+    pub count: i64,
+    pub gross_total: i64,
+    pub discount_total: i64,
+    pub net_total: i64,
+    pub by_method: CashReportPaymentMethods,
+    pub courtesy_count: i64,
+    pub courtesy_gross: i64,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct CashReportPaymentMethods {
+    pub cash: i64,
+    pub card: i64,
+    pub transfer: i64,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct CashReportVoids {
+    pub cancelled_count: i64,
+    pub cancelled_total: i64,
+    pub refunded_count: i64,
+    pub refunded_total: i64,
+}

@@ -2,6 +2,7 @@ use chrono::{DateTime, Utc};
 use serde::Serialize;
 
 use crate::modules::sales::models::{PaymentMethod, SaleStatus};
+use crate::modules::cash::models::CashSessionReport;
 
 /// Una línea de producto en el ticket, ya con el nombre resuelto
 /// (SaleItem solo trae variant_id — para el ticket necesitamos texto legible).
@@ -63,4 +64,12 @@ pub struct TicketData {
     pub total: i64,
     pub cash_received: Option<i64>,
     pub change_given: Option<i64>,
+}
+
+#[derive(Debug, Clone, Serialize)]
+pub struct CashReportTicketData {
+    pub business_name: String,
+    pub currency_decimals: u8,
+    pub report: CashSessionReport,
+    pub is_copy: bool,
 }

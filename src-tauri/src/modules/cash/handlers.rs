@@ -1,4 +1,5 @@
 use tauri::State;
+use sqlx::PgPool;
 
 use crate::db::DbPool;
 use crate::errors::app_error::AppError;
@@ -59,6 +60,16 @@ pub async fn get_current_cash_session(
 #[tauri::command]
 pub async fn get_cash_session(pool: State<'_, DbPool>, id: i32) -> Result<CashSession, String> {
     service::get_session(&pool, id)
+        .await
+        .map_err(|e: AppError| e.to_string())
+}
+
+#[tauri::command]
+pub async fn get_cash_session_report(
+    pool: State<'_, PgPool>,
+    id: i32,
+) -> Result<crate::modules::cash::models::CashSessionReport, String> {
+    service::get_session_report(pool.inner(), id)
         .await
         .map_err(|e: AppError| e.to_string())
 }

@@ -3,6 +3,7 @@ import type {
   CashSession,
   CashSessionWithTotals,
   CashMovement,
+  CashSessionReport,
   OpenSessionDto,
   CloseSessionDto,
   CreateMovementDto,
@@ -32,6 +33,10 @@ export async function getCurrentCashSession(): Promise<CashSessionWithTotals | n
 
 export async function getCashSession(id: number): Promise<CashSession> {
   return invoke('get_cash_session', { id });
+}
+
+export async function getCashSessionReport(id: number): Promise<CashSessionReport> {
+  return invoke('get_cash_session_report', { id });
 }
 
 export async function listCashSessions(

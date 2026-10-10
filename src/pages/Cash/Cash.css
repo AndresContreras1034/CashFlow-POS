@@ -365,3 +365,62 @@ select.form-input option {
     overflow-x: auto;
   }
 }
+
+  .cash-report-actions {
+    display: flex;
+    justify-content: flex-end;
+  }
+
+  .cash-closed-sessions {
+    display: flex;
+    flex-direction: column;
+  }
+
+  .cash-closed-session {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 16px;
+    padding: 12px 0;
+    border-bottom: 1px solid var(--border-subtle);
+  }
+
+  .cash-closed-session:last-child {
+    border-bottom: none;
+  }
+
+  .cash-closed-session > div:first-child {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+    color: var(--text-primary);
+  }
+
+  .cash-closed-session-actions {
+    display: flex;
+    gap: 8px;
+  }
+
+  .cash-report-print-error {
+    padding: 11px 14px;
+    background: var(--warning-dim);
+    border: 1px solid var(--warning);
+    border-radius: var(--radius);
+    color: var(--warning);
+    font-size: 13.5px;
+  }
+
+  @media (max-width: 600px) {
+    .cash-closed-session {
+      align-items: stretch;
+      flex-direction: column;
+    }
+
+    .cash-closed-session-actions {
+      flex-wrap: wrap;
+    }
+
+    .cash-closed-session-actions .btn {
+      flex: 1;
+    }
+  }

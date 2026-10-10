@@ -1,7 +1,9 @@
 import { useEffect, useState, useCallback } from 'react';
 import type {
+  CashSession,
   CashSessionWithTotals,
   CashMovement,
+  CashSessionReport,
   ManualCashMovementType,
 } from '../../types';
 import {
@@ -10,9 +12,13 @@ import {
   closeCashSession,
   registerCashMovement,
   listCashMovements,
+  listCashSessions,
+  getCashSessionReport,
 } from '../../services/cash.service';
+import { printCashReport } from '../../services/billing.service';
 import { formatMoney, parseMoneyInput, moneyStep, MONEY_DEFAULTS } from '../../utils/format';
 import { getOperatorOrNull, setOperator } from '../../utils/preferences';
+import CashReport from '../../components/cash/CashReport';
 import './Cash.css';
 
 export default function Cash() {
@@ -21,6 +27,12 @@ export default function Cash() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [operator, setOperatorName] = useState(() => getOperatorOrNull() ?? '');
+  const [cashReport, setCashReport] = useState<CashSessionReport | null>(null);
+  const [closedSessions, setClosedSessions] = useState<CashSession[]>([]);
+  const [reportLoading, setReportLoading] = useState(false);
+  const [reportError, setReportError] = useState<string | null>(null);
+  const [reportPrintError, setReportPrintError] = useState<string | null>(null);
+  const [printingReport, setPrintingReport] = useState(false);
 
   // Form: apertura
   const [openingAmount, setOpeningAmount] = useState('');
@@ -41,6 +53,8 @@ export default function Cash() {
     try {
       const current = await getCurrentCashSession();
       setSession(current);
+      const closed = await listCashSessions({ status: 'closed', page_size: 10 });
+      setClosedSessions(closed.data);
 
       if (current) {
         const res = await listCashMovements({ session_id: current.id, page_size: 50 });
@@ -74,6 +88,7 @@ export default function Cash() {
         opening_notes: openingNotes || null,
         ...(operatorName ? { opened_by: operatorName } : {}),
       });
+      setCashReport(null);
       setOpeningAmount('');
       setOpeningNotes('');
       await loadSession();
@@ -101,7 +116,10 @@ export default function Cash() {
       });
       setMovementAmount('');
       setMovementNotes('');
+      const refreshOpenReport =
+        cashReport?.kind === 'X' && cashReport.session_id === session.id;
       await loadSession();
+      if (refreshOpenReport) await handleViewReport(session.id);
     } catch (e) {
       setError(String(e));
     }
@@ -118,7 +136,7 @@ export default function Cash() {
     }
     try {
       const operatorName = operator.trim();
-      await closeCashSession(session.id, {
+      const closed = await closeCashSession(session.id, {
         counted_amount: countedCents,
         closing_notes: closingNotes || null,
         ...(operatorName ? { closed_by: operatorName } : {}),
@@ -127,8 +145,36 @@ export default function Cash() {
       setCountedAmount('');
       setClosingNotes('');
       await loadSession();
+      await handleViewReport(closed.id);
     } catch (e) {
       setError(String(e));
+    }
+  }
+
+  async function handleViewReport(sessionId: number) {
+    setReportLoading(true);
+    setReportError(null);
+    setReportPrintError(null);
+    try {
+      const report = await getCashSessionReport(sessionId);
+      setCashReport(report);
+    } catch (e) {
+      setCashReport(null);
+      setReportError(String(e));
+    } finally {
+      setReportLoading(false);
+    }
+  }
+
+  async function handlePrintReport(sessionId: number, copy: boolean) {
+    setPrintingReport(true);
+    setReportPrintError(null);
+    try {
+      await printCashReport(sessionId, copy);
+    } catch (e) {
+      setReportPrintError(`No se pudo imprimir el informe; puedes intentarlo de nuevo: ${String(e)}`);
+    } finally {
+      setPrintingReport(false);
     }
   }
 
@@ -223,6 +269,13 @@ export default function Cash() {
               Abierto por {session.opened_by} —{' '}
               {new Date(session.opened_at).toLocaleString('es-CO')}
             </p>
+            <button
+              className="btn btn-ghost"
+              onClick={() => handleViewReport(session.id)}
+              disabled={reportLoading}
+            >
+              {reportLoading ? 'Cargando informe…' : 'Informe X'}
+            </button>
             <button
               className="btn btn-danger"
               onClick={() => setShowCloseForm((v) => !v)}
@@ -346,6 +399,66 @@ export default function Cash() {
           </div>
         </>
       )}
+
+      {reportError && <div className="form-error">{reportError}</div>}
+      {reportPrintError && <div className="cash-report-print-error">{reportPrintError}</div>}
+      {reportLoading && !session && <div className="cash-card cash-loading">Cargando informe…</div>}
+      {cashReport && (
+        <>
+          <CashReport report={cashReport} />
+          <div className="cash-report-actions">
+            <button
+              className="btn btn-primary"
+              onClick={() => handlePrintReport(cashReport.session_id, false)}
+              disabled={printingReport}
+            >
+              {printingReport
+                ? 'Imprimiendo…'
+                : cashReport.kind === 'X'
+                  ? 'Imprimir informe X'
+                  : 'Imprimir informe Z'}
+            </button>
+          </div>
+        </>
+      )}
+
+      <div className="cash-card">
+        <h2>Turnos cerrados</h2>
+        {closedSessions.length === 0 ? (
+          <p className="cash-meta">No hay turnos cerrados para mostrar.</p>
+        ) : (
+          <div className="cash-closed-sessions">
+            {closedSessions.map((closed) => (
+              <div className="cash-closed-session" key={closed.id}>
+                <div>
+                  <strong>Turno #{closed.id}</strong>
+                  <span className="cash-meta">
+                    Cerrado {closed.closed_at
+                      ? new Date(closed.closed_at).toLocaleString('es-CO')
+                      : '—'}
+                  </span>
+                </div>
+                <div className="cash-closed-session-actions">
+                  <button
+                    className="btn btn-ghost"
+                    onClick={() => handleViewReport(closed.id)}
+                    disabled={reportLoading}
+                  >
+                    Ver informe Z
+                  </button>
+                  <button
+                    className="btn btn-ghost"
+                    onClick={() => handlePrintReport(closed.id, true)}
+                    disabled={printingReport}
+                  >
+                    {printingReport ? 'Imprimiendo…' : 'Reimprimir'}
+                  </button>
+                </div>
+              </div>
+            ))}
+          </div>
+        )}
+      </div>
     </div>
   );
 }

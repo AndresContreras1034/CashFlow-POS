@@ -171,6 +171,35 @@ pruebas se hayan ejecutado en esta ronda.
   posteriormente, tras revisar que las filas históricas satisfacen la regla.
 - **Alcance:** no hay devolución parcial en este flujo.
 
+## Informes de caja X y Z
+
+- **Regla:** el informe X se calcula en una transacción de lectura repetible
+  para un turno abierto y no lo cierra. El informe Z se construye dentro de la
+  transacción de cierre y se guarda como snapshot JSONB en
+  `cash_session_reports`; no se agrega una columna a `cash_sessions` porque el
+  informe contiene varios bloques y debe poder recuperarse como un documento
+  reproducible.
+- **Ventas y anulaciones:** las ventas se atribuyen por
+  `sales.cash_session_id` y solo cuentan mientras su estado sea `completed`.
+  Las anulaciones y devoluciones se atribuyen al turno en que ocurrió
+  `voided_at`, aunque la venta se originara en otro turno; no se restan de los
+  totales de ventas completadas.
+- **Efectivo:** el esperado conserva la fórmula del cierre: apertura más
+  `sale_in` y `manual_in`, menos `sale_out` y `manual_out`. El informe X/Z
+  separa importes de pagos por método, cortesías y movimientos de efectivo.
+- **Dónde se aplica:** `src-tauri/migrations/022_cash_session_reports.sql`;
+  `src-tauri/src/modules/cash/models.rs`;
+  `src-tauri/src/modules/cash/repository.rs`;
+  `src-tauri/src/modules/cash/service.rs`;
+  `src-tauri/src/modules/billing/ticket.rs`.
+- **Pruebas añadidas:** `r01`–`r09` en
+  `src-tauri/tests/cash_report_integration.rs`; pruebas unitarias de reimpresión
+  y ancho ESC/POS en `billing/ticket.rs`.
+- **Histórico y riesgos pendientes:** los turnos cerrados antes de la migración
+  022 no tienen un Z guardado. La tabla no es inmutable por trigger (pendiente
+  F4). La hora del ticket de venta existente se imprime en UTC; el hallazgo se
+  deja pendiente y no se corrige en este cambio.
+
 ## Estado de la auditoría
 
 La tabla resume la correspondencia de los diez criterios con las reglas

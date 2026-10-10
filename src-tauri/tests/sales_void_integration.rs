@@ -513,3 +513,58 @@ async fn v11_detalle_y_listado_muestran_anulacion_sin_sumarla(pool: PgPool) {
     assert_eq!(listed.data[0].id, sale_id);
     assert_eq!(listed.total_amount, 0);
 }
+
+#[sqlx::test(migrations = "./migrations")]
+async fn v12_venta_de_tarjeta_se_anula_con_o_sin_turno_sin_sale_out(pool: PgPool) {
+    let variant_id = seed_variant(&pool, 10_000, 5).await;
+    let first_session = open_cash(&pool).await;
+    let first_sale = sales_service::create_sale(
+        &pool,
+        sale_dto(
+            variant_id,
+            vec![payment(PaymentMethod::Card, 10_000)],
+            None,
+        ),
+    )
+    .await
+    .unwrap();
+    close_cash(&pool, first_session, 0).await;
+    sales_service::void_sale(
+        &pool,
+        first_sale.sale.id,
+        void_dto(SaleStatus::Cancelled, "Anulación sin turno abierto"),
+    )
+    .await
+    .unwrap();
+    assert_eq!(count(&pool, "cash_movements").await, 0);
+
+    let second_session = open_cash(&pool).await;
+    let second_sale = sales_service::create_sale(
+        &pool,
+        sale_dto(
+            variant_id,
+            vec![payment(PaymentMethod::Card, 10_000)],
+            None,
+        ),
+    )
+    .await
+    .unwrap();
+    let movements_before = count(&pool, "cash_movements").await;
+    sales_service::void_sale(
+        &pool,
+        second_sale.sale.id,
+        void_dto(SaleStatus::Refunded, "Devolución con turno abierto"),
+    )
+    .await
+    .unwrap();
+
+    assert_eq!(count(&pool, "cash_movements").await, movements_before);
+    assert_eq!(stock(&pool, variant_id).await, 5);
+    let open_status: String =
+        sqlx::query_scalar("SELECT status FROM cash_sessions WHERE id = $1")
+            .bind(second_session)
+            .fetch_one(&pool)
+            .await
+            .unwrap();
+    assert_eq!(open_status, "open");
+}

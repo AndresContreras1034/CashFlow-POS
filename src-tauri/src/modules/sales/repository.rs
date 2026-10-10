@@ -570,18 +570,14 @@ pub async fn void_sale(
     .fetch_one(&mut *tx)
     .await?;
 
-    let session_id = if cash_net > 0 {
-        Some(
-            sqlx::query_scalar::<_, i32>(
-                "SELECT id FROM cash_sessions WHERE status = 'open' FOR UPDATE",
-            )
-            .fetch_optional(&mut *tx)
-            .await?
-            .ok_or(VoidSaleError::CashSessionRequired)?,
-        )
-    } else {
-        None
-    };
+    let session_id = sqlx::query_scalar::<_, i32>(
+        "SELECT id FROM cash_sessions WHERE status = 'open' FOR UPDATE",
+    )
+    .fetch_optional(&mut *tx)
+    .await?;
+    if cash_net > 0 && session_id.is_none() {
+        return Err(VoidSaleError::CashSessionRequired);
+    }
 
     let items = sqlx::query_as::<_, SaleItem>(
         "SELECT id, sale_id, variant_id, quantity, unit_price, unit_cost, discount, tax, subtotal \
@@ -628,7 +624,8 @@ pub async fn void_sale(
         .await?;
     }
 
-    if let Some(session_id) = session_id {
+    if cash_net > 0 {
+        let session_id = session_id.ok_or(VoidSaleError::CashSessionRequired)?;
         let movement = cash_repo::create_movement(
             &mut tx,
             session_id,

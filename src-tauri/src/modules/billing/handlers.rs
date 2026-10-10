@@ -4,9 +4,10 @@ use tauri::State;
 
 use crate::modules::billing::{
     counter,
-    models::{TicketData, TicketLine, TicketPayment},
+    models::{CashReportTicketData, TicketData, TicketLine, TicketPayment},
     printer, ticket,
 };
+use crate::modules::cash::service as cash_service;
 use crate::modules::sales::models::{PaymentMethod, SaleStatus};
 use crate::modules::settings::repository as settings_repo;
 
@@ -199,10 +200,41 @@ fn format_attributes(value: &serde_json::Value) -> String {
 // ------------------------------------------------------------
 
 #[tauri::command]
-pub async fn print_sale_ticket(pool: State<'_, PgPool>, sale_id: i32) -> Result<(), String> {
+pub async fn print_sale_ticket(
+    pool: State<'_, PgPool>,
+    sale_id: i32,
+    copy: Option<bool>,
+) -> Result<(), String> {
     let data = fetch_ticket_data(pool.inner(), sale_id).await?;
 
-    let bytes = ticket::build_sale_ticket(&data);
+    let bytes = ticket::build_sale_ticket_with_copy(&data, copy.unwrap_or(false));
 
+    printer::print_raw(&bytes)
+}
+
+#[tauri::command]
+pub async fn print_cash_report(
+    pool: State<'_, PgPool>,
+    session_id: i32,
+    copy: Option<bool>,
+) -> Result<(), String> {
+    let report = cash_service::get_session_report(pool.inner(), session_id)
+        .await
+        .map_err(|error| error.to_string())?;
+    let settings = settings_repo::get_settings(pool.inner())
+        .await
+        .map_err(|error| format!("Error consultando la configuracion del negocio: {error}"))?
+        .ok_or_else(|| {
+            "No hay configuracion del negocio (app_settings) registrada. \
+             Ve a Ajustes y guarda el nombre del negocio antes de imprimir."
+                .to_string()
+        })?;
+    let data = CashReportTicketData {
+        business_name: settings.business_name,
+        currency_decimals: settings.currency_decimals as u8,
+        report,
+        is_copy: copy.unwrap_or(false),
+    };
+    let bytes = ticket::build_cash_report_ticket(&data);
     printer::print_raw(&bytes)
 }

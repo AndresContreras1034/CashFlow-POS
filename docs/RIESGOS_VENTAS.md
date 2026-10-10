@@ -149,3 +149,34 @@ no funcionalidades ya implementadas.
 - **Mitigación propuesta:** revisar el histórico y ejecutar
   `VALIDATE CONSTRAINT sales_void_consistency_chk` cuando sea seguro.
 - **Estado:** pendiente de validación histórica.
+
+### XZ-01 — Informes Z no inmutables por base de datos
+
+- **Descripción:** `cash_session_reports` guarda el informe Z como JSONB, pero
+  la migración 022 no instala un trigger que impida actualizar o eliminar ese
+  registro.
+- **Impacto:** un cambio directo en la base de datos podría alterar el informe
+  histórico que se presenta como reproducible.
+- **Mitigación propuesta:** en F4, añadir una protección append-only para los
+  informes Z y una ruta explícita de corrección auditada si se requiere.
+- **Estado:** abierto, pendiente F4.
+
+### XZ-02 — Hora del ticket de venta en UTC
+
+- **Descripción:** la impresión del ticket de venta usa directamente
+  `created_at` en UTC; no aplica `app_settings.timezone`.
+- **Impacto:** la hora impresa puede diferir de la hora local del negocio.
+- **Mitigación propuesta:** formatear la hora de venta con la zona horaria
+  configurada y cubrir la conversión con pruebas.
+- **Estado:** hallazgo pendiente; no corregido en el cambio de informes X/Z.
+
+### XZ-03 — Turnos históricos sin informe Z
+
+- **Descripción:** los turnos cerrados antes de instalar la migración 022 no
+  tienen una fila en `cash_session_reports`.
+- **Impacto:** no se puede recuperar el snapshot Z de esos turnos mediante la
+  nueva consulta.
+- **Mitigación propuesta:** conservar el mensaje explícito de no disponibilidad;
+  generar retrospectivamente informes solo si los datos existentes permiten
+  reconstruirlos con fidelidad, sin presentarlos como snapshots contemporáneos.
+- **Estado:** conocido; histórico anterior a 022.
