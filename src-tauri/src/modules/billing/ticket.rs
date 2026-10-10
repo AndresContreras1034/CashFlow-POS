@@ -97,13 +97,21 @@ pub fn build_sale_ticket(data: &TicketData) -> Vec<u8> {
 
     // ---- Productos ----
     for line in &data.lines {
-        push_line(&mut b, &format_item_line(line, data.currency_decimals));
+        push_line(
+            &mut b,
+            &format_item_line(line, data.currency_decimals, data.show_discounts),
+        );
     }
 
     push_line(&mut b, &"-".repeat(CHARS_PER_LINE));
 
     // ---- Totales ----
-    push_line(&mut b, &two_col("Subtotal:", &money(data.subtotal)));
+    let subtotal = if data.show_discounts {
+        data.subtotal
+    } else {
+        data.subtotal - data.discount
+    };
+    push_line(&mut b, &two_col("Subtotal:", &money(subtotal)));
     if data.show_discounts && data.discount > 0 {
         push_line(
             &mut b,
@@ -198,7 +206,7 @@ fn sum_by_method(data: &TicketData, method: crate::modules::sales::models::Payme
         .sum()
 }
 
-fn format_item_line(item: &TicketLine, decimals: u8) -> String {
+fn format_item_line(item: &TicketLine, decimals: u8, show_discounts: bool) -> String {
     let name = ascii_safe(&item.product_name);
     let mut out = String::new();
 
@@ -220,7 +228,19 @@ fn format_item_line(item: &TicketLine, decimals: u8) -> String {
         item.quantity,
         format_money(item.unit_price, decimals)
     );
-    out.push_str(&two_col(&detail, &format_money(item.subtotal, decimals)));
+    let line_total = if show_discounts {
+        item.unit_price * i64::from(item.quantity)
+    } else {
+        item.subtotal
+    };
+    out.push_str(&two_col(&detail, &format_money(line_total, decimals)));
+    if show_discounts && item.discount > 0 {
+        out.push('\n');
+        out.push_str(&two_col(
+            "  Desc. linea",
+            &format_money(-item.discount, decimals),
+        ));
+    }
 
     out
 }
@@ -346,8 +366,8 @@ fn double_size_off(buf: &mut Vec<u8>) {
 
 #[cfg(test)]
 mod tests {
-    use super::{build_sale_ticket, format_money};
-    use crate::modules::billing::models::TicketData;
+    use super::{build_sale_ticket, format_item_line, format_money};
+    use crate::modules::billing::models::{TicketData, TicketLine};
     use crate::modules::sales::models::SaleStatus;
     use chrono::{TimeZone, Utc};
 
@@ -512,5 +532,102 @@ mod tests {
 
         assert!(ticket.contains("Total recibido:"));
         assert!(ticket.contains(&format_money(10_000, 0)));
+    }
+
+    #[test]
+    fn ticket_item_prints_gross_and_line_discount_when_enabled() {
+        let line = TicketLine {
+            product_name: "Producto".into(),
+            attributes: String::new(),
+            sku: None,
+            quantity: 2,
+            unit_price: 10_000,
+            discount: 2_000,
+            subtotal: 18_000,
+        };
+
+        let rendered = format_item_line(&line, 0, true);
+
+        assert!(rendered.contains("2 x $ 100"));
+        assert!(rendered.contains("$ 200"));
+        assert!(rendered.contains("Desc. linea"));
+        assert!(rendered.contains("-$ 20"));
+    }
+
+    #[test]
+    fn ticket_item_prints_net_without_discount_line_when_discounts_are_hidden() {
+        let line = TicketLine {
+            product_name: "Producto".into(),
+            attributes: String::new(),
+            sku: None,
+            quantity: 2,
+            unit_price: 10_000,
+            discount: 2_000,
+            subtotal: 18_000,
+        };
+
+        let rendered = format_item_line(&line, 0, false);
+
+        assert!(rendered.contains("2 x $ 100"));
+        assert!(rendered.contains("$ 180"));
+        assert!(!rendered.contains("Desc. linea"));
+        assert!(!rendered.contains("-$ 20"));
+    }
+
+    fn totals_ticket(show_discounts: bool) -> TicketData {
+        TicketData {
+            business_name: "Tienda".into(),
+            tax_id: None,
+            address: None,
+            phone: None,
+            ticket_header: None,
+            ticket_footer: None,
+            tax_name: "IVA".into(),
+            currency_decimals: 0,
+            show_logo: false,
+            show_tax_id: false,
+            show_address: false,
+            show_phone: false,
+            show_cashier: false,
+            show_tax_breakdown: false,
+            show_discounts,
+            show_payment_method: false,
+            sale_id: 4,
+            ticket_number: "V-4".into(),
+            created_at: Utc.timestamp_opt(0, 0).single().unwrap(),
+            created_by: "Operador".into(),
+            status: SaleStatus::Completed,
+            courtesy_reason: None,
+            lines: Vec::new(),
+            payments: Vec::new(),
+            subtotal: 10_000,
+            discount: 2_000,
+            tax: 0,
+            total: 8_000,
+            cash_received: None,
+            change_given: None,
+        }
+    }
+
+    #[test]
+    fn ticket_totals_show_gross_subtotal_and_discount_when_enabled() {
+        let ticket = String::from_utf8(build_sale_ticket(&totals_ticket(true))).unwrap();
+
+        assert!(ticket.contains("Subtotal:"));
+        assert!(ticket.contains("$ 100"));
+        assert!(ticket.contains("Descuento:"));
+        assert!(ticket.contains("-$ 20"));
+        assert!(ticket.contains("TOTAL:"));
+        assert!(ticket.contains("$ 80"));
+    }
+
+    #[test]
+    fn ticket_totals_show_net_subtotal_without_discount_line_when_hidden() {
+        let ticket = String::from_utf8(build_sale_ticket(&totals_ticket(false))).unwrap();
+
+        assert!(ticket.contains("Subtotal:"));
+        assert!(ticket.contains("$ 80"));
+        assert!(!ticket.contains("Descuento:"));
+        assert!(ticket.contains("TOTAL:"));
     }
 }

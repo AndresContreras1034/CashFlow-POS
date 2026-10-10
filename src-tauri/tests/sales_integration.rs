@@ -274,7 +274,7 @@ async fn a06_varios_items_con_descuentos_cuadran(pool: PgPool) {
     let b = seed_variant(&pool, 5_000, 10).await;
     open_cash(&pool).await;
 
-    // bruto 25.000 - descuento de línea 1.000 = 24.000; - global 2.000 = 22.000
+    // Bruto 25.000 - descuento de línea 1.000 - global 2.000 = 22.000.
     let mut dto = new_sale(
         vec![
             CreateSaleItemDto {
@@ -297,8 +297,9 @@ async fn a06_varios_items_con_descuentos_cuadran(pool: PgPool) {
     let payments_total: i64 = d.payments.iter().map(|p| p.amount).sum();
 
     assert_eq!(d.sale.total, 22_000);
-    assert_eq!(d.sale.discount, 2_000);
-    assert_eq!(items_subtotal, d.sale.subtotal, "Σ ítems = subtotal");
+    assert_eq!(d.sale.subtotal, 25_000);
+    assert_eq!(d.sale.discount, 3_000);
+    assert_eq!(items_subtotal, 24_000, "sale_items conserva subtotal neto");
     assert_eq!(
         d.sale.total,
         d.sale.subtotal - d.sale.discount,
@@ -1147,7 +1148,7 @@ async fn d09_descuento_de_linea_total_permite_cortesia(pool: PgPool) {
         .await
         .expect("el descuento total de línea debe permitir cortesía");
     assert_eq!(created.sale.total, 0);
-    assert_eq!(created.sale.discount, 0);
+    assert_eq!(created.sale.discount, 10_000);
     assert_eq!(created.sale.courtesy_reason.as_deref(), Some("Apoyo"));
 }
 
@@ -1233,7 +1234,9 @@ async fn e01_efectivo_con_vuelto_guarda_neto_y_turno(pool: PgPool) {
     assert_eq!(sale.sale.cash_received, Some(20_000));
     assert_eq!(sale.sale.change_given, Some(10_000));
     let payments_total: i64 =
-        sqlx::query_scalar("SELECT SUM(amount) FROM sale_payments WHERE sale_id = $1")
+        sqlx::query_scalar(
+            "SELECT COALESCE(SUM(amount), 0)::BIGINT FROM sale_payments WHERE sale_id = $1",
+        )
             .bind(sale.sale.id)
             .fetch_one(&pool)
             .await
@@ -1549,4 +1552,135 @@ async fn e12_get_y_list_sales_incluyen_recibido_y_cambio(pool: PgPool) {
     assert_eq!(listed.data.len(), 1);
     assert_eq!(listed.data[0].cash_received, Some(20_000));
     assert_eq!(listed.data[0].change_given, Some(10_000));
+}
+
+// ============================================================
+// GRUPO F: semántica de subtotal bruto y descuentos (M2)
+// ============================================================
+
+#[sqlx::test(migrations = "./migrations")]
+async fn f01_descuento_de_linea_guarda_subtotal_bruto(pool: PgPool) {
+    let variant_id = seed_variant(&pool, 10_000, 5).await;
+    open_cash(&pool).await;
+    let mut discounted_item = item(variant_id, 1);
+    discounted_item.discount = Some(1_000);
+
+    let sale = service::create_sale(
+        &pool,
+        new_sale(
+            vec![discounted_item],
+            vec![pay(PaymentMethod::Card, 9_000)],
+        ),
+    )
+    .await
+    .unwrap();
+
+    assert_eq!(sale.sale.subtotal, 10_000);
+    assert_eq!(sale.sale.discount, 1_000);
+    assert_eq!(sale.sale.total, 9_000);
+    assert_eq!(sale.items[0].subtotal, 9_000);
+}
+
+#[sqlx::test(migrations = "./migrations")]
+async fn f02_descuentos_de_linea_y_global_se_suman(pool: PgPool) {
+    let first_variant = seed_variant(&pool, 10_000, 5).await;
+    let second_variant = seed_variant(&pool, 5_000, 5).await;
+    open_cash(&pool).await;
+    let mut discounted_item = item(first_variant, 1);
+    discounted_item.discount = Some(1_000);
+    let mut dto = new_sale(
+        vec![discounted_item, item(second_variant, 1)],
+        vec![pay(PaymentMethod::Card, 12_000)],
+    );
+    dto.discount = Some(2_000);
+
+    let sale = service::create_sale(&pool, dto).await.unwrap();
+
+    assert_eq!(sale.sale.subtotal, 15_000);
+    assert_eq!(sale.sale.discount, 3_000);
+    assert_eq!(sale.sale.total, 12_000);
+    assert_eq!(sale.items[0].subtotal, 9_000);
+    assert_eq!(sale.items[1].subtotal, 5_000);
+}
+
+#[sqlx::test(migrations = "./migrations")]
+async fn f03_invariantes_sql_de_venta_bruta_y_pagos(pool: PgPool) {
+    let first_variant = seed_variant(&pool, 10_000, 5).await;
+    let second_variant = seed_variant(&pool, 5_000, 5).await;
+    open_cash(&pool).await;
+    let mut discounted_item = item(first_variant, 1);
+    discounted_item.discount = Some(1_000);
+    let mut dto = new_sale(
+        vec![discounted_item, item(second_variant, 1)],
+        vec![pay(PaymentMethod::Cash, 12_000)],
+    );
+    dto.discount = Some(2_000);
+    let sale = service::create_sale(&pool, dto).await.unwrap();
+
+    let (subtotal, discount, total, gross_semantics, gross_items): (i64, i64, i64, bool, i64) =
+        sqlx::query_as(
+            "SELECT s.subtotal, s.discount, s.total, s.gross_semantics,
+                    COALESCE(SUM(si.unit_price * si.quantity), 0)::BIGINT
+             FROM sales s
+             LEFT JOIN sale_items si ON si.sale_id = s.id
+             WHERE s.id = $1
+             GROUP BY s.id",
+        )
+        .bind(sale.sale.id)
+        .fetch_one(&pool)
+        .await
+        .unwrap();
+    let payments_total: i64 = sqlx::query_scalar(
+        "SELECT COALESCE(SUM(amount), 0)::BIGINT FROM sale_payments WHERE sale_id = $1",
+    )
+    .bind(sale.sale.id)
+    .fetch_one(&pool)
+    .await
+    .unwrap();
+
+    assert_eq!(gross_items, subtotal, "Σ precio × cantidad = subtotal bruto");
+    assert_eq!(subtotal - discount, total);
+    assert_eq!(payments_total, total);
+    assert!(gross_semantics);
+}
+
+#[sqlx::test(migrations = "./migrations")]
+async fn f04_cortesia_guarda_descuento_igual_al_subtotal_bruto(pool: PgPool) {
+    let variant_id = seed_variant(&pool, 10_000, 5).await;
+    open_cash(&pool).await;
+    let mut dto = new_sale(vec![item(variant_id, 1)], vec![]);
+    dto.discount = Some(10_000);
+    dto.courtesy_reason = Some("Apoyo".to_string());
+
+    let sale = service::create_sale(&pool, dto).await.unwrap();
+
+    assert_eq!(sale.sale.total, 0);
+    assert_eq!(sale.sale.subtotal, 10_000);
+    assert_eq!(sale.sale.discount, sale.sale.subtotal);
+    assert_eq!(sale.sale.courtesy_reason.as_deref(), Some("Apoyo"));
+}
+
+#[sqlx::test(migrations = "./migrations")]
+async fn f05_auditoria_separa_descuentos_de_linea_y_global(pool: PgPool) {
+    let first_variant = seed_variant(&pool, 10_000, 5).await;
+    let second_variant = seed_variant(&pool, 5_000, 5).await;
+    open_cash(&pool).await;
+    let mut discounted_item = item(first_variant, 1);
+    discounted_item.discount = Some(1_000);
+    let mut dto = new_sale(
+        vec![discounted_item, item(second_variant, 1)],
+        vec![pay(PaymentMethod::Card, 12_000)],
+    );
+    dto.discount = Some(2_000);
+    let sale = service::create_sale(&pool, dto).await.unwrap();
+
+    let metadata: serde_json::Value =
+        sqlx::query_scalar("SELECT metadata FROM audit_events WHERE action = 'create'")
+            .fetch_one(&pool)
+            .await
+            .unwrap();
+
+    assert_eq!(metadata["discount_lines"], 1_000);
+    assert_eq!(metadata["discount_global"], 2_000);
+    assert_eq!(sale.sale.discount, 3_000);
 }

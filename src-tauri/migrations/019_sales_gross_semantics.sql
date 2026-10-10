@@ -1,0 +1,2 @@
+ALTER TABLE sales
+    ADD COLUMN gross_semantics BOOLEAN NOT NULL DEFAULT FALSE;

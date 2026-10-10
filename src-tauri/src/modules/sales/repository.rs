@@ -171,6 +171,7 @@ pub async fn create_sale(pool: &PgPool, dto: CreateSaleDto) -> Result<SaleDetail
     let mut lines = Vec::new();
     let mut subtotal_total: i64 = 0;
     let mut gross_total: i64 = 0;
+    let mut discount_lines: i64 = 0;
 
     for item in &dto.items {
         let price = variants
@@ -189,6 +190,9 @@ pub async fn create_sale(pool: &PgPool, dto: CreateSaleDto) -> Result<SaleDetail
         if discount < 0 || discount > gross {
             return Err(CreateSaleError::InvalidDiscount);
         }
+        discount_lines = discount_lines
+            .checked_add(discount)
+            .ok_or(CreateSaleError::AmountOverflow)?;
         let line_subtotal = gross - discount;
 
         subtotal_total = subtotal_total
@@ -208,6 +212,9 @@ pub async fn create_sale(pool: &PgPool, dto: CreateSaleDto) -> Result<SaleDetail
     if global_discount > subtotal_total {
         return Err(CreateSaleError::InvalidDiscount);
     }
+    let discount_total = discount_lines
+        .checked_add(global_discount)
+        .ok_or(CreateSaleError::AmountOverflow)?;
     let total = subtotal_total - global_discount;
     let courtesy_reason = if total == 0 {
         if gross_total == 0 {
@@ -291,15 +298,15 @@ pub async fn create_sale(pool: &PgPool, dto: CreateSaleDto) -> Result<SaleDetail
     let sale = sqlx::query_as::<_, Sale>(
         r#"INSERT INTO sales
                (customer_id, subtotal, tax, discount, total, status, notes, courtesy_reason,
-                cash_received, change_given, created_by)
-           VALUES ($1, $2, $3, $4, $5, 'completed', $6, $7, $8, $9, $10)
+                cash_received, change_given, created_by, gross_semantics)
+           VALUES ($1, $2, $3, $4, $5, 'completed', $6, $7, $8, $9, $10, TRUE)
            RETURNING id, customer_id, subtotal, tax, discount, total, cash_received,
                      change_given, status, notes, courtesy_reason, created_by, created_at"#,
     )
     .bind(dto.customer_id)
-    .bind(subtotal_total)
+    .bind(gross_total)
     .bind(total_tax)
-    .bind(global_discount)
+    .bind(discount_total)
     .bind(total)
     .bind(dto.notes)
     .bind(courtesy_reason.clone())
@@ -422,6 +429,8 @@ pub async fn create_sale(pool: &PgPool, dto: CreateSaleDto) -> Result<SaleDetail
             metadata: Some(json!({
                 "subtotal": sale.subtotal,
                 "discount": sale.discount,
+                "discount_lines": discount_lines,
+                "discount_global": global_discount,
                 "tax": sale.tax,
                 "total": sale.total,
                 "item_count": items.len(),

@@ -287,8 +287,8 @@ export default function SalesHistory() {
                 </table>
 
                 <div className="sales-history-totals">
-                  <div><span>Subtotal</span><span>{formatMoney(selected.subtotal)}</span></div>
-                  <div><span>Descuento</span><span>{formatMoney(selected.discount)}</span></div>
+                  <div><span>Subtotal (bruto)</span><span>{formatMoney(selected.subtotal)}</span></div>
+                  <div><span>Descuento total</span><span>{formatMoney(selected.discount)}</span></div>
                   {selected.cash_received !== null && (
                     <>
                       <div>
