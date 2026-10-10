@@ -23,6 +23,7 @@ pub struct CreateSaleDto {
     pub items: Vec<CreateSaleItemDto>,
     pub payments: Vec<CreateSalePaymentDto>,
     pub discount: Option<i64>,
+    pub cash_received: Option<i64>,
     pub notes: Option<String>,
     pub courtesy_reason: Option<String>,
     pub created_by: Option<String>,

@@ -47,6 +47,15 @@ pub async fn create_sale(pool: &PgPool, dto: CreateSaleDto) -> Result<SaleDetail
             CreateSaleError::PaymentMismatch => {
                 AppError::validation("El total de los pagos no coincide con el total de la venta")
             }
+            CreateSaleError::CashReceivedWithoutCash => AppError::validation(
+                "El efectivo recibido requiere una venta con pago en efectivo",
+            ),
+            CreateSaleError::CashReceivedTooLow => AppError::validation(
+                "El efectivo recibido no puede ser menor al pago en efectivo",
+            ),
+            CreateSaleError::CashReceivedPrecision => AppError::validation(
+                "El efectivo recibido no admite fracciones con la moneda configurada",
+            ),
             CreateSaleError::InvalidDiscount => AppError::validation(
                 "El descuento no puede ser negativo ni superar el subtotal de la venta",
             ),

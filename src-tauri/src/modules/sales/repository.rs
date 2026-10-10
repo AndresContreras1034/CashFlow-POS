@@ -32,6 +32,9 @@ pub enum CreateSaleError {
     CourtesyHasPayments,
     NoPayments,
     PaymentMismatch,
+    CashReceivedWithoutCash,
+    CashReceivedTooLow,
+    CashReceivedPrecision,
     InvalidDiscount,
     AmountOverflow,
     VariantNotFound,
@@ -253,13 +256,45 @@ pub async fn create_sale(pool: &PgPool, dto: CreateSaleDto) -> Result<SaleDetail
         return Err(CreateSaleError::PaymentMismatch);
     }
 
+    let cash_net = dto
+        .payments
+        .iter()
+        .filter(|payment| payment.method == PaymentMethod::Cash)
+        .try_fold(0_i64, |sum, payment| {
+            sum.checked_add(payment.amount)
+                .ok_or(CreateSaleError::AmountOverflow)
+        })?;
+    let (cash_received, change_given) = if let Some(received) = dto.cash_received {
+        if total == 0 || cash_net == 0 {
+            return Err(CreateSaleError::CashReceivedWithoutCash);
+        }
+        if received < cash_net {
+            return Err(CreateSaleError::CashReceivedTooLow);
+        }
+        let money_step = 10_i64.pow(2_u32 - currency_decimals as u32);
+        if received % money_step != 0 {
+            return Err(CreateSaleError::CashReceivedPrecision);
+        }
+        (
+            Some(received),
+            Some(
+                received
+                    .checked_sub(cash_net)
+                    .ok_or(CreateSaleError::AmountOverflow)?,
+            ),
+        )
+    } else {
+        (None, None)
+    };
+
     // 2. Insertar sale
     let sale = sqlx::query_as::<_, Sale>(
         r#"INSERT INTO sales
-               (customer_id, subtotal, tax, discount, total, status, notes, courtesy_reason, created_by)
-           VALUES ($1, $2, $3, $4, $5, 'completed', $6, $7, $8)
-           RETURNING id, customer_id, subtotal, tax, discount, total, status, notes,
-                     courtesy_reason, created_by, created_at"#,
+               (customer_id, subtotal, tax, discount, total, status, notes, courtesy_reason,
+                cash_received, change_given, created_by)
+           VALUES ($1, $2, $3, $4, $5, 'completed', $6, $7, $8, $9, $10)
+           RETURNING id, customer_id, subtotal, tax, discount, total, cash_received,
+                     change_given, status, notes, courtesy_reason, created_by, created_at"#,
     )
     .bind(dto.customer_id)
     .bind(subtotal_total)
@@ -268,6 +303,8 @@ pub async fn create_sale(pool: &PgPool, dto: CreateSaleDto) -> Result<SaleDetail
     .bind(total)
     .bind(dto.notes)
     .bind(courtesy_reason.clone())
+    .bind(cash_received)
+    .bind(change_given)
     .bind(&created_by)
     .fetch_one(&mut *tx)
     .await?;
@@ -348,19 +385,13 @@ pub async fn create_sale(pool: &PgPool, dto: CreateSaleDto) -> Result<SaleDetail
     }
 
     // 5. Pago en efectivo -> movimiento de caja del turno bloqueado al inicio
-    let cash_amount: i64 = dto
-        .payments
-        .iter()
-        .filter(|p| p.method == PaymentMethod::Cash)
-        .map(|p| p.amount)
-        .sum();
-    if cash_amount > 0 {
+    if cash_net > 0 {
         let movement = cash_repo::create_movement(
             &mut tx,
             cash_session_id,
             CreateMovementDto {
                 movement_type: CashMovementType::SaleIn,
-                amount: cash_amount,
+                amount: cash_net,
                 notes: Some(format!("Venta #{}", sale.id)),
                 created_by: Some(created_by.clone()),
                 sale_id: Some(sale.id),
@@ -407,6 +438,8 @@ pub async fn create_sale(pool: &PgPool, dto: CreateSaleDto) -> Result<SaleDetail
                 "idempotency_key": dto.idempotency_key,
                 "courtesy": sale.courtesy_reason.is_some(),
                 "courtesy_reason": sale.courtesy_reason,
+                "cash_received": sale.cash_received,
+                "change_given": sale.change_given,
             })),
             error_message: None,
         },
@@ -424,7 +457,7 @@ pub async fn create_sale(pool: &PgPool, dto: CreateSaleDto) -> Result<SaleDetail
 pub async fn get_sale_by_id(pool: &PgPool, id: i32) -> Result<Option<SaleDetail>, sqlx::Error> {
     let sale = sqlx::query_as::<_, Sale>(
         r#"SELECT id, customer_id, subtotal, tax, discount, total,
-                  status, notes, courtesy_reason, created_by, created_at
+                  cash_received, change_given, status, notes, courtesy_reason, created_by, created_at
            FROM sales WHERE id = $1"#,
     )
     .bind(id)
@@ -467,7 +500,7 @@ pub async fn list_sales(
 
     let rows = sqlx::query_as::<_, Sale>(
         r#"SELECT id, customer_id, subtotal, tax, discount, total,
-                  status, notes, courtesy_reason, created_by, created_at
+                  cash_received, change_given, status, notes, courtesy_reason, created_by, created_at
            FROM sales
            WHERE ($1::TEXT IS NULL OR status::TEXT = $1)
              AND ($2::INT  IS NULL OR customer_id = $2)

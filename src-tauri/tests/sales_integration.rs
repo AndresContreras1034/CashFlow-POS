@@ -109,6 +109,7 @@ fn new_sale(items: Vec<CreateSaleItemDto>, payments: Vec<CreateSalePaymentDto>) 
         items,
         payments,
         discount: None,
+        cash_received: None,
         notes: None,
         courtesy_reason: None,
         created_by: Some("test".to_string()),

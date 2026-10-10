@@ -28,6 +28,8 @@ pub struct Sale {
     pub tax: i64,
     pub discount: i64,
     pub total: i64,
+    pub cash_received: Option<i64>,
+    pub change_given: Option<i64>,
     pub status: SaleStatus,
     pub notes: Option<String>,
     pub courtesy_reason: Option<String>,
