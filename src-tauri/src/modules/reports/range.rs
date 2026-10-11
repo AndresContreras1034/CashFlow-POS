@@ -1,8 +1,8 @@
-use chrono::Duration;
+use chrono::{Datelike, Duration, NaiveDate};
 
 use crate::errors::app_error::AppError;
 
-use super::dto::{DateRange, ReportFilter};
+use super::dto::{DateRange, Granularity, ReportFilter, TimeSeriesPoint};
 
 impl ReportFilter {
     pub fn validate(&self) -> Result<(), AppError> {
@@ -55,6 +55,63 @@ pub fn margin_bps(profit: i64, revenue: i64) -> i32 {
     share_bps(profit, revenue)
 }
 
+pub fn fill_buckets(
+    range: &DateRange,
+    granularity: Granularity,
+    points: Vec<TimeSeriesPoint>,
+) -> Result<Vec<TimeSeriesPoint>, AppError> {
+    let points_by_bucket = points
+        .into_iter()
+        .map(|point| (point.bucket, point))
+        .collect::<std::collections::BTreeMap<_, _>>();
+    let mut bucket = bucket_start(range.from, granularity)?;
+    let mut filled = Vec::new();
+
+    while bucket <= range.to {
+        filled.push(match points_by_bucket.get(&bucket) {
+            Some(point) => point.clone(),
+            None => TimeSeriesPoint {
+                bucket,
+                tickets: 0,
+                gross_sales: 0,
+                gross_profit: 0,
+            },
+        });
+
+        let next_bucket = match granularity {
+            Granularity::Day => bucket.checked_add_signed(Duration::days(1)),
+            Granularity::Week => bucket.checked_add_signed(Duration::days(7)),
+            Granularity::Month => {
+                let (year, month) = if bucket.month() == 12 {
+                    (bucket.year().checked_add(1), 1)
+                } else {
+                    (Some(bucket.year()), bucket.month() + 1)
+                };
+                year.and_then(|year| NaiveDate::from_ymd_opt(year, month, 1))
+            }
+        };
+        let Some(next_bucket) = next_bucket else {
+            break;
+        };
+        bucket = next_bucket;
+    }
+
+    Ok(filled)
+}
+
+fn bucket_start(date: NaiveDate, granularity: Granularity) -> Result<NaiveDate, AppError> {
+    match granularity {
+        Granularity::Day => Ok(date),
+        Granularity::Week => {
+            let offset = i64::from(date.weekday().num_days_from_monday());
+            date.checked_sub_signed(Duration::days(offset))
+                .ok_or_else(|| AppError::validation("La fecha del rango está fuera de límites"))
+        }
+        Granularity::Month => NaiveDate::from_ymd_opt(date.year(), date.month(), 1)
+            .ok_or_else(|| AppError::validation("La fecha del rango está fuera de límites")),
+    }
+}
+
 fn ratio_bps(numerator: i128, denominator: i128) -> i32 {
     let negative = (numerator < 0) != (denominator < 0);
     let numerator = numerator.abs();
@@ -71,8 +128,6 @@ mod tests {
     use chrono::NaiveDate;
 
     use super::*;
-    use crate::modules::reports::dto::Granularity;
-
     fn date(value: &str) -> NaiveDate {
         NaiveDate::parse_from_str(value, "%Y-%m-%d").expect("valid test date")
     }
@@ -179,5 +234,83 @@ mod tests {
         assert_eq!(margin_bps(10, 0), 0);
         assert_eq!(share_bps(1, 8), 1_250);
         assert_eq!(margin_bps(2, 8), 2_500);
+    }
+
+    fn point(bucket: &str, tickets: i64) -> TimeSeriesPoint {
+        TimeSeriesPoint {
+            bucket: date(bucket),
+            tickets,
+            gross_sales: tickets * 100,
+            gross_profit: tickets * 50,
+        }
+    }
+
+    #[test]
+    fn fills_daily_buckets_with_zeroes_and_supports_a_one_day_range() {
+        let range = DateRange {
+            from: date("2026-10-10"),
+            to: date("2026-10-12"),
+        };
+        let filled = fill_buckets(
+            &range,
+            Granularity::Day,
+            vec![point("2026-10-10", 2), point("2026-10-12", 1)],
+        )
+        .expect("valid daily range");
+
+        assert_eq!(filled.len(), 3);
+        assert_eq!(filled[0].tickets, 2);
+        assert_eq!(filled[1], point("2026-10-11", 0));
+        assert_eq!(
+            fill_buckets(
+                &DateRange {
+                    from: date("2026-10-10"),
+                    to: date("2026-10-10"),
+                },
+                Granularity::Day,
+                Vec::new(),
+            )
+            .expect("valid daily range"),
+            vec![point("2026-10-10", 0)]
+        );
+    }
+
+    #[test]
+    fn fills_week_buckets_from_monday_across_a_month_boundary() {
+        let filled = fill_buckets(
+            &DateRange {
+                from: date("2026-11-01"),
+                to: date("2026-11-08"),
+            },
+            Granularity::Week,
+            vec![point("2026-10-26", 2), point("2026-11-02", 3)],
+        )
+        .expect("valid week range");
+
+        assert_eq!(
+            filled.iter().map(|point| point.bucket).collect::<Vec<_>>(),
+            vec![date("2026-10-26"), date("2026-11-02")]
+        );
+        assert_eq!(filled[0].tickets, 2);
+        assert_eq!(filled[1].tickets, 3);
+    }
+
+    #[test]
+    fn fills_month_buckets_across_a_year_boundary() {
+        let filled = fill_buckets(
+            &DateRange {
+                from: date("2026-12-20"),
+                to: date("2027-02-02"),
+            },
+            Granularity::Month,
+            vec![point("2026-12-01", 1), point("2027-02-01", 2)],
+        )
+        .expect("valid month range");
+
+        assert_eq!(
+            filled.iter().map(|point| point.bucket).collect::<Vec<_>>(),
+            vec![date("2026-12-01"), date("2027-01-01"), date("2027-02-01")]
+        );
+        assert_eq!(filled[1].tickets, 0);
     }
 }

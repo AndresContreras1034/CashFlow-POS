@@ -227,6 +227,9 @@ pub fn run() {
             // Reports
             // =================================================
             get_dashboard_kpis,
+            get_sales_series,
+            get_sales_by_payment_method,
+            get_sales_heatmap,
             // =================================================
             // Audit
             // =================================================

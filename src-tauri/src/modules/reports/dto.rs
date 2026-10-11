@@ -85,6 +85,7 @@ pub struct TimeSeriesPoint {
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct PaymentMethodStat {
     pub method: PaymentMethod,
+    /// Non-additive: a mixed-payment sale is counted once for each method it uses.
     pub tickets: i64,
     pub amount: i64,
     pub share_bps: i32,

@@ -63,6 +63,7 @@ export interface TimeSeriesPoint {
 
 export interface PaymentMethodStat {
   method: PaymentMethod;
+  /** Non-additive: a mixed-payment sale is counted once for each method it uses. */
   tickets: number;
   amount: number;
   share_bps: number;

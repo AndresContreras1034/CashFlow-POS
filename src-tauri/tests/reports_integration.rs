@@ -3,6 +3,7 @@ use pos_lib::modules::reports::{
     dto::{DateRange, ReportFilter},
     service,
 };
+use pos_lib::modules::sales::models::PaymentMethod;
 use sqlx::PgPool;
 
 async fn seed_variant(pool: &PgPool) -> i32 {
@@ -46,7 +47,7 @@ async fn insert_sale(
     item_tax: i64,
     item_subtotal: i64,
     unit_cost: Option<i64>,
-) {
+) -> i32 {
     let created_at: DateTime<Utc> = DateTime::parse_from_rfc3339(created_at)
         .unwrap()
         .with_timezone(&Utc);
@@ -91,6 +92,23 @@ async fn insert_sale(
     .execute(pool)
     .await
     .unwrap();
+
+    sale_id
+}
+
+async fn insert_payments(pool: &PgPool, sale_id: i32, payments: &[(&str, i64)]) {
+    for (method, amount) in payments {
+        sqlx::query(
+            "INSERT INTO sale_payments (sale_id, method, amount) \
+             VALUES ($1, $2::payment_method, $3)",
+        )
+        .bind(sale_id)
+        .bind(method)
+        .bind(amount)
+        .execute(pool)
+        .await
+        .unwrap();
+    }
 }
 
 async fn insert_mixed_cost_sale(pool: &PgPool, variant_id: i32) {
@@ -464,6 +482,204 @@ async fn mixed_cost_ticket_is_excluded_from_profit_base(pool: PgPool) {
     assert_eq!(report.current.profit_base_net_sales, 0);
     assert_eq!(report.current.gross_profit, 0);
     assert_eq!(report.current.margin_bps, 0);
+}
+
+#[sqlx::test(migrations = "./migrations")]
+async fn sales_breakdowns_use_local_buckets_and_exclude_non_sales(pool: PgPool) {
+    sqlx::query(
+        "UPDATE app_settings SET timezone = 'America/Bogota', currency_decimals = 2 WHERE id = 1",
+    )
+    .execute(&pool)
+    .await
+    .unwrap();
+
+    let variant_id = seed_variant(&pool).await;
+    let oct_seventh_sale = insert_sale(
+        &pool,
+        variant_id,
+        "completed",
+        "2026-10-07T15:00:00Z",
+        5_000,
+        0,
+        0,
+        5_000,
+        None,
+        1,
+        5_000,
+        0,
+        0,
+        5_000,
+        Some(1_000),
+    )
+    .await;
+    insert_payments(&pool, oct_seventh_sale, &[("transfer", 5_000)]).await;
+
+    let friday_sale = insert_sale(
+        &pool,
+        variant_id,
+        "completed",
+        "2026-10-10T02:30:00Z",
+        10_000,
+        0,
+        0,
+        10_000,
+        None,
+        1,
+        10_000,
+        0,
+        0,
+        10_000,
+        Some(4_000),
+    )
+    .await;
+    insert_payments(&pool, friday_sale, &[("cash", 6_000), ("card", 4_000)]).await;
+
+    let cancelled = insert_sale(
+        &pool,
+        variant_id,
+        "cancelled",
+        "2026-10-09T18:00:00Z",
+        4_000,
+        0,
+        0,
+        4_000,
+        None,
+        1,
+        4_000,
+        0,
+        0,
+        4_000,
+        Some(1_000),
+    )
+    .await;
+    insert_payments(&pool, cancelled, &[("cash", 4_000)]).await;
+
+    let refunded = insert_sale(
+        &pool,
+        variant_id,
+        "refunded",
+        "2026-10-09T19:00:00Z",
+        3_000,
+        0,
+        0,
+        3_000,
+        None,
+        1,
+        3_000,
+        0,
+        0,
+        3_000,
+        Some(1_000),
+    )
+    .await;
+    insert_payments(&pool, refunded, &[("card", 3_000)]).await;
+
+    insert_sale(
+        &pool,
+        variant_id,
+        "completed",
+        "2026-10-09T20:00:00Z",
+        8_000,
+        0,
+        8_000,
+        0,
+        Some("Regalo"),
+        1,
+        8_000,
+        0,
+        0,
+        8_000,
+        Some(2_000),
+    )
+    .await;
+
+    let filter = |granularity| ReportFilter {
+        date_from: date("2026-10-07"),
+        date_to: date("2026-10-10"),
+        granularity,
+        compare_previous: false,
+        category_id: None,
+        limit: None,
+    };
+
+    let daily = service::get_sales_series(
+        &pool,
+        filter(Some(pos_lib::modules::reports::dto::Granularity::Day)),
+    )
+    .await
+    .unwrap();
+    assert_eq!(daily.len(), 4);
+    assert_eq!(daily[0].bucket, date("2026-10-07"));
+    assert_eq!(daily[0].tickets, 1);
+    assert_eq!(daily[0].gross_sales, 5_000);
+    assert_eq!(daily[0].gross_profit, 4_000);
+    assert_eq!(daily[1].bucket, date("2026-10-08"));
+    assert_eq!(daily[1].tickets, 0);
+    assert_eq!(daily[2].bucket, date("2026-10-09"));
+    assert_eq!(daily[2].tickets, 1);
+    assert_eq!(daily[2].gross_sales, 10_000);
+    assert_eq!(daily[2].gross_profit, 6_000);
+    assert_eq!(daily[3].bucket, date("2026-10-10"));
+    assert_eq!(daily[3].tickets, 0);
+
+    let weekly = service::get_sales_series(
+        &pool,
+        filter(Some(pos_lib::modules::reports::dto::Granularity::Week)),
+    )
+    .await
+    .unwrap();
+    assert_eq!(weekly.len(), 1);
+    assert_eq!(weekly[0].bucket, date("2026-10-05"));
+    assert_eq!(weekly[0].tickets, 2);
+    assert_eq!(weekly[0].gross_sales, 15_000);
+    assert_eq!(weekly[0].gross_profit, 10_000);
+
+    let monthly = service::get_sales_series(
+        &pool,
+        filter(Some(pos_lib::modules::reports::dto::Granularity::Month)),
+    )
+    .await
+    .unwrap();
+    assert_eq!(monthly.len(), 1);
+    assert_eq!(monthly[0].bucket, date("2026-10-01"));
+    assert_eq!(monthly[0].tickets, 2);
+    assert_eq!(monthly[0].gross_sales, 15_000);
+
+    let payments = service::get_sales_by_payment_method(&pool, filter(None))
+        .await
+        .unwrap();
+    assert_eq!(
+        payments.iter().map(|stat| stat.method).collect::<Vec<_>>(),
+        vec![
+            PaymentMethod::Cash,
+            PaymentMethod::Card,
+            PaymentMethod::Transfer
+        ]
+    );
+    assert_eq!(payments[0].tickets, 1);
+    assert_eq!(payments[0].amount, 6_000);
+    assert_eq!(payments[0].share_bps, 4_000);
+    assert_eq!(payments[1].tickets, 1);
+    assert_eq!(payments[1].amount, 4_000);
+    assert_eq!(payments[1].share_bps, 2_667);
+    assert_eq!(payments[2].tickets, 1);
+    assert_eq!(payments[2].amount, 5_000);
+    assert_eq!(payments[2].share_bps, 3_333);
+    assert_eq!(
+        payments.iter().map(|stat| stat.share_bps).sum::<i32>(),
+        10_000
+    );
+
+    let heatmap = service::get_sales_heatmap(&pool, filter(None))
+        .await
+        .unwrap();
+    assert_eq!(heatmap.len(), 2);
+    assert!(heatmap.iter().any(|cell| {
+        cell.weekday == 4 && cell.hour == 21 && cell.tickets == 1 && cell.gross_sales == 10_000
+    }));
+    assert!(heatmap.iter().any(|cell| {
+        cell.weekday == 2 && cell.hour == 10 && cell.tickets == 1 && cell.gross_sales == 5_000
+    }));
 }
 
 fn zero_kpis() -> pos_lib::modules::reports::dto::SalesKpis {
