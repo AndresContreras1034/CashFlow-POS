@@ -1034,6 +1034,80 @@ async fn product_rankings_reconcile_allocations_costing_and_stale_stock(pool: Pg
         .any(|product| product.variant_id == courtesy_only_variant));
 }
 
+#[sqlx::test(migrations = "./migrations")]
+async fn top_products_category_filter_limits_rows_and_scopes_shares(pool: PgPool) {
+    use pos_lib::modules::reports::dto::RankBy;
+
+    sqlx::query(
+        "UPDATE app_settings SET timezone = 'America/Bogota', currency_decimals = 2 WHERE id = 1",
+    )
+    .execute(&pool)
+    .await
+    .unwrap();
+
+    let first_variant = seed_variant(&pool).await;
+    let second_variant = seed_variant(&pool).await;
+    let first_category: i32 =
+        sqlx::query_scalar("SELECT p.category_id FROM product_variants v JOIN products p ON p.id = v.product_id WHERE v.id = $1")
+            .bind(first_variant)
+            .fetch_one(&pool)
+            .await
+            .unwrap();
+    let second_category: i32 =
+        sqlx::query_scalar("SELECT p.category_id FROM product_variants v JOIN products p ON p.id = v.product_id WHERE v.id = $1")
+            .bind(second_variant)
+            .fetch_one(&pool)
+            .await
+            .unwrap();
+    assert_ne!(first_category, second_category);
+
+    for (variant_id, total) in [(first_variant, 8_000), (second_variant, 12_000)] {
+        insert_sale(
+            &pool,
+            variant_id,
+            "completed",
+            "2026-10-09T15:00:00Z",
+            total,
+            0,
+            0,
+            total,
+            None,
+            1,
+            total,
+            0,
+            0,
+            total,
+            Some(total / 2),
+        )
+        .await;
+    }
+
+    let filtered = service::get_top_products(
+        &pool,
+        ReportFilter {
+            date_from: date("2026-10-09"),
+            date_to: date("2026-10-09"),
+            granularity: None,
+            compare_previous: false,
+            category_id: Some(first_category),
+            limit: Some(100),
+            rank_by: Some(RankBy::Revenue),
+        },
+    )
+    .await
+    .unwrap();
+
+    assert_eq!(filtered.len(), 1);
+    assert_eq!(filtered[0].variant_id, first_variant);
+    assert_eq!(
+        filtered
+            .iter()
+            .map(|product| product.share_bps)
+            .sum::<i32>(),
+        10_000
+    );
+}
+
 fn zero_kpis() -> pos_lib::modules::reports::dto::SalesKpis {
     pos_lib::modules::reports::dto::SalesKpis {
         tickets: 0,

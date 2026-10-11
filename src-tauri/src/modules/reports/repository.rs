@@ -480,6 +480,8 @@ pub async fn fetch_top_products(
                WHERE ($4::INT IS NULL OR p.category_id = $4)
                GROUP BY p.id, v.id, p.name, v.attributes
            )
+           -- The window totals are computed after category_id filtering, so shares are
+           -- relative to the selected category whenever that filter is present.
            SELECT product_totals.*,
                SUM(units) OVER ()::BIGINT AS units_total,
                SUM(revenue) OVER ()::BIGINT AS revenue_total,
