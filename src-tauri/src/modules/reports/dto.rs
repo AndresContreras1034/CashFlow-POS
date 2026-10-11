@@ -7,12 +7,24 @@ fn default_granularity() -> Option<Granularity> {
     Some(Granularity::Day)
 }
 
+fn default_rank_by() -> Option<RankBy> {
+    Some(RankBy::Revenue)
+}
+
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
 pub enum Granularity {
     Day,
     Week,
     Month,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum RankBy {
+    Units,
+    Revenue,
+    Profit,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
@@ -25,6 +37,8 @@ pub struct ReportFilter {
     pub compare_previous: bool,
     pub category_id: Option<i32>,
     pub limit: Option<i64>,
+    #[serde(default = "default_rank_by")]
+    pub rank_by: Option<RankBy>,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
@@ -106,8 +120,11 @@ pub struct TopProduct {
     pub product_name: String,
     pub attributes: serde_json::Value,
     pub units: i64,
+    pub gross_revenue: i64,
     pub revenue: i64,
     pub profit: i64,
+    pub margin_bps: Option<i32>,
+    pub uncosted_units: i64,
     pub share_bps: i32,
 }
 
@@ -116,8 +133,11 @@ pub struct CategorySales {
     pub category_id: i32,
     pub category_name: String,
     pub units: i64,
+    pub gross_revenue: i64,
     pub revenue: i64,
     pub profit: i64,
+    pub margin_bps: Option<i32>,
+    pub uncosted_units: i64,
     pub share_bps: i32,
 }
 
@@ -128,12 +148,14 @@ pub struct StaleProduct {
     pub attributes: serde_json::Value,
     pub stock: i32,
     pub stock_value_at_cost: i64,
+    /// True when the inventory value is understated because no unit cost is recorded.
+    pub cost_missing: bool,
     pub days_since_last_sale: Option<i64>,
 }
 
 #[cfg(test)]
 mod tests {
-    use super::{Granularity, ReportFilter};
+    use super::{Granularity, RankBy, ReportFilter};
 
     #[test]
     fn report_filter_defaults_to_daily_without_comparison() {
@@ -145,5 +167,6 @@ mod tests {
         assert!(!filter.compare_previous);
         assert_eq!(filter.category_id, None);
         assert_eq!(filter.limit, None);
+        assert_eq!(filter.rank_by, Some(RankBy::Revenue));
     }
 }

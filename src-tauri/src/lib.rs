@@ -230,6 +230,9 @@ pub fn run() {
             get_sales_series,
             get_sales_by_payment_method,
             get_sales_heatmap,
+            get_top_products,
+            get_sales_by_category,
+            get_stale_products,
             // =================================================
             // Audit
             // =================================================

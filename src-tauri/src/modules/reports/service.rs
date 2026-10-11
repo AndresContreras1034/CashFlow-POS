@@ -5,8 +5,8 @@ use crate::{
     modules::{
         reports::{
             dto::{
-                DashboardKpis, DateRange, Delta, Granularity, HeatmapCell, PaymentMethodStat,
-                ReportFilter, TimeSeriesPoint,
+                CategorySales, DashboardKpis, DateRange, Delta, Granularity, HeatmapCell,
+                PaymentMethodStat, RankBy, ReportFilter, StaleProduct, TimeSeriesPoint, TopProduct,
             },
             range::{change_bps, fill_buckets, previous_range},
             repository,
@@ -123,6 +123,65 @@ pub async fn get_sales_heatmap(
             to: filter.date_to,
         },
         &timezone,
+    )
+    .await
+    .map_err(AppError::from)
+}
+
+pub async fn get_top_products(
+    pool: &PgPool,
+    filter: ReportFilter,
+) -> Result<Vec<TopProduct>, AppError> {
+    filter.validate()?;
+    let (timezone, _) = resolve_timezone_and_decimals(pool).await?;
+    repository::fetch_top_products(
+        pool,
+        &DateRange {
+            from: filter.date_from,
+            to: filter.date_to,
+        },
+        &timezone,
+        filter.category_id,
+        filter.limit.unwrap_or(10),
+        filter.rank_by.unwrap_or(RankBy::Revenue),
+    )
+    .await
+    .map_err(AppError::from)
+}
+
+pub async fn get_sales_by_category(
+    pool: &PgPool,
+    filter: ReportFilter,
+) -> Result<Vec<CategorySales>, AppError> {
+    filter.validate()?;
+    let (timezone, _) = resolve_timezone_and_decimals(pool).await?;
+    repository::fetch_sales_by_category(
+        pool,
+        &DateRange {
+            from: filter.date_from,
+            to: filter.date_to,
+        },
+        &timezone,
+    )
+    .await
+    .map_err(AppError::from)
+}
+
+pub async fn get_stale_products(
+    pool: &PgPool,
+    filter: ReportFilter,
+) -> Result<Vec<StaleProduct>, AppError> {
+    filter.validate()?;
+    let (timezone, _) = resolve_timezone_and_decimals(pool).await?;
+    repository::fetch_stale_products(
+        pool,
+        &DateRange {
+            from: filter.date_from,
+            to: filter.date_to,
+        },
+        &timezone,
+        filter.category_id,
+        filter.limit.unwrap_or(10),
     )
     .await
     .map_err(AppError::from)

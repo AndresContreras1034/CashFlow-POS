@@ -1,6 +1,7 @@
 import type { PaymentMethod } from './index';
 
 export type Granularity = 'day' | 'week' | 'month';
+export type RankBy = 'units' | 'revenue' | 'profit';
 
 export interface ReportFilter {
   date_from: string;
@@ -9,6 +10,7 @@ export interface ReportFilter {
   compare_previous?: boolean;
   category_id?: number | null;
   limit?: number | null;
+  rank_by?: RankBy | null;
 }
 
 export interface DateRange {
@@ -82,8 +84,11 @@ export interface TopProduct {
   product_name: string;
   attributes: unknown;
   units: number;
+  gross_revenue: number;
   revenue: number;
   profit: number;
+  margin_bps: number | null;
+  uncosted_units: number;
   share_bps: number;
 }
 
@@ -91,8 +96,11 @@ export interface CategorySales {
   category_id: number;
   category_name: string;
   units: number;
+  gross_revenue: number;
   revenue: number;
   profit: number;
+  margin_bps: number | null;
+  uncosted_units: number;
   share_bps: number;
 }
 
@@ -102,5 +110,6 @@ export interface StaleProduct {
   attributes: unknown;
   stock: number;
   stock_value_at_cost: number;
+  cost_missing: boolean;
   days_since_last_sale: number | null;
 }

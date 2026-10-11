@@ -39,9 +39,66 @@ const COSTED_SALES_CTES: &str = r#"
     )
 "#;
 
+const ALLOCATED_ITEMS_CTES: &str = r#",
+    item_base AS (
+        SELECT
+            si.id AS item_id,
+            si.sale_id,
+            si.variant_id,
+            si.quantity::BIGINT AS quantity,
+            si.subtotal::NUMERIC AS item_subtotal,
+            si.unit_cost,
+            s.total::NUMERIC AS sale_total,
+            s.tax::NUMERIC AS sale_tax,
+            s.fully_costed,
+            SUM(si.subtotal::NUMERIC) OVER (
+                PARTITION BY si.sale_id ORDER BY si.id
+                ROWS BETWEEN UNBOUNDED PRECEDING AND CURRENT ROW
+            ) AS cumulative_subtotal,
+            SUM(si.subtotal::NUMERIC) OVER (PARTITION BY si.sale_id) AS sale_subtotal
+        FROM sale_items si
+        JOIN costed_sales s ON s.id = si.sale_id
+        WHERE s.courtesy_reason IS NULL
+    ),
+    gross_allocated_items AS (
+        SELECT
+            item_base.*,
+            CASE
+                WHEN sale_subtotal = 0 THEN 0::NUMERIC
+                ELSE ROUND(cumulative_subtotal * sale_total / sale_subtotal)
+                     - ROUND((cumulative_subtotal - item_subtotal) * sale_total / sale_subtotal)
+            END AS gross_alloc
+        FROM item_base
+    ),
+    allocated_items AS (
+        SELECT
+            gross_allocated_items.*,
+            CASE
+                WHEN sale_total = 0 THEN 0::NUMERIC
+                ELSE ROUND(
+                    SUM(gross_alloc) OVER (
+                        PARTITION BY sale_id ORDER BY item_id
+                        ROWS BETWEEN UNBOUNDED PRECEDING AND CURRENT ROW
+                    ) * sale_tax / sale_total
+                ) - ROUND(
+                    (
+                        SUM(gross_alloc) OVER (
+                            PARTITION BY sale_id ORDER BY item_id
+                            ROWS BETWEEN UNBOUNDED PRECEDING AND CURRENT ROW
+                        ) - gross_alloc
+                    ) * sale_tax / sale_total
+                )
+            END AS tax_alloc
+        FROM gross_allocated_items
+    )
+"#;
+
 use crate::{
     modules::{
-        reports::dto::{DateRange, HeatmapCell, PaymentMethodStat, SalesKpis, TimeSeriesPoint},
+        reports::dto::{
+            CategorySales, DateRange, HeatmapCell, PaymentMethodStat, RankBy, SalesKpis,
+            StaleProduct, TimeSeriesPoint, TopProduct,
+        },
         sales::models::PaymentMethod,
     },
     types::money::divide_to_currency,
@@ -92,6 +149,47 @@ struct HeatmapRow {
     hour: i16,
     tickets: i64,
     gross_sales: i64,
+}
+
+#[derive(sqlx::FromRow)]
+struct ProductRankingRow {
+    product_id: i32,
+    variant_id: i32,
+    product_name: String,
+    attributes: serde_json::Value,
+    units: i64,
+    gross_revenue: i64,
+    revenue: i64,
+    profit: i64,
+    costed_revenue: i64,
+    uncosted_units: i64,
+    units_total: i64,
+    revenue_total: i64,
+    profit_total: i64,
+}
+
+#[derive(sqlx::FromRow)]
+struct CategoryRankingRow {
+    category_id: i32,
+    category_name: String,
+    units: i64,
+    gross_revenue: i64,
+    revenue: i64,
+    profit: i64,
+    costed_revenue: i64,
+    uncosted_units: i64,
+    revenue_total: i64,
+}
+
+#[derive(sqlx::FromRow)]
+struct StaleProductRow {
+    variant_id: i32,
+    product_name: String,
+    attributes: serde_json::Value,
+    stock: i32,
+    stock_value_at_cost: i64,
+    cost_missing: bool,
+    days_since_last_sale: Option<i64>,
 }
 
 pub async fn fetch_sales_kpis(
@@ -336,6 +434,222 @@ pub async fn fetch_sales_heatmap(
             hour: row.hour as u8,
             tickets: row.tickets,
             gross_sales: row.gross_sales,
+        })
+        .collect())
+}
+
+pub async fn fetch_top_products(
+    pool: &PgPool,
+    range: &DateRange,
+    timezone: &str,
+    category_id: Option<i32>,
+    limit: i64,
+    rank_by: RankBy,
+) -> Result<Vec<TopProduct>, sqlx::Error> {
+    let order_by = match rank_by {
+        RankBy::Units => "units DESC, variant_id ASC",
+        RankBy::Revenue => "revenue DESC, variant_id ASC",
+        RankBy::Profit => "profit DESC, variant_id ASC",
+    };
+    let query = format!(
+        r#"{COSTED_SALES_CTES}
+           {ALLOCATED_ITEMS_CTES},
+           product_totals AS (
+               SELECT
+                   p.id AS product_id,
+                   v.id AS variant_id,
+                   p.name AS product_name,
+                   v.attributes,
+                   COALESCE(SUM(a.quantity), 0)::BIGINT AS units,
+                   COALESCE(SUM(a.gross_alloc), 0)::BIGINT AS gross_revenue,
+                   COALESCE(SUM(a.gross_alloc - a.tax_alloc), 0)::BIGINT AS revenue,
+                   COALESCE(SUM(
+                       CASE WHEN a.fully_costed
+                           THEN a.gross_alloc - a.tax_alloc
+                                - COALESCE(a.unit_cost::NUMERIC * a.quantity, 0)
+                           ELSE 0
+                       END
+                   ), 0)::BIGINT AS profit,
+                   COALESCE(SUM(a.gross_alloc - a.tax_alloc)
+                       FILTER (WHERE a.fully_costed), 0)::BIGINT AS costed_revenue,
+                   COALESCE(SUM(a.quantity)
+                       FILTER (WHERE NOT a.fully_costed), 0)::BIGINT AS uncosted_units
+               FROM allocated_items a
+               JOIN product_variants v ON v.id = a.variant_id
+               JOIN products p ON p.id = v.product_id
+               WHERE ($4::INT IS NULL OR p.category_id = $4)
+               GROUP BY p.id, v.id, p.name, v.attributes
+           )
+           SELECT product_totals.*,
+               SUM(units) OVER ()::BIGINT AS units_total,
+               SUM(revenue) OVER ()::BIGINT AS revenue_total,
+               SUM(profit) OVER ()::BIGINT AS profit_total
+           FROM product_totals
+           ORDER BY {order_by}
+           LIMIT $5"#
+    );
+    let rows = sqlx::query_as::<_, ProductRankingRow>(&query)
+        .bind(range.from)
+        .bind(range.to)
+        .bind(timezone)
+        .bind(category_id)
+        .bind(limit)
+        .fetch_all(pool)
+        .await?;
+
+    Ok(rows
+        .into_iter()
+        .map(|row| {
+            let (share, total) = match rank_by {
+                RankBy::Units => (row.units, row.units_total),
+                RankBy::Revenue => (row.revenue, row.revenue_total),
+                RankBy::Profit => (row.profit, row.profit_total),
+            };
+            TopProduct {
+                product_id: row.product_id,
+                variant_id: row.variant_id,
+                product_name: row.product_name,
+                attributes: row.attributes,
+                units: row.units,
+                gross_revenue: row.gross_revenue,
+                revenue: row.revenue,
+                profit: row.profit,
+                margin_bps: (row.costed_revenue != 0)
+                    .then(|| super::range::margin_bps(row.profit, row.costed_revenue)),
+                uncosted_units: row.uncosted_units,
+                share_bps: super::range::share_bps(share, total),
+            }
+        })
+        .collect())
+}
+
+pub async fn fetch_sales_by_category(
+    pool: &PgPool,
+    range: &DateRange,
+    timezone: &str,
+) -> Result<Vec<CategorySales>, sqlx::Error> {
+    let query = format!(
+        r#"{COSTED_SALES_CTES}
+           {ALLOCATED_ITEMS_CTES},
+           category_totals AS (
+               SELECT
+                   c.id AS category_id,
+                   c.name AS category_name,
+                   COALESCE(SUM(a.quantity), 0)::BIGINT AS units,
+                   COALESCE(SUM(a.gross_alloc), 0)::BIGINT AS gross_revenue,
+                   COALESCE(SUM(a.gross_alloc - a.tax_alloc), 0)::BIGINT AS revenue,
+                   COALESCE(SUM(
+                       CASE WHEN a.fully_costed
+                           THEN a.gross_alloc - a.tax_alloc
+                                - COALESCE(a.unit_cost::NUMERIC * a.quantity, 0)
+                           ELSE 0
+                       END
+                   ), 0)::BIGINT AS profit,
+                   COALESCE(SUM(a.gross_alloc - a.tax_alloc)
+                       FILTER (WHERE a.fully_costed), 0)::BIGINT AS costed_revenue,
+                   COALESCE(SUM(a.quantity)
+                       FILTER (WHERE NOT a.fully_costed), 0)::BIGINT AS uncosted_units
+               FROM allocated_items a
+               JOIN product_variants v ON v.id = a.variant_id
+               JOIN products p ON p.id = v.product_id
+               JOIN categories c ON c.id = p.category_id
+               GROUP BY c.id, c.name
+           )
+           SELECT category_totals.*,
+               SUM(revenue) OVER ()::BIGINT AS revenue_total
+           FROM category_totals
+           ORDER BY revenue DESC, category_id ASC"#
+    );
+    let rows = sqlx::query_as::<_, CategoryRankingRow>(&query)
+        .bind(range.from)
+        .bind(range.to)
+        .bind(timezone)
+        .fetch_all(pool)
+        .await?;
+
+    Ok(rows
+        .into_iter()
+        .map(|row| CategorySales {
+            category_id: row.category_id,
+            category_name: row.category_name,
+            units: row.units,
+            gross_revenue: row.gross_revenue,
+            revenue: row.revenue,
+            profit: row.profit,
+            margin_bps: (row.costed_revenue != 0)
+                .then(|| super::range::margin_bps(row.profit, row.costed_revenue)),
+            uncosted_units: row.uncosted_units,
+            share_bps: super::range::share_bps(row.revenue, row.revenue_total),
+        })
+        .collect())
+}
+
+pub async fn fetch_stale_products(
+    pool: &PgPool,
+    range: &DateRange,
+    timezone: &str,
+    category_id: Option<i32>,
+    limit: i64,
+) -> Result<Vec<StaleProduct>, sqlx::Error> {
+    let rows = sqlx::query_as!(
+        StaleProductRow,
+        r#"SELECT
+               v.id AS "variant_id!",
+               p.name AS "product_name!",
+               v.attributes AS "attributes!",
+               v.stock AS "stock!",
+               (v.stock::NUMERIC * v.cost::NUMERIC)::BIGINT AS "stock_value_at_cost!",
+               (v.cost = 0) AS "cost_missing!",
+               (
+                   $2::DATE - (
+                       SELECT MAX((prior.created_at AT TIME ZONE $3)::DATE)
+                       FROM sales prior
+                       WHERE prior.status = 'completed'
+                         AND prior.created_at < ($1::DATE::TIMESTAMP AT TIME ZONE $3)
+                         AND EXISTS (
+                             SELECT 1 FROM sale_items prior_item
+                             WHERE prior_item.sale_id = prior.id
+                               AND prior_item.variant_id = v.id
+                         )
+                   )
+               )::BIGINT AS "days_since_last_sale?"
+           FROM product_variants v
+           JOIN products p ON p.id = v.product_id
+           WHERE v.is_active
+             AND p.is_active
+             AND v.stock > 0
+             AND ($4::INT IS NULL OR p.category_id = $4)
+             AND v.created_at < ($1::DATE::TIMESTAMP AT TIME ZONE $3)
+             AND NOT EXISTS (
+                 SELECT 1
+                 FROM sales in_range
+                 JOIN sale_items range_item ON range_item.sale_id = in_range.id
+                 WHERE in_range.status = 'completed'
+                   AND range_item.variant_id = v.id
+                   AND in_range.created_at >= ($1::DATE::TIMESTAMP AT TIME ZONE $3)
+                   AND in_range.created_at < (($2::DATE + 1)::TIMESTAMP AT TIME ZONE $3)
+             )
+           ORDER BY 5 DESC, v.id ASC
+           LIMIT $5"#,
+        range.from,
+        range.to,
+        timezone,
+        category_id,
+        limit
+    )
+    .fetch_all(pool)
+    .await?;
+
+    Ok(rows
+        .into_iter()
+        .map(|row| StaleProduct {
+            variant_id: row.variant_id,
+            product_name: row.product_name,
+            attributes: row.attributes,
+            stock: row.stock,
+            stock_value_at_cost: row.stock_value_at_cost,
+            cost_missing: row.cost_missing,
+            days_since_last_sale: row.days_since_last_sale,
         })
         .collect())
 }

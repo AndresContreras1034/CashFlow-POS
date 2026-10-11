@@ -140,6 +140,7 @@ mod tests {
             compare_previous: false,
             category_id: None,
             limit: None,
+            rank_by: None,
         }
     }
 

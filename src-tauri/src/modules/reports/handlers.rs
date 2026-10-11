@@ -4,7 +4,10 @@ use crate::{
     db::DbPool,
     errors::app_error::AppError,
     modules::reports::{
-        dto::{DashboardKpis, HeatmapCell, PaymentMethodStat, ReportFilter, TimeSeriesPoint},
+        dto::{
+            CategorySales, DashboardKpis, HeatmapCell, PaymentMethodStat, ReportFilter,
+            StaleProduct, TimeSeriesPoint, TopProduct,
+        },
         service,
     },
 };
@@ -45,6 +48,36 @@ pub async fn get_sales_heatmap(
     filter: ReportFilter,
 ) -> Result<Vec<HeatmapCell>, String> {
     service::get_sales_heatmap(&pool, filter)
+        .await
+        .map_err(|error: AppError| error.to_string())
+}
+
+#[tauri::command]
+pub async fn get_top_products(
+    pool: State<'_, DbPool>,
+    filter: ReportFilter,
+) -> Result<Vec<TopProduct>, String> {
+    service::get_top_products(&pool, filter)
+        .await
+        .map_err(|error: AppError| error.to_string())
+}
+
+#[tauri::command]
+pub async fn get_sales_by_category(
+    pool: State<'_, DbPool>,
+    filter: ReportFilter,
+) -> Result<Vec<CategorySales>, String> {
+    service::get_sales_by_category(&pool, filter)
+        .await
+        .map_err(|error: AppError| error.to_string())
+}
+
+#[tauri::command]
+pub async fn get_stale_products(
+    pool: State<'_, DbPool>,
+    filter: ReportFilter,
+) -> Result<Vec<StaleProduct>, String> {
+    service::get_stale_products(&pool, filter)
         .await
         .map_err(|error: AppError| error.to_string())
 }

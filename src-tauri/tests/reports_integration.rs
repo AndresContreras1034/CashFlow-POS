@@ -276,6 +276,7 @@ async fn dashboard_kpis_include_costs_void_counts_and_local_date_comparison(pool
             compare_previous: true,
             category_id: None,
             limit: None,
+            rank_by: None,
         },
     )
     .await
@@ -391,6 +392,7 @@ async fn dashboard_kpis_are_zero_for_empty_range_and_comparison_is_optional(pool
         compare_previous: true,
         category_id: None,
         limit: None,
+        rank_by: None,
     };
     let compared = service::get_dashboard_kpis(&pool, base_filter.clone())
         .await
@@ -438,6 +440,7 @@ async fn dashboard_kpis_reject_invalid_timezone(pool: PgPool) {
             compare_previous: false,
             category_id: None,
             limit: None,
+            rank_by: None,
         },
     )
     .await
@@ -469,6 +472,7 @@ async fn mixed_cost_ticket_is_excluded_from_profit_base(pool: PgPool) {
             compare_previous: false,
             category_id: None,
             limit: None,
+            rank_by: None,
         },
     )
     .await
@@ -600,6 +604,7 @@ async fn sales_breakdowns_use_local_buckets_and_exclude_non_sales(pool: PgPool) 
         compare_previous: false,
         category_id: None,
         limit: None,
+        rank_by: None,
     };
 
     let daily = service::get_sales_series(
@@ -680,6 +685,353 @@ async fn sales_breakdowns_use_local_buckets_and_exclude_non_sales(pool: PgPool) 
     assert!(heatmap.iter().any(|cell| {
         cell.weekday == 2 && cell.hour == 10 && cell.tickets == 1 && cell.gross_sales == 5_000
     }));
+}
+
+#[sqlx::test(migrations = "./migrations")]
+async fn product_rankings_reconcile_allocations_costing_and_stale_stock(pool: PgPool) {
+    use pos_lib::modules::reports::dto::RankBy;
+
+    sqlx::query(
+        "UPDATE app_settings SET timezone = 'America/Bogota', currency_decimals = 2 WHERE id = 1",
+    )
+    .execute(&pool)
+    .await
+    .unwrap();
+
+    let first_variant = seed_variant(&pool).await;
+    let product_id: i32 =
+        sqlx::query_scalar("SELECT product_id FROM product_variants WHERE id = $1")
+            .bind(first_variant)
+            .fetch_one(&pool)
+            .await
+            .unwrap();
+    let second_variant: i32 = sqlx::query_scalar(
+        r#"INSERT INTO product_variants
+               (product_id, attributes, price, cost, stock, created_at)
+           VALUES ($1, '{"size":"large"}', 2000, 500, 8, '2026-01-01T00:00:00Z')
+           RETURNING id"#,
+    )
+    .bind(product_id)
+    .fetch_one(&pool)
+    .await
+    .unwrap();
+    let stale_cancelled_variant: i32 = sqlx::query_scalar(
+        r#"INSERT INTO product_variants
+               (product_id, attributes, price, cost, stock, created_at)
+           VALUES ($1, '{"color":"blue"}', 1000, 0, 5, '2026-01-01T00:00:00Z')
+           RETURNING id"#,
+    )
+    .bind(product_id)
+    .fetch_one(&pool)
+    .await
+    .unwrap();
+    let stale_sold_variant: i32 = sqlx::query_scalar(
+        r#"INSERT INTO product_variants
+               (product_id, attributes, price, cost, stock, created_at)
+           VALUES ($1, '{"color":"red"}', 1000, 700, 2, '2026-01-01T00:00:00Z')
+           RETURNING id"#,
+    )
+    .bind(product_id)
+    .fetch_one(&pool)
+    .await
+    .unwrap();
+    let courtesy_only_variant: i32 = sqlx::query_scalar(
+        r#"INSERT INTO product_variants
+               (product_id, attributes, price, cost, stock, created_at)
+           VALUES ($1, '{"color":"green"}', 2000, 1000, 3, '2026-01-01T00:00:00Z')
+           RETURNING id"#,
+    )
+    .bind(product_id)
+    .fetch_one(&pool)
+    .await
+    .unwrap();
+    let high_units_variant: i32 = sqlx::query_scalar(
+        r#"INSERT INTO product_variants
+               (product_id, attributes, price, cost, stock, created_at)
+           VALUES ($1, '{"color":"yellow"}', 2500, 5000, 4, '2026-01-01T00:00:00Z')
+           RETURNING id"#,
+    )
+    .bind(product_id)
+    .fetch_one(&pool)
+    .await
+    .unwrap();
+
+    sqlx::query(
+        "UPDATE product_variants SET stock = 10, created_at = '2026-01-01T00:00:00Z' \
+         WHERE id = $1",
+    )
+    .bind(first_variant)
+    .execute(&pool)
+    .await
+    .unwrap();
+
+    let current_sale = insert_sale(
+        &pool,
+        first_variant,
+        "completed",
+        "2026-10-10T02:30:00Z",
+        11_001,
+        1_001,
+        1_000,
+        10_001,
+        None,
+        1,
+        6_000,
+        0,
+        0,
+        6_000,
+        Some(1_000),
+    )
+    .await;
+    sqlx::query(
+        r#"INSERT INTO sale_items
+               (sale_id, variant_id, quantity, unit_price, unit_cost, discount, tax, subtotal)
+           VALUES ($1, $2, 2, 2000, 500, 0, 0, 4000)"#,
+    )
+    .bind(current_sale)
+    .bind(second_variant)
+    .execute(&pool)
+    .await
+    .unwrap();
+
+    let historical_sale = insert_sale(
+        &pool,
+        second_variant,
+        "completed",
+        "2026-10-09T15:00:00Z",
+        5_000,
+        500,
+        500,
+        4_500,
+        None,
+        1,
+        5_000,
+        0,
+        0,
+        5_000,
+        Some(1_000),
+    )
+    .await;
+    sqlx::query("UPDATE sales SET gross_semantics = FALSE WHERE id = $1")
+        .bind(historical_sale)
+        .execute(&pool)
+        .await
+        .unwrap();
+
+    insert_mixed_cost_sale(&pool, first_variant).await;
+
+    insert_sale(
+        &pool,
+        high_units_variant,
+        "completed",
+        "2026-10-09T16:00:00Z",
+        10_000,
+        0,
+        0,
+        10_000,
+        None,
+        4,
+        2_500,
+        0,
+        0,
+        10_000,
+        Some(5_000),
+    )
+    .await;
+
+    insert_sale(
+        &pool,
+        stale_cancelled_variant,
+        "cancelled",
+        "2026-10-09T18:00:00Z",
+        1_000,
+        0,
+        0,
+        1_000,
+        None,
+        1,
+        1_000,
+        0,
+        0,
+        1_000,
+        Some(100),
+    )
+    .await;
+    insert_sale(
+        &pool,
+        courtesy_only_variant,
+        "completed",
+        "2026-10-09T19:00:00Z",
+        2_000,
+        0,
+        2_000,
+        0,
+        Some("Cortesía"),
+        1,
+        2_000,
+        0,
+        0,
+        2_000,
+        Some(2_000),
+    )
+    .await;
+    insert_sale(
+        &pool,
+        stale_sold_variant,
+        "completed",
+        "2026-09-20T12:00:00Z",
+        1_000,
+        0,
+        0,
+        1_000,
+        None,
+        1,
+        1_000,
+        0,
+        0,
+        1_000,
+        Some(700),
+    )
+    .await;
+
+    let filter = ReportFilter {
+        date_from: date("2026-10-09"),
+        date_to: date("2026-10-09"),
+        granularity: None,
+        compare_previous: false,
+        category_id: None,
+        limit: Some(100),
+        rank_by: Some(RankBy::Revenue),
+    };
+    let dashboard = service::get_dashboard_kpis(&pool, filter.clone())
+        .await
+        .unwrap();
+    let products = service::get_top_products(&pool, filter.clone())
+        .await
+        .unwrap();
+    let categories = service::get_sales_by_category(&pool, filter.clone())
+        .await
+        .unwrap();
+
+    assert_eq!(dashboard.current.gross_sales, 44_501);
+    assert_eq!(
+        products.iter().map(|p| p.gross_revenue).sum::<i64>(),
+        44_501
+    );
+    assert_eq!(
+        products.iter().map(|p| p.revenue).sum::<i64>(),
+        dashboard.current.gross_sales - dashboard.current.tax_total
+    );
+    assert_eq!(
+        products.iter().map(|p| p.profit).sum::<i64>() - dashboard.current.courtesy_cost,
+        dashboard.current.gross_profit
+    );
+    assert_eq!(categories.len(), 1);
+    assert_eq!(categories[0].gross_revenue, dashboard.current.gross_sales);
+    assert_eq!(
+        categories[0].profit - dashboard.current.courtesy_cost,
+        dashboard.current.gross_profit
+    );
+    assert_eq!(
+        products
+            .iter()
+            .find(|p| p.variant_id == first_variant)
+            .unwrap()
+            .gross_revenue,
+        26_001
+    );
+    assert_eq!(
+        products
+            .iter()
+            .find(|p| p.variant_id == first_variant)
+            .unwrap()
+            .revenue,
+        25_400
+    );
+    assert_eq!(
+        products
+            .iter()
+            .find(|p| p.variant_id == second_variant)
+            .unwrap()
+            .gross_revenue,
+        8_500
+    );
+    assert_eq!(
+        products
+            .iter()
+            .find(|p| p.variant_id == second_variant)
+            .unwrap()
+            .revenue,
+        7_600
+    );
+    assert_eq!(
+        products
+            .iter()
+            .find(|p| p.variant_id == first_variant)
+            .unwrap()
+            .uncosted_units,
+        2
+    );
+    assert!(!products
+        .iter()
+        .any(|product| product.variant_id == stale_cancelled_variant));
+    assert_eq!(
+        products
+            .iter()
+            .map(|product| product.share_bps)
+            .sum::<i32>(),
+        10_000
+    );
+
+    let mut units_filter = filter.clone();
+    units_filter.rank_by = Some(RankBy::Units);
+    let units_ranked = service::get_top_products(&pool, units_filter)
+        .await
+        .unwrap();
+    assert_eq!(units_ranked[0].variant_id, high_units_variant);
+
+    let mut profit_filter = filter.clone();
+    profit_filter.rank_by = Some(RankBy::Profit);
+    let profit_ranked = service::get_top_products(&pool, profit_filter)
+        .await
+        .unwrap();
+    assert_eq!(profit_ranked[0].variant_id, second_variant);
+    assert_eq!(products[0].variant_id, first_variant);
+
+    let mut limited_filter = filter.clone();
+    limited_filter.limit = Some(1);
+    let limited = service::get_top_products(&pool, limited_filter)
+        .await
+        .unwrap();
+    assert_eq!(limited.len(), 1);
+    assert_eq!(limited[0].variant_id, first_variant);
+    assert_eq!(limited[0].share_bps, products[0].share_bps);
+
+    let mut category_filter = filter.clone();
+    category_filter.category_id = Some(-1);
+    assert_eq!(
+        service::get_sales_by_category(&pool, category_filter)
+            .await
+            .unwrap()
+            .len(),
+        1
+    );
+
+    let stale = service::get_stale_products(&pool, filter).await.unwrap();
+    assert_eq!(stale.len(), 2);
+    assert!(stale.iter().any(|product| {
+        product.variant_id == stale_cancelled_variant
+            && product.cost_missing
+            && product.days_since_last_sale.is_none()
+    }));
+    assert!(stale.iter().any(|product| {
+        product.variant_id == stale_sold_variant
+            && !product.cost_missing
+            && product.days_since_last_sale == Some(19)
+    }));
+    assert!(!stale
+        .iter()
+        .any(|product| product.variant_id == courtesy_only_variant));
 }
 
 fn zero_kpis() -> pos_lib::modules::reports::dto::SalesKpis {
