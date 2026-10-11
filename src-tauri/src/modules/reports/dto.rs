@@ -161,7 +161,7 @@ pub struct InventoryValuation {
     /// Mirrors inventory's existing valuation: variants without a recorded cost are excluded.
     pub potential_sale_value: i64,
     pub potential_margin_bps: Option<i32>,
-    /// Active variants with a positive recorded cost, matching InventoryValueDto semantics.
+    /// Active variants with cost > 0 regardless of stock, matching inventory's inherited semantics.
     pub variants_valued: i64,
     pub variants_without_cost: i64,
     pub negative_stock_variants: i64,
@@ -193,6 +193,8 @@ pub struct InventoryTurnover {
 }
 
 /// Current stock snapshot with sales demand calculated over the requested date range.
+/// Out-of-stock rows sort by units sold DESC, then low-stock rows by days of cover
+/// ASC NULLS LAST; variant_id is the deterministic tie-breaker.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct StockAlert {
     pub variant_id: i32,

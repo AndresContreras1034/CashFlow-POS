@@ -1444,6 +1444,18 @@ async fn stock_alerts_order_status_cover_and_reorder_by_selected_range(pool: PgP
 
     let (category_id, _, out_sold_variant) =
         seed_inventory_variant(&pool, "alert-a", "Out sold", 0, 0, 100, 300, true, true).await;
+    let (_, _, out_more_sold_variant) = seed_inventory_variant(
+        &pool,
+        "alert-more-sold",
+        "Out more sold",
+        0,
+        0,
+        100,
+        300,
+        true,
+        true,
+    )
+    .await;
     let (_, _, out_never_variant) = seed_inventory_variant(
         &pool,
         "alert-never",
@@ -1488,16 +1500,34 @@ async fn stock_alerts_order_status_cover_and_reorder_by_selected_range(pool: PgP
         out_sold_variant,
         "completed",
         "2026-10-10T02:30:00Z",
-        1_200,
-        0,
-        0,
-        1_200,
-        None,
-        4,
         300,
         0,
         0,
-        1_200,
+        300,
+        None,
+        1,
+        300,
+        0,
+        0,
+        300,
+        Some(100),
+    )
+    .await;
+    insert_sale(
+        &pool,
+        out_more_sold_variant,
+        "completed",
+        "2026-10-10T02:30:00Z",
+        12_000,
+        0,
+        0,
+        12_000,
+        None,
+        40,
+        300,
+        0,
+        0,
+        12_000,
         Some(100),
     )
     .await;
@@ -1555,7 +1585,12 @@ async fn stock_alerts_order_status_cover_and_reorder_by_selected_range(pool: PgP
             .iter()
             .map(|alert| alert.variant_id)
             .collect::<Vec<_>>(),
-        vec![out_sold_variant, out_never_variant, low_variant]
+        vec![
+            out_more_sold_variant,
+            out_sold_variant,
+            out_never_variant,
+            low_variant,
+        ]
     );
     assert!(alerts
         .iter()
@@ -1567,17 +1602,20 @@ async fn stock_alerts_order_status_cover_and_reorder_by_selected_range(pool: PgP
         alerts[0].status,
         pos_lib::modules::inventory::models::StockStatus::OutOfStock
     );
-    assert_eq!(alerts[0].units_sold, 4);
+    assert_eq!(alerts[0].units_sold, 40);
     assert_eq!(alerts[0].days_of_cover, Some(0));
-    assert_eq!(alerts[0].suggested_reorder, 4);
-    assert_eq!(alerts[1].days_of_cover, None);
-    assert_eq!(alerts[1].suggested_reorder, 0);
+    assert_eq!(alerts[0].suggested_reorder, 40);
+    assert_eq!(alerts[1].units_sold, 1);
+    assert_eq!(alerts[1].days_of_cover, Some(0));
+    assert_eq!(alerts[1].suggested_reorder, 1);
+    assert_eq!(alerts[2].days_of_cover, None);
+    assert_eq!(alerts[2].suggested_reorder, 0);
     assert_eq!(
-        alerts[2].status,
+        alerts[3].status,
         pos_lib::modules::inventory::models::StockStatus::Low
     );
-    assert_eq!(alerts[2].days_of_cover, Some(1));
-    assert_eq!(alerts[2].suggested_reorder, 2);
+    assert_eq!(alerts[3].days_of_cover, Some(1));
+    assert_eq!(alerts[3].suggested_reorder, 2);
 
     let mut month_filter = filter.clone();
     month_filter.date_from = date("2026-10-01");
@@ -1610,6 +1648,66 @@ async fn stock_alerts_order_status_cover_and_reorder_by_selected_range(pool: PgP
         .unwrap();
     assert_eq!(category_alerts.len(), 1);
     assert_eq!(category_alerts[0].variant_id, out_sold_variant);
+}
+
+#[sqlx::test(migrations = "./migrations")]
+async fn inventory_turnover_counts_historical_cogs_after_product_deactivation(pool: PgPool) {
+    sqlx::query("UPDATE app_settings SET timezone = 'America/Bogota' WHERE id = 1")
+        .execute(&pool)
+        .await
+        .unwrap();
+    let (category_id, product_id, variant_id) = seed_inventory_variant(
+        &pool,
+        "turnover-inactive",
+        "Deactivated after sale",
+        8,
+        1,
+        250,
+        500,
+        true,
+        true,
+    )
+    .await;
+    insert_sale(
+        &pool,
+        variant_id,
+        "completed",
+        "2026-10-09T17:00:00Z",
+        1_500,
+        0,
+        0,
+        1_500,
+        None,
+        3,
+        500,
+        0,
+        0,
+        1_500,
+        Some(250),
+    )
+    .await;
+    sqlx::query("UPDATE products SET is_active = FALSE WHERE id = $1")
+        .bind(product_id)
+        .execute(&pool)
+        .await
+        .unwrap();
+
+    let result = service::get_inventory_turnover(
+        &pool,
+        ReportFilter {
+            date_from: date("2026-10-09"),
+            date_to: date("2026-10-09"),
+            granularity: None,
+            compare_previous: false,
+            category_id: Some(category_id),
+            limit: None,
+            rank_by: None,
+        },
+    )
+    .await
+    .unwrap();
+    assert_eq!(result.cogs, 750);
+    assert_eq!(result.inventory_value_at_cost, 0);
 }
 
 fn zero_kpis() -> pos_lib::modules::reports::dto::SalesKpis {

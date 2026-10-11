@@ -802,8 +802,9 @@ pub async fn fetch_inventory_turnover(
             COUNT(*) FILTER (WHERE si.unit_cost IS NULL)::BIGINT AS uncosted_items
         FROM sales s
         JOIN sale_items si ON si.sale_id = s.id
-        JOIN product_variants v ON v.id = si.variant_id AND v.is_active
-        JOIN products p ON p.id = v.product_id AND p.is_active
+        -- Historical COGS must remain visible after a sold product is deactivated.
+        JOIN product_variants v ON v.id = si.variant_id
+        JOIN products p ON p.id = v.product_id
         WHERE s.status = 'completed'
           AND s.courtesy_reason IS NULL
           AND s.created_at >= ($1::DATE::TIMESTAMP AT TIME ZONE $3)
@@ -881,11 +882,15 @@ pub async fn fetch_stock_alerts(
            JOIN products p ON p.id = v.product_id
            JOIN categories c ON c.id = v.category_id
            LEFT JOIN sales_by_variant sales ON sales.variant_id = v.variant_id
-           WHERE (v.stock <= pv.stock_min OR v.stock <= 0)
+           WHERE v.stock <= pv.stock_min
              AND ($4::INT IS NULL OR v.category_id = $4)
            ORDER BY
                CASE WHEN v.stock <= 0 THEN 0 ELSE 1 END ASC,
-               days_of_cover ASC NULLS LAST,
+               CASE WHEN v.stock <= 0 THEN COALESCE(sales.units_sold, 0) END DESC NULLS LAST,
+               CASE
+                   WHEN v.stock > 0 AND COALESCE(sales.units_sold, 0) > 0
+                   THEN ROUND(pv.stock::NUMERIC * $5::NUMERIC / sales.units_sold)::BIGINT
+               END ASC NULLS LAST,
                v.variant_id ASC
            LIMIT $6"#
     );
