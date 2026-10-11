@@ -2,10 +2,13 @@ import { invoke } from '@tauri-apps/api/core';
 import type {
   DashboardKpis,
   HeatmapCell,
+  InventoryTurnover,
+  InventoryValuation,
   PaymentMethodStat,
   ReportFilter,
   CategorySales,
   StaleProduct,
+  StockAlert,
   TopProduct,
   TimeSeriesPoint,
 } from '../types/reports';
@@ -38,4 +41,16 @@ export function getSalesByCategory(filter: ReportFilter): Promise<CategorySales[
 
 export function getStaleProducts(filter: ReportFilter): Promise<StaleProduct[]> {
   return invoke('get_stale_products', { filter });
+}
+
+export function getInventoryValuation(filter: ReportFilter): Promise<InventoryValuation> {
+  return invoke('get_inventory_valuation', { filter });
+}
+
+export function getInventoryTurnover(filter: ReportFilter): Promise<InventoryTurnover> {
+  return invoke('get_inventory_turnover', { filter });
+}
+
+export function getStockAlerts(filter: ReportFilter): Promise<StockAlert[]> {
+  return invoke('get_stock_alerts', { filter });
 }

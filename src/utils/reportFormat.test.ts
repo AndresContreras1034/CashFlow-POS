@@ -2,8 +2,11 @@ import { describe, expect, it } from 'vitest';
 import {
   fillHeatmap,
   formatBps,
+  formatDaysOfCover,
   formatDaysSinceSale,
+  formatTurnover,
   formatVariantAttributes,
+  stockStatusLabel,
 } from './reportFormat';
 
 describe('report formatting helpers', () => {
@@ -49,5 +52,19 @@ describe('report formatting helpers', () => {
     expect(formatDaysSinceSale(null)).toBe('Nunca vendido');
     expect(formatDaysSinceSale(1)).toBe('1 día');
     expect(formatDaysSinceSale(12)).toBe('12 días');
+  });
+
+  it('formats inventory turnover ratios in times', () => {
+    expect(formatTurnover(15_000)).toBe('1,50 veces');
+    expect(formatTurnover(0)).toBe('0,00 veces');
+    expect(formatTurnover(null)).toBe('—');
+  });
+
+  it('formats stock coverage and status labels', () => {
+    expect(formatDaysOfCover(null)).toBe('Sin ventas');
+    expect(formatDaysOfCover(1)).toBe('1 día');
+    expect(formatDaysOfCover(12)).toBe('12 días');
+    expect(stockStatusLabel('out_of_stock')).toBe('Agotado');
+    expect(stockStatusLabel('low')).toBe('Bajo');
   });
 });

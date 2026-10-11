@@ -18,6 +18,11 @@ const ProductsTab = lazy(() =>
     default: module.ProductsTab,
   })),
 );
+const InventoryTab = lazy(() =>
+  import('../../components/reports/InventoryTab').then(module => ({
+    default: module.InventoryTab,
+  })),
+);
 
 const PRESETS: Array<{ id: ReportRangePreset; label: string }> = [
   { id: 'today', label: 'Hoy' },
@@ -54,10 +59,12 @@ export default function Reports() {
     granularity: 'day',
     compare_previous: false,
   }));
-  const [activeTab, setActiveTab] = useState<'summary' | 'products'>('summary');
+  const [activeTab, setActiveTab] = useState<'summary' | 'products' | 'inventory'>('summary');
   const [categoryId, setCategoryId] = useState<number | null>(null);
   const [rankBy, setRankBy] = useState<'units' | 'revenue' | 'profit'>('revenue');
   const [productLimit, setProductLimit] = useState(10);
+  const [inventoryCategoryId, setInventoryCategoryId] = useState<number | null>(null);
+  const [alertLimit, setAlertLimit] = useState(25);
 
   const applyPreset = (nextPreset: ReportRangePreset) => {
     if (!today) return;
@@ -173,6 +180,17 @@ export default function Reports() {
         >
           Productos
         </button>
+        <button
+          type="button"
+          role="tab"
+          id="reports-tab-inventory"
+          aria-selected={activeTab === 'inventory'}
+          aria-controls="reports-panel-inventory"
+          className={activeTab === 'inventory' ? 'reports-tab--active' : ''}
+          onClick={() => setActiveTab('inventory')}
+        >
+          Inventario
+        </button>
       </div>
 
       {activeTab === 'summary' ? (
@@ -186,7 +204,7 @@ export default function Reports() {
             <DashboardTab filter={filter} />
           </Suspense>
         </div>
-      ) : (
+      ) : activeTab === 'products' ? (
         <div
           id="reports-panel-products"
           role="tabpanel"
@@ -202,6 +220,23 @@ export default function Reports() {
               onRankByChange={setRankBy}
               productLimit={productLimit}
               onProductLimitChange={setProductLimit}
+            />
+          </Suspense>
+        </div>
+      ) : (
+        <div
+          id="reports-panel-inventory"
+          role="tabpanel"
+          aria-labelledby="reports-tab-inventory"
+          className="reports-tab-panel"
+        >
+          <Suspense fallback={<p className="reports-empty">Cargando inventario…</p>}>
+            <InventoryTab
+              filter={filter}
+              categoryId={inventoryCategoryId}
+              onCategoryIdChange={setInventoryCategoryId}
+              alertLimit={alertLimit}
+              onAlertLimitChange={setAlertLimit}
             />
           </Suspense>
         </div>

@@ -1,4 +1,4 @@
-import type { HeatmapCell } from '../types/reports';
+import type { HeatmapCell, StockStatus } from '../types/reports';
 import { formatAttributes } from './format';
 
 export function formatBps(bps: number | null): string {
@@ -50,4 +50,22 @@ export function formatVariantAttributes(attributes: unknown): string {
 export function formatDaysSinceSale(days: number | null): string {
   if (days === null) return 'Nunca vendido';
   return `${new Intl.NumberFormat('es-CO').format(days)} ${days === 1 ? 'día' : 'días'}`;
+}
+
+export function formatTurnover(bps: number | null): string {
+  if (bps === null) return '—';
+  const times = new Intl.NumberFormat('es-CO', {
+    minimumFractionDigits: 2,
+    maximumFractionDigits: 2,
+  }).format(bps / 10_000);
+  return `${times} veces`;
+}
+
+export function formatDaysOfCover(days: number | null): string {
+  if (days === null) return 'Sin ventas';
+  return `${new Intl.NumberFormat('es-CO').format(days)} ${days === 1 ? 'día' : 'días'}`;
+}
+
+export function stockStatusLabel(status: StockStatus): string {
+  return status === 'out_of_stock' ? 'Agotado' : 'Bajo';
 }
