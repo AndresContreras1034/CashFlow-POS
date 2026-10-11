@@ -321,10 +321,7 @@ pub async fn fetch_sales_kpis(
     let avg_ticket = if paid_tickets == 0 {
         0
     } else {
-        match divide_to_currency(sales.gross_sales, paid_tickets, currency_decimals) {
-            Some(value) => value,
-            None => 0,
-        }
+        divide_to_currency(sales.gross_sales, paid_tickets, currency_decimals).unwrap_or_default()
     };
 
     Ok(SalesKpis {
