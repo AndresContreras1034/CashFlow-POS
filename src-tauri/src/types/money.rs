@@ -26,6 +26,21 @@ pub fn round_to_currency(amount: i64, decimals: u8) -> i64 {
     round_ratio_to_currency(amount as i128, 1, decimals)
 }
 
+/// Divide an amount in hundredths and round to the currency precision.
+/// Returns `None` for a zero divisor.
+pub fn divide_to_currency(amount: i64, divisor: i64, decimals: u8) -> Option<i64> {
+    if divisor == 0 {
+        return None;
+    }
+
+    let numerator = amount as i128 * if divisor < 0 { -1 } else { 1 };
+    Some(round_ratio_to_currency(
+        numerator,
+        (divisor as i128).abs(),
+        decimals,
+    ))
+}
+
 /// IVA sobre una base neta, redondeado una sola vez a la precisión de la moneda.
 /// `bps`: basis points (1900 = 19 %), entre 0 y 10000.
 pub fn tax_on_net(net: i64, bps: i32, decimals: u8) -> i64 {
@@ -48,6 +63,14 @@ mod tests {
         assert_eq!(round_to_currency(19_050, 0), 19_100);
         assert_eq!(round_to_currency(19_019, 2), 19_019);
         assert_eq!(round_to_currency(-19_050, 0), -19_100);
+    }
+
+    #[test]
+    fn division_rounds_to_currency_precision_half_away_from_zero() {
+        assert_eq!(divide_to_currency(10_100, 2, 0), Some(5_100));
+        assert_eq!(divide_to_currency(-10_100, 2, 0), Some(-5_100));
+        assert_eq!(divide_to_currency(10_100, 2, 2), Some(5_050));
+        assert_eq!(divide_to_currency(10_000, 0, 2), None);
     }
 
     #[test]

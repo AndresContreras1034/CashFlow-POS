@@ -16,6 +16,7 @@ use modules::debts::router::*;
 use modules::developer::router::*;
 use modules::inventory::router::*;
 use modules::licensing::router::*;
+use modules::reports::router::*;
 use modules::sales::router::*;
 use modules::settings::router::*;
 use modules::stocktake::router::*;
@@ -222,6 +223,10 @@ pub fn run() {
             // Billing / Printer
             // =================================================
             print_sale_ticket,
+            // =================================================
+            // Reports
+            // =================================================
+            get_dashboard_kpis,
             // =================================================
             // Audit
             // =================================================

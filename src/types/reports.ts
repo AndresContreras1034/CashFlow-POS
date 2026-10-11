@@ -37,6 +37,7 @@ export interface SalesKpis {
   cancelled_count: number;
   refunded_count: number;
   courtesy_count: number;
+  courtesy_cost: number;
 }
 
 export interface DashboardKpis {

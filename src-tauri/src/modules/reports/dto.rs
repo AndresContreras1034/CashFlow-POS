@@ -56,6 +56,7 @@ pub struct SalesKpis {
     pub cancelled_count: i64,
     pub refunded_count: i64,
     pub courtesy_count: i64,
+    pub courtesy_cost: i64,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
