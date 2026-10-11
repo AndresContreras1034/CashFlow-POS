@@ -139,3 +139,41 @@ pub struct DebtOverview {
     pub status: DebtStatus,
     pub urgency: DebtUrgency,
 }
+
+// ============================================================
+// RESPUESTAS COMPUESTAS
+// ============================================================
+
+/// La deuda con saldo, estado y urgencia calculados, más todos sus pagos
+/// (vigentes y anulados). Es lo que devuelve toda operación sobre una deuda,
+/// para que el frontend reemplace su estado sin recalcular nada.
+#[derive(Debug, Clone, Serialize)]
+pub struct DebtDetail {
+    #[serde(flatten)]
+    pub debt: DebtOverview,
+    pub payments: Vec<DebtPayment>,
+}
+
+/// Totales del panel. «Activa» = pendiente, pago parcial o vencida.
+/// `pending_total` incluye lo vencido: es todo el saldo por pagar.
+/// «Próxima a vencer» = urgencia `alert` o `due_today`.
+#[derive(Debug, Clone, Serialize, FromRow)]
+pub struct DebtSummary {
+    pub pending_total: i64,
+    pub overdue_total: i64,
+    pub due_soon_total: i64,
+    pub active_count: i64,
+    pub overdue_count: i64,
+    pub due_soon_count: i64,
+}
+
+/// Una fila por (categoría, estado). El saldo de las anuladas se cuenta como 0.
+#[derive(Debug, Clone, Serialize, FromRow)]
+pub struct DebtCategoryStat {
+    pub category: DebtCategory,
+    pub status: DebtStatus,
+    pub count: i64,
+    pub original_total: i64,
+    pub paid_total: i64,
+    pub balance_total: i64,
+}

@@ -1,0 +1,1286 @@
+﻿AUDITORIA DEL MODULO REPORTES - CASHFLOW POS
+`n================================================================================`nARCHIVO: src-tauri/src/modules/reports/mod.rs`n================================================================================
+
+`n================================================================================`nARCHIVO: src-tauri/src/modules/reports/router.rs`n================================================================================
+`n================================================================================`nARCHIVO: src-tauri/src/modules/reports/handlers.rs`n================================================================================
+`n================================================================================`nARCHIVO: src-tauri/src/modules/reports/sales_report.rs`n================================================================================
+`n================================================================================`nARCHIVO: src-tauri/src/modules/reports/debt_report.rs`n================================================================================
+`n================================================================================`nARCHIVO: src-tauri/src/modules/reports/inventory_report.rs`n================================================================================
+`n================================================================================`nARCHIVO: src-tauri/src/types/money.rs`n================================================================================
+//! PolÃ­tica de dinero:
+//! - Todo importe se guarda como i64 en centÃ©simas de la unidad principal.
+//! - `decimals` (0..=2) es la precisiÃ³n visible de la moneda: COP = 0, USD = 2.
+//! - Los importes calculados se redondean a esa precisiÃ³n al calcularlos.
+
+fn step(decimals: u8) -> i128 {
+    10_i128.pow(2 - decimals.min(2) as u32)
+}
+
+fn clamp_i128(value: i128) -> i64 {
+    value.clamp(i64::MIN as i128, i64::MAX as i128) as i64
+}
+
+fn round_ratio_to_currency(numerator: i128, denominator: i128, decimals: u8) -> i64 {
+    let unit = step(decimals);
+    let scaled_denominator = denominator * unit;
+    let magnitude = numerator.abs();
+    let rounded = (magnitude + scaled_denominator / 2) / scaled_denominator;
+    let result = rounded * unit;
+    clamp_i128(if numerator < 0 { -result } else { result })
+}
+
+/// Redondea un importe en centÃ©simas a la precisiÃ³n de la moneda
+/// (mitad hacia afuera de cero).
+pub fn round_to_currency(amount: i64, decimals: u8) -> i64 {
+    round_ratio_to_currency(amount as i128, 1, decimals)
+}
+
+/// IVA sobre una base neta, redondeado una sola vez a la precisiÃ³n de la moneda.
+/// `bps`: basis points (1900 = 19 %), entre 0 y 10000.
+pub fn tax_on_net(net: i64, bps: i32, decimals: u8) -> i64 {
+    round_ratio_to_currency(net as i128 * bps as i128, 10_000, decimals)
+}
+
+/// IVA contenido en un importe que ya lo incluye (precios con IVA incluido).
+/// `bps` debe estar entre 0 y 10000.
+pub fn tax_included_in(gross: i64, bps: i32, decimals: u8) -> i64 {
+    round_ratio_to_currency(gross as i128 * bps as i128, 10_000 + bps as i128, decimals)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn cop_rounds_to_whole_pesos() {
+        assert_eq!(round_to_currency(19_019, 0), 19_000);
+        assert_eq!(round_to_currency(19_050, 0), 19_100);
+        assert_eq!(round_to_currency(19_019, 2), 19_019);
+        assert_eq!(round_to_currency(-19_050, 0), -19_100);
+    }
+
+    #[test]
+    fn tax_is_rounded_once_to_currency_precision() {
+        assert_eq!(tax_on_net(100_100, 1900, 0), 19_000);
+        assert_eq!(tax_on_net(100_100, 1900, 2), 19_019);
+        assert_eq!(tax_on_net(260, 1900, 0), 0);
+    }
+
+    #[test]
+    fn tax_included_in_gross_is_rounded_once() {
+        assert_eq!(tax_included_in(11_900, 1900, 2), 1_900);
+        assert_eq!(tax_included_in(11_900, 1900, 0), 1_900);
+    }
+}
+`n================================================================================`nARCHIVO: src-tauri/src/types/pagination.rs`n================================================================================
+
+`n================================================================================`nARCHIVO: src-tauri/src/modules/sales/models.rs`n================================================================================
+use chrono::{DateTime, Utc};
+use serde::{Deserialize, Serialize};
+use sqlx::FromRow;
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, sqlx::Type)]
+#[sqlx(type_name = "payment_method", rename_all = "snake_case")]
+#[serde(rename_all = "snake_case")]
+pub enum PaymentMethod {
+    Cash,
+    Card,
+    Transfer,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, sqlx::Type)]
+#[sqlx(type_name = "sale_status", rename_all = "snake_case")]
+#[serde(rename_all = "snake_case")]
+pub enum SaleStatus {
+    Completed,
+    Cancelled,
+    Refunded,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, FromRow)]
+pub struct Sale {
+    pub id: i32,
+    pub customer_id: Option<i32>,
+    pub subtotal: i64,
+    pub tax: i64,
+    pub discount: i64,
+    pub total: i64,
+    pub cash_received: Option<i64>,
+    pub change_given: Option<i64>,
+    pub status: SaleStatus,
+    pub notes: Option<String>,
+    pub courtesy_reason: Option<String>,
+    pub created_by: String,
+    pub created_at: DateTime<Utc>,
+    pub voided_at: Option<DateTime<Utc>>,
+    pub void_reason: Option<String>,
+    pub voided_by: Option<String>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, FromRow)]
+pub struct SaleItem {
+    pub id: i32,
+    pub sale_id: i32,
+    pub variant_id: i32,
+    pub quantity: i32,
+    pub unit_price: i64,
+    pub unit_cost: Option<i64>,
+    pub discount: i64,
+    pub tax: i64,
+    pub subtotal: i64,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, FromRow)]
+pub struct SaleItemName {
+    pub item_id: i32,
+    pub product_name: String,
+    pub sku: Option<String>,
+    pub attributes: serde_json::Value,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, FromRow)]
+pub struct SalePayment {
+    pub id: i32,
+    pub sale_id: i32,
+    pub method: PaymentMethod,
+    pub amount: i64,
+}
+
+/// Venta completa con Ã­tems y pagos â€” se ensambla a mano con 3 queries
+/// en el repository, no es un FromRow directo.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct SaleDetail {
+    #[serde(flatten)]
+    pub sale: Sale,
+    pub items: Vec<SaleItem>,
+    pub payments: Vec<SalePayment>,
+    pub item_names: Vec<SaleItemName>,
+}
+`n================================================================================`nARCHIVO: src-tauri/src/modules/inventory/models.rs`n================================================================================
+use chrono::{DateTime, Utc};
+use serde::{Deserialize, Serialize};
+use serde_json::Value as JsonValue;
+use sqlx::FromRow;
+
+// ============================================================
+// CATEGORÃAS
+// ============================================================
+
+#[derive(Debug, Clone, Serialize, Deserialize, FromRow)]
+pub struct Category {
+    pub id: i32,
+    pub name: String,
+    pub description: Option<String>,
+    pub is_active: bool,
+    pub created_at: DateTime<Utc>,
+    pub updated_at: DateTime<Utc>,
+}
+
+// ============================================================
+// PRODUCTOS
+// ============================================================
+
+#[derive(Debug, Clone, Serialize, Deserialize, FromRow)]
+pub struct Product {
+    pub id: i32,
+    pub category_id: i32,
+    pub name: String,
+    pub description: Option<String>,
+    pub brand: Option<String>,
+    pub image_url: Option<String>,
+    pub is_active: bool,
+    pub created_at: DateTime<Utc>,
+    pub updated_at: DateTime<Utc>,
+}
+
+/// Producto con su categorÃ­a incluida (para listados)
+#[derive(Debug, Clone, Serialize, Deserialize, FromRow)]
+pub struct ProductWithCategory {
+    pub id: i32,
+    pub category_id: i32,
+    pub category_name: String,
+    pub name: String,
+    pub description: Option<String>,
+    pub brand: Option<String>,
+    pub image_url: Option<String>,
+    pub is_active: bool,
+    pub created_at: DateTime<Utc>,
+    pub updated_at: DateTime<Utc>,
+}
+
+// ============================================================
+// VARIANTES
+// ============================================================
+
+#[derive(Debug, Clone, Serialize, Deserialize, FromRow)]
+pub struct ProductVariant {
+    pub id: i32,
+    pub product_id: i32,
+    pub attributes: JsonValue, // {"volumen": "100ml"} | {"talla": "M", "color": "Rojo"}
+    pub sku: Option<String>,
+    pub barcode: Option<String>,
+    pub price: i64, // centavos
+    pub cost: i64,  // centavos
+    pub stock: i32,
+    pub stock_min: i32,
+    pub allow_negative: bool,
+    pub is_active: bool,
+    pub created_at: DateTime<Utc>,
+    pub updated_at: DateTime<Utc>,
+}
+
+/// Variante con info del producto padre (para bÃºsqueda por barcode en ventas)
+#[derive(Debug, Clone, Serialize, Deserialize, FromRow)]
+pub struct VariantWithProduct {
+    // Variante
+    pub id: i32,
+    pub product_id: i32,
+    pub attributes: JsonValue,
+    pub sku: Option<String>,
+    pub barcode: Option<String>,
+    pub price: i64,
+    pub cost: i64,
+    pub stock: i32,
+    pub stock_min: i32,
+    pub allow_negative: bool,
+    pub is_active: bool,
+    // Producto padre
+    pub product_name: String,
+    pub brand: Option<String>,
+    pub image_url: Option<String>,
+    pub category_id: i32,
+    pub category_name: String,
+}
+
+/// Stock status para alertas
+#[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq)]
+#[serde(rename_all = "snake_case")]
+pub enum StockStatus {
+    Ok,         // stock > stock_min
+    Low,        // 0 < stock <= stock_min
+    OutOfStock, // stock == 0
+}
+
+impl StockStatus {
+    pub fn as_str(&self) -> &'static str {
+        match self {
+            StockStatus::Ok => "ok",
+            StockStatus::Low => "low",
+            StockStatus::OutOfStock => "out_of_stock",
+        }
+    }
+}
+
+impl ProductVariant {
+    pub fn stock_status(&self) -> StockStatus {
+        if self.stock <= 0 {
+            StockStatus::OutOfStock
+        } else if self.stock <= self.stock_min {
+            StockStatus::Low
+        } else {
+            StockStatus::Ok
+        }
+    }
+
+    /// Precio formateado en pesos (centavos â†’ pesos)
+    pub fn price_display(&self) -> f64 {
+        self.price as f64 / 100.0
+    }
+}
+
+// ============================================================
+// MOVIMIENTOS DE INVENTARIO (KARDEX)
+// ============================================================
+
+#[derive(Debug, Clone, Serialize, Deserialize, sqlx::Type, PartialEq)]
+#[sqlx(type_name = "movement_type", rename_all = "snake_case")]
+#[serde(rename_all = "snake_case")]
+pub enum MovementType {
+    Purchase,
+    Sale,
+    SaleReturn,
+    ManualIn,
+    ManualOut,
+    Adjustment,
+    InitialStock,
+}
+
+#[derive(Debug, Clone, Copy, Serialize, Deserialize, sqlx::Type, PartialEq, Eq)]
+#[sqlx(type_name = "movement_reason", rename_all = "snake_case")]
+#[serde(rename_all = "snake_case")]
+pub enum MovementReason {
+    Damaged,
+    Lost,
+    Expired,
+    Theft,
+    InternalUse,
+    CountCorrection,
+    Other,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, FromRow)]
+pub struct InventoryMovement {
+    pub id: i32,
+    pub variant_id: i32,
+    pub movement_type: MovementType,
+    pub quantity: i32,
+    pub stock_before: i32,
+    pub stock_after: i32,
+    pub unit_cost: i64,
+    pub sale_id: Option<i32>,
+    pub purchase_id: Option<i32>,
+    pub reason: Option<MovementReason>,
+    pub notes: Option<String>,
+    pub created_by: String,
+    pub created_at: DateTime<Utc>,
+}
+
+/// Movimiento con info de la variante y producto (para el Kardex visual)
+#[derive(Debug, Clone, Serialize, Deserialize, FromRow)]
+pub struct MovementWithDetails {
+    pub id: i32,
+    pub variant_id: i32,
+    pub movement_type: MovementType,
+    pub quantity: i32,
+    pub stock_before: i32,
+    pub stock_after: i32,
+    pub unit_cost: i64,
+    pub sale_id: Option<i32>,
+    pub purchase_id: Option<i32>,
+    pub reason: Option<MovementReason>,
+    pub notes: Option<String>,
+    pub created_by: String,
+    pub created_at: DateTime<Utc>,
+    // Info variante/producto
+    pub product_name: String,
+    pub attributes: JsonValue,
+    pub sku: Option<String>,
+    pub barcode: Option<String>,
+}
+`n================================================================================`nARCHIVO: src-tauri/src/modules/debts/models.rs`n================================================================================
+use chrono::{DateTime, NaiveDate, Utc};
+use serde::{Deserialize, Serialize};
+use sqlx::FromRow;
+use uuid::Uuid;
+
+// ============================================================
+// ENUMS (espejo de los tipos de la migraciÃ³n 014)
+// ============================================================
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, sqlx::Type)]
+#[sqlx(type_name = "debt_category", rename_all = "snake_case")]
+#[serde(rename_all = "snake_case")]
+pub enum DebtCategory {
+    Maintenance,
+    BusinessOperation,
+    FixedServices,
+    OtherObligations,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, sqlx::Type)]
+#[sqlx(type_name = "debt_nature", rename_all = "snake_case")]
+#[serde(rename_all = "snake_case")]
+pub enum DebtNature {
+    Operating,
+    FinancialLoan,
+    Tax,
+    Other,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, sqlx::Type)]
+#[sqlx(type_name = "debt_payment_method", rename_all = "snake_case")]
+#[serde(rename_all = "snake_case")]
+pub enum DebtPaymentMethod {
+    Cash,
+    Card,
+    Transfer,
+    Check,
+    Other,
+}
+
+/// Estado financiero. Lo calcula la vista `debt_overview`; nunca se guarda.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, sqlx::Type)]
+#[sqlx(type_name = "debt_status", rename_all = "snake_case")]
+#[serde(rename_all = "snake_case")]
+pub enum DebtStatus {
+    Voided,
+    Paid,
+    Overdue,
+    PartiallyPaid,
+    Pending,
+}
+
+/// Urgencia del vencimiento, independiente del estado financiero.
+/// Lo calcula la vista `debt_overview`; el frontend solo la muestra.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, sqlx::Type)]
+#[sqlx(type_name = "debt_urgency", rename_all = "snake_case")]
+#[serde(rename_all = "snake_case")]
+pub enum DebtUrgency {
+    None,
+    Ok,
+    Alert,
+    DueToday,
+    Overdue,
+}
+
+// ============================================================
+// FILAS
+// ============================================================
+
+/// Fila de `debts`. Sin saldo ni estado: eso vive en `DebtOverview`.
+#[derive(Debug, Clone, Serialize, Deserialize, FromRow)]
+pub struct Debt {
+    pub id: i32,
+    pub creditor_name: String,
+    pub category: DebtCategory,
+    pub subcategory: Option<String>,
+    pub nature: DebtNature,
+    pub concept: String,
+    pub original_amount: i64,
+    pub issued_on: NaiveDate,
+    pub due_on: Option<NaiveDate>,
+    pub document_ref: Option<String>,
+    pub notes: Option<String>,
+    pub idempotency_key: Uuid,
+    pub voided_at: Option<DateTime<Utc>>,
+    pub voided_by: Option<String>,
+    pub void_reason: Option<String>,
+    pub created_by: String,
+    pub created_at: DateTime<Utc>,
+    pub updated_at: DateTime<Utc>,
+}
+
+/// Fila de `debt_payments`. Un pago anulado permanece (con `voided_at`).
+#[derive(Debug, Clone, Serialize, Deserialize, FromRow)]
+pub struct DebtPayment {
+    pub id: i32,
+    pub debt_id: i32,
+    pub amount: i64,
+    pub paid_on: NaiveDate,
+    pub method: DebtPaymentMethod,
+    pub reference: Option<String>,
+    pub notes: Option<String>,
+    pub idempotency_key: Uuid,
+    pub voided_at: Option<DateTime<Utc>>,
+    pub voided_by: Option<String>,
+    pub void_reason: Option<String>,
+    pub created_by: String,
+    pub created_at: DateTime<Utc>,
+}
+
+/// Fila de la vista `debt_overview`: la deuda con saldo, estado y urgencia
+/// ya calculados por la base de datos.
+#[derive(Debug, Clone, Serialize, Deserialize, FromRow)]
+pub struct DebtOverview {
+    pub id: i32,
+    pub creditor_name: String,
+    pub category: DebtCategory,
+    pub subcategory: Option<String>,
+    pub nature: DebtNature,
+    pub concept: String,
+    pub original_amount: i64,
+    pub issued_on: NaiveDate,
+    pub due_on: Option<NaiveDate>,
+    pub document_ref: Option<String>,
+    pub notes: Option<String>,
+    pub voided_at: Option<DateTime<Utc>>,
+    pub voided_by: Option<String>,
+    pub void_reason: Option<String>,
+    pub created_by: String,
+    pub created_at: DateTime<Utc>,
+    pub updated_at: DateTime<Utc>,
+    pub paid_amount: i64,
+    pub balance: i64,
+    pub payment_count: i64,
+    pub last_paid_on: Option<NaiveDate>,
+    pub today: NaiveDate,
+    /// Negativo = ya venciÃ³. `None` si la deuda no tiene vencimiento.
+    pub days_until_due: Option<i32>,
+    pub status: DebtStatus,
+    pub urgency: DebtUrgency,
+}
+
+// ============================================================
+// RESPUESTAS COMPUESTAS
+// ============================================================
+
+/// La deuda con saldo, estado y urgencia calculados, mÃ¡s todos sus pagos
+/// (vigentes y anulados). Es lo que devuelve toda operaciÃ³n sobre una deuda,
+/// para que el frontend reemplace su estado sin recalcular nada.
+#[derive(Debug, Clone, Serialize)]
+pub struct DebtDetail {
+    #[serde(flatten)]
+    pub debt: DebtOverview,
+    pub payments: Vec<DebtPayment>,
+}
+
+/// Totales del panel. Â«ActivaÂ» = pendiente, pago parcial o vencida.
+/// `pending_total` incluye lo vencido: es todo el saldo por pagar.
+/// Â«PrÃ³xima a vencerÂ» = urgencia `alert` o `due_today`.
+#[derive(Debug, Clone, Serialize, FromRow)]
+pub struct DebtSummary {
+    pub pending_total: i64,
+    pub overdue_total: i64,
+    pub due_soon_total: i64,
+    pub active_count: i64,
+    pub overdue_count: i64,
+    pub due_soon_count: i64,
+}
+
+/// Una fila por (categorÃ­a, estado). El saldo de las anuladas se cuenta como 0.
+#[derive(Debug, Clone, Serialize, FromRow)]
+pub struct DebtCategoryStat {
+    pub category: DebtCategory,
+    pub status: DebtStatus,
+    pub count: i64,
+    pub original_total: i64,
+    pub paid_total: i64,
+    pub balance_total: i64,
+}
+`n================================================================================`nARCHIVO: src-tauri/src/modules/customers/models.rs`n================================================================================
+`n================================================================================`nARCHIVO: src/types/index.ts`n================================================================================
+// ============================================================
+// CATEGORÃAS
+// ============================================================
+
+export interface Category {
+  id: number;
+  name: string;
+  description?: string;
+  is_active: boolean;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface CreateCategoryDto {
+  name: string;
+  description?: string;
+}
+
+export interface UpdateCategoryDto {
+  name?: string;
+  description?: string;
+  is_active?: boolean;
+}
+
+// ============================================================
+// PRODUCTOS
+// ============================================================
+
+export interface Product {
+  id: number;
+  category_id: number;
+  name: string;
+  description?: string;
+  brand?: string;
+  image_url?: string;
+  is_active: boolean;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface ProductWithCategory extends Product {
+  category_name: string;
+}
+
+export interface CreateProductDto {
+  category_id: number;
+  name: string;
+  description?: string;
+  brand?: string;
+  image_url?: string;
+}
+
+export interface UpdateProductDto {
+  category_id?: number;
+  name?: string;
+  description?: string;
+  brand?: string;
+  image_url?: string;
+  is_active?: boolean;
+}
+
+// ============================================================
+// VARIANTES
+// ============================================================
+
+export type StockStatus = 'ok' | 'low' | 'out_of_stock';
+
+export interface ProductVariant {
+  id: number;
+  product_id: number;
+  attributes: Record<string, string>;
+  sku?: string;
+  barcode?: string;
+  price: number; // centavos
+  cost: number;  // centavos
+  stock: number;
+  stock_min: number;
+  allow_negative: boolean;
+  is_active: boolean;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface VariantWithProduct extends ProductVariant {
+  product_name: string;
+  brand?: string;
+  image_url?: string;
+  category_id: number;
+  category_name: string;
+}
+
+export interface CreateVariantDto {
+  product_id: number;
+  attributes: Record<string, string>;
+  sku?: string;
+  barcode?: string;
+  price: number;
+  cost?: number;
+  stock?: number;
+  stock_min?: number;
+  allow_negative?: boolean;
+}
+
+export interface UpdateVariantDto {
+  attributes?: Record<string, string>;
+  sku?: string;
+  barcode?: string;
+  price?: number;
+  cost?: number;
+  stock_min?: number;
+  allow_negative?: boolean;
+  is_active?: boolean;
+}
+
+// ============================================================
+// MOVIMIENTOS DE INVENTARIO (KARDEX)
+// ============================================================
+
+export type MovementType =
+  | 'purchase'
+  | 'sale'
+  | 'sale_return'
+  | 'manual_in'
+  | 'manual_out'
+  | 'adjustment'
+  | 'initial_stock';
+
+export type MovementReason =
+  | 'damaged'
+  | 'lost'
+  | 'expired'
+  | 'theft'
+  | 'internal_use'
+  | 'count_correction'
+  | 'other';
+
+export interface InventoryMovement {
+  id: number;
+  variant_id: number;
+  movement_type: MovementType;
+  quantity: number;
+  stock_before: number;
+  stock_after: number;
+  unit_cost: number;
+  sale_id?: number;
+  purchase_id?: number;
+  reason: MovementReason | null;
+  notes?: string;
+  created_by: string;
+  created_at: string;
+}
+
+export interface MovementWithDetails extends InventoryMovement {
+  product_name: string;
+  attributes: Record<string, string>;
+  sku?: string;
+  barcode?: string;
+}
+
+// ============================================================
+// DTOs DE STOCK
+// ============================================================
+
+export interface StockEntryDto {
+  variant_id: number;
+  quantity: number;
+  unit_cost?: number;
+  notes?: string;
+  created_by?: string;
+}
+
+export interface StockOutDto {
+  variant_id: number;
+  quantity: number;
+  unit_cost?: number | null;
+  reason?: MovementReason;
+  notes?: string;
+  created_by?: string;
+}
+
+export interface StockAdjustmentDto {
+  variant_id: number;
+  actual_stock: number;
+  reason?: MovementReason;
+  notes?: string;
+  created_by?: string;
+}
+
+// ============================================================
+// FILTROS
+// ============================================================
+
+export interface ProductFilterDto {
+  category_id?: number;
+  search?: string;
+  is_active?: boolean;
+  variant_is_active?: boolean;
+  stock_status?: 'ok' | 'low' | 'out_of_stock';
+  sort_by?: 'name' | 'brand' | 'category' | 'created_at';
+  sort_dir?: 'asc' | 'desc';
+  page?: number;
+  page_size?: number;
+}
+
+export interface KardexFilterDto {
+  variant_id?: number;
+  product_id?: number;
+  movement_type?: string;
+  date_from?: string;
+  date_to?: string;
+  page?: number;
+  page_size?: number;
+}
+
+// ============================================================
+// RESPUESTAS
+// ============================================================
+
+export interface PaginatedResponse<T> {
+  data: T[];
+  total: number;
+  page: number;
+  page_size: number;
+  total_pages: number;
+}
+
+export interface LowStockItemDto {
+  variant_id: number;
+  product_name: string;
+  attributes: Record<string, string>;
+  barcode?: string;
+  stock: number;
+  stock_min: number;
+  stock_status: string;
+}
+
+export interface InventoryValueDto {
+  value_at_cost: number;
+  potential_sale_value: number;
+  variants_without_cost: number;
+  negative_stock_variants: number;
+  variants_valued: number;
+}
+
+export interface ProductStockStatsDto {
+  product_id: number;
+  variant_count: number;
+  total_stock: number;
+  min_stock_min: number;
+}
+
+export interface ExportSummaryDto {
+  active_rows: number;
+  inactive_rows: number;
+  low_stock_rows: number;
+}
+
+export type LicenseKind = 'purchase' | 'rental';
+export type LicenseStatusKind = 'unlicensed' | 'active' | 'expired' | 'invalid';
+
+export interface LicenseStatusDto {
+  installation_id: string;
+  status: LicenseStatusKind;
+  license_id: string | null;
+  licensee: string | null;
+  kind: LicenseKind | null;
+  expires_at: string | null;
+  source_code_access: boolean;
+  message: string;
+}
+
+// ============================================================
+// AJUSTES
+// ============================================================
+
+export interface AppSettings {
+  id: number;
+  business_name: string;
+  tax_id: string | null;
+  address: string | null;
+  phone: string | null;
+  email: string | null;
+  currency: string;
+  currency_decimals: number;
+  tax_rate_bps: number;
+  tax_name: string;
+  timezone: string;
+  ticket_header: string | null;
+  ticket_footer: string | null;
+  show_logo: boolean;
+  show_tax_id: boolean;
+  show_address: boolean;
+  show_phone: boolean;
+  show_cashier: boolean;
+  show_tax_breakdown: boolean;
+  show_discounts: boolean;
+  show_payment_method: boolean;
+  low_stock_default_threshold: number;
+  logo_url: string | null;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface UpdateSettingsDto {
+  business_name?: string;
+  // Nullable fields always replace current values; null clears the field.
+  tax_id: string | null;
+  address: string | null;
+  phone: string | null;
+  email: string | null;
+  currency?: string;
+  currency_decimals?: number;
+  tax_rate_bps?: number;
+  tax_name?: string;
+  timezone?: string;
+  ticket_header: string | null;
+  ticket_footer: string | null;
+  show_logo?: boolean;
+  show_tax_id?: boolean;
+  show_address?: boolean;
+  show_phone?: boolean;
+  show_cashier?: boolean;
+  show_tax_breakdown?: boolean;
+  show_discounts?: boolean;
+  show_payment_method?: boolean;
+  low_stock_default_threshold?: number;
+  logo_url: string | null;
+}
+// ============================================================
+// CAJA
+// ============================================================
+
+export type CashMovementType = 'manual_in' | 'manual_out' | 'sale_in' | 'sale_out';
+
+export interface CashSession {
+  id: number;
+  opening_amount: number;
+  expected_amount: number | null;
+  counted_amount: number | null;
+  difference: number | null;
+  status: 'open' | 'closed';
+  opened_by: string;
+  closed_by: string | null;
+  opening_notes: string | null;
+  closing_notes: string | null;
+  opened_at: string;
+  closed_at: string | null;
+}
+
+export interface CashSessionWithTotals {
+  id: number;
+  opening_amount: number;
+  status: 'open' | 'closed';
+  opened_by: string;
+  opening_notes: string | null;
+  opened_at: string;
+  total_in: number;
+  total_out: number;
+  current_balance: number;
+}
+
+export interface CashReportTotals {
+  opening_amount: number;
+  cash_sales: number;
+  cash_refunds: number;
+  manual_in: number;
+  manual_out: number;
+  expected_amount: number;
+  counted_amount: number | null;
+  difference: number | null;
+}
+
+export interface CashReportPaymentMethods {
+  cash: number;
+  card: number;
+  transfer: number;
+}
+
+export interface CashReportSales {
+  count: number;
+  gross_total: number;
+  discount_total: number;
+  net_total: number;
+  by_method: CashReportPaymentMethods;
+  courtesy_count: number;
+  courtesy_gross: number;
+}
+
+export interface CashReportVoids {
+  cancelled_count: number;
+  cancelled_total: number;
+  refunded_count: number;
+  refunded_total: number;
+}
+
+export interface CashSessionReport {
+  schema_version: number;
+  kind: 'X' | 'Z';
+  session_id: number;
+  opened_by: string;
+  closed_by: string | null;
+  opened_at_local: string;
+  closed_at_local: string | null;
+  generated_at_local: string;
+  cash: CashReportTotals;
+  sales: CashReportSales;
+  voids: CashReportVoids;
+}
+
+export interface CashMovement {
+  id: number;
+  session_id: number;
+  movement_type: CashMovementType;
+  amount: number;
+  sale_id: number | null;
+  notes: string | null;
+  created_by: string;
+  created_at: string;
+}
+
+export interface OpenSessionDto {
+  opening_amount: number;
+  opening_notes?: string | null;
+  opened_by?: string | null;
+}
+
+export interface CloseSessionDto {
+  counted_amount: number;
+  closing_notes?: string | null;
+  closed_by?: string | null;
+}
+
+export type ManualCashMovementType = 'manual_in' | 'manual_out';
+
+export interface CreateMovementDto {
+  movement_type: ManualCashMovementType;
+  amount: number;
+  notes?: string | null;
+  created_by?: string | null;
+  sale_id?: number | null;
+}
+
+export interface CashSessionFilterDto {
+  status?: string | null;
+  date_from?: string | null;
+  date_to?: string | null;
+  page?: number;
+  page_size?: number;
+}
+
+export interface CashMovementFilterDto {
+  session_id?: number | null;
+  movement_type?: string | null;
+  page?: number;
+  page_size?: number;
+}
+
+// ============================================================
+// VENTAS
+// ============================================================
+
+export type PaymentMethod = 'cash' | 'card' | 'transfer';
+export type SaleStatus = 'completed' | 'cancelled' | 'refunded';
+
+export interface Sale {
+  id: number;
+  customer_id: number | null;
+  subtotal: number;
+  tax: number;
+  discount: number;
+  total: number;
+  status: SaleStatus;
+  notes: string | null;
+  courtesy_reason: string | null;
+  cash_received: number | null;
+  change_given: number | null;
+  created_by: string;
+  created_at: string;
+  voided_at: string | null;
+  void_reason: string | null;
+  voided_by: string | null;
+}
+
+export interface SaleItem {
+  id: number;
+  sale_id: number;
+  variant_id: number;
+  quantity: number;
+  unit_price: number;
+  unit_cost: number | null;
+  discount: number;
+  tax: number;
+  subtotal: number;
+}
+
+export interface SalePayment {
+  id: number;
+  sale_id: number;
+  method: PaymentMethod;
+  amount: number;
+}
+
+export interface SaleDetail extends Sale {
+  items: SaleItem[];
+  payments: SalePayment[];
+  item_names: SaleItemName[];
+}
+
+export interface SaleItemName {
+  item_id: number;
+  product_name: string;
+  sku: string | null;
+  attributes: Record<string, unknown>;
+}
+
+export interface CreateSaleItemDto {
+  variant_id: number;
+  quantity: number;
+  discount?: number | null;
+}
+
+export interface CreateSalePaymentDto {
+  method: PaymentMethod;
+  amount: number;
+}
+
+export interface CreateSaleDto {
+  customer_id?: number | null;
+  items: CreateSaleItemDto[];
+  payments: CreateSalePaymentDto[];
+  discount?: number | null;
+  cash_received?: number | null;
+  notes?: string | null;
+  courtesy_reason?: string | null;
+  created_by?: string | null;
+  idempotency_key?: string | null;
+}
+
+export interface VoidSaleDto {
+  target_status: 'cancelled' | 'refunded';
+  reason: string;
+  performed_by?: string | null;
+}
+
+export interface SaleFilterDto {
+  status?: string | null;
+  customer_id?: number | null;
+  date_from?: string | null;
+  date_to?: string | null;
+  sale_id?: number | null;
+  payment_method?: string | null;
+  cash_session_id?: number | null;
+  page?: number;
+  page_size?: number;
+}
+
+export interface SaleListResponse extends PaginatedResponse<Sale> {
+  total_amount: number;
+}
+export interface ImportRowResult {
+  row_number: number;
+  product_name: string;
+  sku?: string;
+  status: 'new_product' | 'existing_product' | 'skipped_duplicate_sku' | 'error';
+  message?: string;
+}
+
+export interface ImportSummaryDto {
+  new_categories: number;
+  new_products: number;
+  new_variants: number;
+  skipped: number;
+  errors: number;
+  rows: ImportRowResult[];
+  total_rows: number;
+  rows_truncated: boolean;
+  can_execute: boolean;
+}
+
+export type StocktakeStatus = 'counting' | 'applied' | 'cancelled';
+
+export interface Stocktake {
+  id: number;
+  category_id: number | null;
+  category_name: string | null;
+  status: StocktakeStatus;
+  notes: string | null;
+  created_by: string;
+  created_at: string;
+  applied_at: string | null;
+  cancelled_at: string | null;
+  total_lines: number;
+  counted_lines: number;
+}
+
+export interface CreateStocktakeDto {
+  category_id?: number | null;
+  notes?: string | null;
+  created_by?: string | null;
+}
+
+export interface StocktakeLineFilterDto {
+  search?: string | null;
+  only_pending?: boolean;
+  page?: number;
+  page_size?: number;
+}
+
+/** Fila para el conteo ciego: no contiene el stock del sistema. */
+export interface StocktakeCountLineDto {
+  variant_id: number;
+  product_name: string;
+  attributes: Record<string, string>;
+  sku: string | null;
+  barcode: string | null;
+  counted_stock: number | null;
+}
+
+export interface StocktakeReviewLineDto {
+  variant_id: number;
+  product_name: string;
+  attributes: Record<string, string>;
+  sku: string | null;
+  barcode: string | null;
+  expected_stock: number;
+  current_stock: number;
+  counted_stock: number;
+  difference: number;
+  moved_during_count: boolean;
+}
+
+export interface StocktakeSummaryDto {
+  uncounted: number;
+  matching: number;
+  with_difference: number;
+  surplus_units: number;
+  shortage_units: number;
+  moved_during_count: number;
+}
+
+// ============================================================
+// AUDITORÃA
+// ============================================================
+
+export type AuditCategory = 'business' | 'error';
+export type AuditOutcome = 'success' | 'failure';
+export type AuditModule =
+  | 'sales'
+  | 'inventory'
+  | 'cash'
+  | 'stocktake'
+  | 'settings'
+  | 'import'
+  | 'licensing'
+  | 'billing'
+  | 'system';
+
+/** Un campo que cambiÃ³: solo aparecen los campos modificados. */
+export interface AuditChange {
+  from: unknown;
+  to: unknown;
+}
+
+export interface AuditEvent {
+  id: number;
+  /** ISO-8601 UTC */
+  created_at: string;
+  correlation_id: string | null;
+  category: AuditCategory;
+  module: AuditModule;
+  action: string;
+  outcome: AuditOutcome;
+  actor: string | null;
+  entity_type: string | null;
+  entity_id: string | null;
+  summary: string;
+  changes: Record<string, AuditChange> | null;
+  metadata: Record<string, unknown> | null;
+  error_message: string | null;
+}
+
+export interface AuditFilterDto {
+  module?: AuditModule;
+  category?: AuditCategory;
+  outcome?: AuditOutcome;
+  action?: string;
+  entity_type?: string;
+  entity_id?: string;
+  correlation_id?: string;
+  search?: string;
+  /** 'YYYY-MM-DD', inclusivo */
+  date_from?: string;
+  /** 'YYYY-MM-DD', inclusivo */
+  date_to?: string;
+  sort_dir?: 'asc' | 'desc';
+  page?: number;
+  page_size?: number;
+}
+
+export interface StocktakeReviewDto {
+  stocktake: Stocktake;
+  summary: StocktakeSummaryDto;
+  lines: StocktakeReviewLineDto[];
+}
+
+export interface StocktakeApplyResultDto {
+  adjusted: number;
+  unchanged: number;
+  uncounted: number;
+}
+`n================================================================================`nARCHIVO: src/services/reports.service.ts`n================================================================================
+`n================================================================================`nARCHIVO: src/services/api.ts`n================================================================================
+`n================================================================================`nARCHIVO: src/pages/Reports/Reports.tsx`n================================================================================
+`n================================================================================`nARCHIVO: src/components/reports/SalesChart.tsx`n================================================================================
+`n================================================================================`nARCHIVO: package.json`n================================================================================
+{
+  "name": "pos",
+  "private": true,
+  "version": "0.1.0",
+  "type": "module",
+  "scripts": {
+    "dev": "vite",
+    "build": "tsc && vite build",
+    "preview": "vite preview",
+    "tauri": "node scripts/tauri-dev-window.cjs",
+    "test": "vitest run"
+  },
+  "dependencies": {
+    "@tauri-apps/api": "^2.11.0",
+    "@tauri-apps/plugin-dialog": "^2.7.3",
+    "@tauri-apps/plugin-opener": "^2",
+    "react": "^19.1.0",
+    "react-dom": "^19.1.0",
+    "react-router-dom": "^7.17.0"
+  },
+  "devDependencies": {
+    "@tauri-apps/cli": "^2",
+    "@types/react": "^19.1.8",
+    "@types/react-dom": "^19.1.6",
+    "@vitejs/plugin-react": "^4.6.0",
+    "typescript": "~5.8.3",
+    "vite": "^7.0.4",
+    "vitest": "^5.0.3"
+  }
+}

@@ -1,0 +1,139 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "SELECT\n               id, created_at, correlation_id,\n               category AS \"category: AuditCategory\",\n               module   AS \"module: AuditModule\",\n               action,\n               outcome  AS \"outcome: AuditOutcome\",\n               actor, entity_type, entity_id, summary,\n               changes, metadata, error_message\n           FROM audit_events\n           WHERE module = 'debts'\n             AND outcome = 'success'\n             AND (   (entity_type = 'debt' AND entity_id = $1)\n                  OR (entity_type = 'debt_payment' AND metadata->>'debt_id' = $1))\n           ORDER BY created_at DESC, id DESC\n           LIMIT $2",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "id",
+        "type_info": "Int8"
+      },
+      {
+        "ordinal": 1,
+        "name": "created_at",
+        "type_info": "Timestamptz"
+      },
+      {
+        "ordinal": 2,
+        "name": "correlation_id",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 3,
+        "name": "category: AuditCategory",
+        "type_info": {
+          "Custom": {
+            "name": "audit_category",
+            "kind": {
+              "Enum": [
+                "business",
+                "error"
+              ]
+            }
+          }
+        }
+      },
+      {
+        "ordinal": 4,
+        "name": "module: AuditModule",
+        "type_info": {
+          "Custom": {
+            "name": "audit_module",
+            "kind": {
+              "Enum": [
+                "sales",
+                "inventory",
+                "cash",
+                "stocktake",
+                "settings",
+                "import",
+                "licensing",
+                "billing",
+                "system",
+                "debts"
+              ]
+            }
+          }
+        }
+      },
+      {
+        "ordinal": 5,
+        "name": "action",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 6,
+        "name": "outcome: AuditOutcome",
+        "type_info": {
+          "Custom": {
+            "name": "audit_outcome",
+            "kind": {
+              "Enum": [
+                "success",
+                "failure"
+              ]
+            }
+          }
+        }
+      },
+      {
+        "ordinal": 7,
+        "name": "actor",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 8,
+        "name": "entity_type",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 9,
+        "name": "entity_id",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 10,
+        "name": "summary",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 11,
+        "name": "changes",
+        "type_info": "Jsonb"
+      },
+      {
+        "ordinal": 12,
+        "name": "metadata",
+        "type_info": "Jsonb"
+      },
+      {
+        "ordinal": 13,
+        "name": "error_message",
+        "type_info": "Text"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Text",
+        "Int8"
+      ]
+    },
+    "nullable": [
+      false,
+      false,
+      true,
+      false,
+      false,
+      false,
+      false,
+      true,
+      true,
+      true,
+      false,
+      true,
+      true,
+      true
+    ]
+  },
+  "hash": "ec90f6ce7087d9a16b380ad55c9e4ad30402970f5a314cc52e5f7e05b92587ef"
+}

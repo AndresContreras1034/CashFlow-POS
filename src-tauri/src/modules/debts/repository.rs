@@ -1,22 +1,23 @@
 use chrono::NaiveDate;
 use serde_json::{json, Value as JsonValue};
-use sqlx::{PgConnection, PgPool};
+use sqlx::{PgConnection, PgPool, Postgres, QueryBuilder};
 use uuid::Uuid;
 
 use crate::modules::audit::{
     actor::declared_actor,
     changes::changed_fields,
     dto::NewAuditEvent,
-    models::{AuditCategory, AuditModule, AuditOutcome},
+    models::{AuditCategory, AuditEvent, AuditModule, AuditOutcome},
     repository as audit_repo,
 };
 use crate::modules::debts::{
     dto::{
-        CreateDebtDto, RegisterPaymentDto, UpdateDebtDto, VoidDebtDto, VoidPaymentDto,
+        CreateDebtDto, DebtFilterDto, DebtSortBy, RegisterPaymentDto, SortDir, UpdateDebtDto,
+        VoidDebtDto, VoidPaymentDto,
     },
     models::{
-        Debt, DebtCategory, DebtNature, DebtOverview, DebtPayment, DebtPaymentMethod,
-        DebtStatus, DebtUrgency,
+        Debt, DebtCategory, DebtCategoryStat, DebtNature, DebtOverview, DebtPayment,
+        DebtPaymentMethod, DebtStatus, DebtSummary, DebtUrgency,
     },
 };
 
@@ -41,7 +42,10 @@ pub enum DebtError {
     IssuedAfterFirstPayment,
     PaymentInFuture,
     PaymentBeforeIssue,
-    Overpayment { balance: i64, requested: i64 },
+    Overpayment {
+        balance: i64,
+        requested: i64,
+    },
     PaymentAlreadyVoided,
     /// La clave de idempotencia ya existe con datos distintos.
     IdempotencyConflict,
@@ -293,11 +297,7 @@ pub async fn create_debt(pool: &PgPool, dto: CreateDebtDto) -> Result<Debt, Debt
 ///
 /// Con pagos vigentes: el importe no se puede cambiar y la emisión no puede
 /// pasar del primer pago.
-pub async fn update_debt(
-    pool: &PgPool,
-    id: i32,
-    dto: UpdateDebtDto,
-) -> Result<Debt, DebtError> {
+pub async fn update_debt(pool: &PgPool, id: i32, dto: UpdateDebtDto) -> Result<Debt, DebtError> {
     let actor = declared_actor(&dto.updated_by);
     let mut tx = pool.begin().await?;
 
@@ -321,7 +321,10 @@ pub async fn update_debt(
         if dto.original_amount != before.original_amount {
             return Err(DebtError::AmountChangeWithPayments);
         }
-        if live.first_paid_on.is_some_and(|first| dto.issued_on > first) {
+        if live
+            .first_paid_on
+            .is_some_and(|first| dto.issued_on > first)
+        {
             return Err(DebtError::IssuedAfterFirstPayment);
         }
     }
@@ -690,4 +693,271 @@ pub async fn list_payments(pool: &PgPool, debt_id: i32) -> Result<Vec<DebtPaymen
     )
     .fetch_all(pool)
     .await
+}
+
+/// Decimales de la moneda según Ajustes (0 o 2). Los importes se validan
+/// contra esta precisión en el service; aquí solo se lee.
+pub async fn currency_decimals(pool: &PgPool) -> Result<u8, sqlx::Error> {
+    let decimals = sqlx::query_scalar!("SELECT currency_decimals FROM app_settings WHERE id = 1")
+        .fetch_one(pool)
+        .await?;
+    Ok(decimals.clamp(0, 2) as u8)
+}
+
+// ============================================================
+// LISTADO, RESUMEN Y ESTADÍSTICAS
+// ============================================================
+//
+// Estas consultas usan `QueryBuilder` en lugar de los macros `query!`
+// (que sí usa el resto del repository) por dos razones:
+//   * el listado combina ~15 filtros opcionales y 5 columnas de orden en
+//     ambos sentidos: con macros serían decenas de consultas casi idénticas;
+//   * así el WHERE se define UNA vez y lo comparten listado, total, resumen
+//     y estadísticas, y sus cifras no pueden divergir.
+// Todo valor del usuario va como parámetro (`push_bind`). El único texto
+// que se concatena (columna y sentido del ORDER BY, y las listas de estados)
+// sale de enums y constantes de este archivo, nunca del cliente.
+
+/// Estados con saldo por pagar.
+const ACTIVE_STATUSES: &str = "o.status IN ('pending', 'partially_paid', 'overdue')";
+/// Próximas a vencer = urgencia `alert` o `due_today` (el umbral de días
+/// vive solo en la vista `debt_overview`).
+const DUE_SOON_URGENCIES: &str = "o.urgency IN ('alert', 'due_today')";
+
+fn clean(value: &Option<String>) -> Option<&str> {
+    value
+        .as_deref()
+        .map(str::trim)
+        .filter(|text| !text.is_empty())
+}
+
+/// Patrón ILIKE para `search`, escapando `\`, `%` y `_` para que el texto
+/// del usuario se busque literalmente.
+pub fn search_pattern(search: &Option<String>) -> Option<String> {
+    let text = clean(search)?;
+    let escaped = text
+        .replace('\\', "\\\\")
+        .replace('%', "\\%")
+        .replace('_', "\\_");
+    Some(format!("%{escaped}%"))
+}
+
+fn push_filters(qb: &mut QueryBuilder<'_, Postgres>, f: &DebtFilterDto) {
+    qb.push(" WHERE TRUE");
+
+    if let Some(pattern) = search_pattern(&f.search) {
+        qb.push(" AND (o.creditor_name ILIKE ")
+            .push_bind(pattern.clone())
+            .push(" OR o.concept ILIKE ")
+            .push_bind(pattern.clone())
+            .push(" OR o.document_ref ILIKE ")
+            .push_bind(pattern)
+            .push(")");
+    }
+    if let Some(category) = f.category {
+        qb.push(" AND o.category = ").push_bind(category);
+    }
+    if let Some(nature) = f.nature {
+        qb.push(" AND o.nature = ").push_bind(nature);
+    }
+    if let Some(status) = f.status {
+        qb.push(" AND o.status = ").push_bind(status);
+    }
+    if let Some(urgencies) = f.urgencies.as_ref().filter(|list| !list.is_empty()) {
+        qb.push(" AND o.urgency IN (");
+        let mut list = qb.separated(", ");
+        for urgency in urgencies {
+            list.push_bind(*urgency);
+        }
+        list.push_unseparated(")");
+    }
+    if let Some(date) = f.issued_from {
+        qb.push(" AND o.issued_on >= ").push_bind(date);
+    }
+    if let Some(date) = f.issued_to {
+        qb.push(" AND o.issued_on <= ").push_bind(date);
+    }
+    if let Some(date) = f.due_from {
+        qb.push(" AND o.due_on >= ").push_bind(date);
+    }
+    if let Some(date) = f.due_to {
+        qb.push(" AND o.due_on <= ").push_bind(date);
+    }
+    if f.paid_from.is_some() || f.paid_to.is_some() {
+        qb.push(
+            " AND EXISTS (SELECT 1 FROM debt_payments p
+                          WHERE p.debt_id = o.id AND p.voided_at IS NULL",
+        );
+        if let Some(date) = f.paid_from {
+            qb.push(" AND p.paid_on >= ").push_bind(date);
+        }
+        if let Some(date) = f.paid_to {
+            qb.push(" AND p.paid_on <= ").push_bind(date);
+        }
+        qb.push(")");
+    }
+}
+
+fn order_clause(sort_by: DebtSortBy, sort_dir: SortDir) -> String {
+    let column = match sort_by {
+        DebtSortBy::Amount => "o.original_amount",
+        DebtSortBy::IssuedOn => "o.issued_on",
+        DebtSortBy::CreatedAt => "o.created_at",
+        DebtSortBy::DueOn => "o.due_on",
+        DebtSortBy::Balance => "o.balance",
+    };
+    let direction = match sort_dir {
+        SortDir::Asc => "ASC",
+        SortDir::Desc => "DESC",
+    };
+    // Las deudas sin vencimiento van siempre al final; `id` desempata.
+    format!(" ORDER BY {column} {direction} NULLS LAST, o.id DESC")
+}
+
+/// Listado con filtros, orden y paginación. Devuelve la página y el total
+/// de filas que cumplen el filtro.
+pub async fn list_debts(
+    pool: &PgPool,
+    filter: &DebtFilterDto,
+) -> Result<(Vec<DebtOverview>, i64), sqlx::Error> {
+    let page = filter.page.unwrap_or(1).max(1);
+    let page_size = filter.page_size.unwrap_or(20).clamp(1, 100);
+    let offset = (page - 1).saturating_mul(page_size);
+
+    let mut rows_query = QueryBuilder::<Postgres>::new("SELECT o.* FROM debt_overview o");
+    push_filters(&mut rows_query, filter);
+    rows_query.push(order_clause(
+        filter.sort_by.unwrap_or_default(),
+        filter.sort_dir.unwrap_or_default(),
+    ));
+    rows_query
+        .push(" LIMIT ")
+        .push_bind(page_size)
+        .push(" OFFSET ")
+        .push_bind(offset);
+    let rows = rows_query
+        .build_query_as::<DebtOverview>()
+        .fetch_all(pool)
+        .await?;
+
+    let mut count_query = QueryBuilder::<Postgres>::new("SELECT COUNT(*) FROM debt_overview o");
+    push_filters(&mut count_query, filter);
+    let total = count_query
+        .build_query_scalar::<i64>()
+        .fetch_one(pool)
+        .await?;
+
+    Ok((rows, total))
+}
+
+/// Totales del panel sobre las deudas que cumplen el filtro (orden y
+/// paginación se ignoran).
+pub async fn summary(pool: &PgPool, filter: &DebtFilterDto) -> Result<DebtSummary, sqlx::Error> {
+    let mut qb = QueryBuilder::<Postgres>::new(format!(
+        "SELECT
+             COALESCE(SUM(o.balance) FILTER (WHERE {ACTIVE_STATUSES}), 0)::BIGINT
+                 AS pending_total,
+             COALESCE(SUM(o.balance) FILTER (WHERE o.status = 'overdue'), 0)::BIGINT
+                 AS overdue_total,
+             COALESCE(SUM(o.balance) FILTER (WHERE {DUE_SOON_URGENCIES}), 0)::BIGINT
+                 AS due_soon_total,
+             (COUNT(*) FILTER (WHERE {ACTIVE_STATUSES}))::BIGINT AS active_count,
+             (COUNT(*) FILTER (WHERE o.status = 'overdue'))::BIGINT AS overdue_count,
+             (COUNT(*) FILTER (WHERE {DUE_SOON_URGENCIES}))::BIGINT AS due_soon_count
+         FROM debt_overview o"
+    ));
+    push_filters(&mut qb, filter);
+    qb.build_query_as::<DebtSummary>().fetch_one(pool).await
+}
+
+/// Totales por (categoría, estado) sobre las deudas que cumplen el filtro.
+pub async fn category_stats(
+    pool: &PgPool,
+    filter: &DebtFilterDto,
+) -> Result<Vec<DebtCategoryStat>, sqlx::Error> {
+    let mut qb = QueryBuilder::<Postgres>::new(
+        "SELECT o.category, o.status,
+                COUNT(*)::BIGINT                                   AS count,
+                COALESCE(SUM(o.original_amount), 0)::BIGINT        AS original_total,
+                COALESCE(SUM(o.paid_amount), 0)::BIGINT            AS paid_total,
+                COALESCE(SUM(o.balance) FILTER (WHERE o.status <> 'voided'), 0)::BIGINT
+                                                                   AS balance_total
+         FROM debt_overview o",
+    );
+    push_filters(&mut qb, filter);
+    qb.push(" GROUP BY o.category, o.status ORDER BY o.category, o.status");
+    qb.build_query_as::<DebtCategoryStat>()
+        .fetch_all(pool)
+        .await
+}
+
+// ============================================================
+// HISTORIAL
+// ============================================================
+
+/// Tope de eventos del historial de una deuda.
+const HISTORY_LIMIT: i64 = 500;
+
+/// Historial de modificaciones y anulaciones de una deuda, leído de
+/// `audit_events` (única fuente de verdad; no hay tabla de historial propia).
+/// Incluye los eventos de sus pagos y excluye los fallos técnicos. Del más
+/// reciente al más antiguo.
+pub async fn list_history(pool: &PgPool, debt_id: i32) -> Result<Vec<AuditEvent>, sqlx::Error> {
+    sqlx::query_as!(
+        AuditEvent,
+        r#"SELECT
+               id, created_at, correlation_id,
+               category AS "category: AuditCategory",
+               module   AS "module: AuditModule",
+               action,
+               outcome  AS "outcome: AuditOutcome",
+               actor, entity_type, entity_id, summary,
+               changes, metadata, error_message
+           FROM audit_events
+           WHERE module = 'debts'
+             AND outcome = 'success'
+             AND (   (entity_type = 'debt' AND entity_id = $1)
+                  OR (entity_type = 'debt_payment' AND metadata->>'debt_id' = $1))
+           ORDER BY created_at DESC, id DESC
+           LIMIT $2"#,
+        debt_id.to_string(),
+        HISTORY_LIMIT
+    )
+    .fetch_all(pool)
+    .await
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn search_pattern_ignores_blank_text() {
+        assert_eq!(search_pattern(&None), None);
+        assert_eq!(search_pattern(&Some("   ".to_string())), None);
+    }
+
+    #[test]
+    fn search_pattern_escapes_like_wildcards() {
+        assert_eq!(
+            search_pattern(&Some(" 50%_off ".to_string())),
+            Some("%50\\%\\_off%".to_string())
+        );
+        assert_eq!(
+            search_pattern(&Some("a\\b".to_string())),
+            Some("%a\\\\b%".to_string())
+        );
+    }
+
+    #[test]
+    fn order_clause_comes_only_from_the_closed_lists() {
+        assert_eq!(
+            order_clause(DebtSortBy::DueOn, SortDir::Asc),
+            " ORDER BY o.due_on ASC NULLS LAST, o.id DESC"
+        );
+        assert_eq!(
+            order_clause(DebtSortBy::Balance, SortDir::Desc),
+            " ORDER BY o.balance DESC NULLS LAST, o.id DESC"
+        );
+    }
 }

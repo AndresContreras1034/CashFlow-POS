@@ -12,6 +12,7 @@ use db::init_db;
 use modules::audit::router::*;
 use modules::billing::router::*;
 use modules::cash::router::*;
+use modules::debts::router::*;
 use modules::developer::router::*;
 use modules::inventory::router::*;
 use modules::licensing::router::*;
@@ -227,6 +228,21 @@ pub fn run() {
             list_audit_events,
             get_audit_event,
             list_audit_events_by_correlation,
+            // =================================================
+            // Debts
+            // =================================================
+            get_debt_options,
+            list_debts,
+            get_debt,
+            get_debt_summary,
+            get_debt_category_stats,
+            list_due_debts,
+            list_debt_history,
+            create_debt,
+            update_debt,
+            void_debt,
+            register_debt_payment,
+            void_debt_payment,
             // Developer Mode
             set_developer_mode,
             get_developer_status,
