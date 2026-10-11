@@ -27,6 +27,8 @@ resultado_*.txt
 resumen_resultados.txt
 exportar_auditoria.txt
 /audit_logs.txt
+auditoria_reportes/
+etapa2.diff
 
 # Editor directories and files
 .vscode/*
