@@ -31,6 +31,50 @@ async fn seed_variant(pool: &PgPool) -> i32 {
     .unwrap()
 }
 
+async fn seed_inventory_variant(
+    pool: &PgPool,
+    category_name: &str,
+    product_name: &str,
+    stock: i32,
+    stock_min: i32,
+    cost: i64,
+    price: i64,
+    variant_active: bool,
+    product_active: bool,
+) -> (i32, i32, i32) {
+    let category_id: i32 =
+        sqlx::query_scalar("INSERT INTO categories (name) VALUES ($1) RETURNING id")
+            .bind(category_name)
+            .fetch_one(pool)
+            .await
+            .unwrap();
+    let product_id: i32 = sqlx::query_scalar(
+        "INSERT INTO products (category_id, name, is_active) VALUES ($1, $2, $3) RETURNING id",
+    )
+    .bind(category_id)
+    .bind(product_name)
+    .bind(product_active)
+    .fetch_one(pool)
+    .await
+    .unwrap();
+    let variant_id: i32 = sqlx::query_scalar(
+        r#"INSERT INTO product_variants
+               (product_id, attributes, price, cost, stock, stock_min, is_active)
+           VALUES ($1, '{"variant":"test"}', $2, $3, $4, $5, $6)
+           RETURNING id"#,
+    )
+    .bind(product_id)
+    .bind(price)
+    .bind(cost)
+    .bind(stock)
+    .bind(stock_min)
+    .bind(variant_active)
+    .fetch_one(pool)
+    .await
+    .unwrap();
+    (category_id, product_id, variant_id)
+}
+
 async fn insert_sale(
     pool: &PgPool,
     variant_id: i32,
@@ -1106,6 +1150,466 @@ async fn top_products_category_filter_limits_rows_and_scopes_shares(pool: PgPool
             .sum::<i32>(),
         10_000
     );
+}
+
+#[sqlx::test(migrations = "./migrations")]
+async fn inventory_valuation_is_a_current_active_stock_snapshot(pool: PgPool) {
+    let (category_a, _, _) = seed_inventory_variant(
+        &pool,
+        "valuation-a",
+        "Valuation A",
+        10,
+        2,
+        200,
+        500,
+        true,
+        true,
+    )
+    .await;
+    let (category_no_cost, _, _) = seed_inventory_variant(
+        &pool,
+        "valuation-a-2",
+        "Valuation no cost",
+        3,
+        1,
+        0,
+        300,
+        true,
+        true,
+    )
+    .await;
+    let (category_b, _, _) = seed_inventory_variant(
+        &pool,
+        "valuation-b",
+        "Valuation B",
+        4,
+        1,
+        100,
+        250,
+        true,
+        true,
+    )
+    .await;
+    seed_inventory_variant(
+        &pool,
+        "valuation-negative",
+        "Negative stock",
+        -2,
+        0,
+        300,
+        500,
+        true,
+        true,
+    )
+    .await;
+    seed_inventory_variant(
+        &pool,
+        "valuation-inactive",
+        "Inactive variant",
+        20,
+        0,
+        100,
+        200,
+        false,
+        true,
+    )
+    .await;
+    seed_inventory_variant(
+        &pool,
+        "valuation-product-inactive",
+        "Inactive product",
+        30,
+        0,
+        100,
+        200,
+        true,
+        false,
+    )
+    .await;
+
+    let filter = ReportFilter {
+        date_from: date("2026-01-01"),
+        date_to: date("2026-01-01"),
+        granularity: None,
+        compare_previous: false,
+        category_id: None,
+        limit: Some(1),
+        rank_by: None,
+    };
+    let valuation = service::get_inventory_valuation(&pool, filter.clone())
+        .await
+        .unwrap();
+    let legacy = pos_lib::modules::inventory::service::get_inventory_value(&pool)
+        .await
+        .unwrap();
+
+    assert_eq!(valuation.value_at_cost, 2_400);
+    assert_eq!(valuation.potential_sale_value, 6_000);
+    assert_eq!(valuation.potential_margin_bps, Some(6_000));
+    assert_eq!(valuation.variants_valued, 3);
+    assert_eq!(valuation.variants_without_cost, 1);
+    assert_eq!(valuation.negative_stock_variants, 1);
+    assert_eq!(valuation.units_in_stock, 17);
+    assert_eq!(legacy.value_at_cost, valuation.value_at_cost);
+    assert_eq!(legacy.potential_sale_value, valuation.potential_sale_value);
+    assert_eq!(
+        valuation
+            .by_category
+            .iter()
+            .map(|category| category.value_at_cost)
+            .sum::<i64>(),
+        valuation.value_at_cost
+    );
+    assert_eq!(
+        valuation
+            .by_category
+            .iter()
+            .map(|category| category.category_id)
+            .collect::<Vec<_>>(),
+        vec![category_a, category_b, category_no_cost]
+    );
+    let no_cost_category = valuation
+        .by_category
+        .iter()
+        .find(|category| category.category_id == category_no_cost)
+        .unwrap();
+    assert_eq!(no_cost_category.units, 3);
+    assert_eq!(no_cost_category.value_at_cost, 0);
+    assert_eq!(no_cost_category.variants_without_cost, 1);
+    assert!(valuation.by_category.iter().any(|category| {
+        category.category_id == category_a
+            && category.units == 10
+            && category.value_at_cost == 2_000
+    }));
+
+    let filtered = service::get_inventory_valuation(
+        &pool,
+        ReportFilter {
+            category_id: Some(category_a),
+            ..filter
+        },
+    )
+    .await
+    .unwrap();
+    assert_eq!(filtered.value_at_cost, 2_000);
+    assert_eq!(filtered.units_in_stock, 10);
+    assert_eq!(filtered.by_category.len(), 1);
+    assert_eq!(filtered.by_category[0].category_id, category_a);
+}
+
+#[sqlx::test(migrations = "./migrations")]
+async fn inventory_turnover_uses_local_dates_and_excludes_uncosted_and_courtesy(pool: PgPool) {
+    sqlx::query("UPDATE app_settings SET timezone = 'America/Bogota' WHERE id = 1")
+        .execute(&pool)
+        .await
+        .unwrap();
+    let (category_id, _, variant_id) = seed_inventory_variant(
+        &pool,
+        "turnover",
+        "Turnover product",
+        10,
+        2,
+        200,
+        500,
+        true,
+        true,
+    )
+    .await;
+    insert_sale(
+        &pool,
+        variant_id,
+        "completed",
+        "2026-10-10T02:30:00Z",
+        1_500,
+        0,
+        0,
+        1_500,
+        None,
+        3,
+        500,
+        0,
+        0,
+        1_500,
+        Some(200),
+    )
+    .await;
+    insert_sale(
+        &pool,
+        variant_id,
+        "completed",
+        "2026-10-09T17:00:00Z",
+        500,
+        0,
+        0,
+        500,
+        None,
+        1,
+        500,
+        0,
+        0,
+        500,
+        None,
+    )
+    .await;
+    insert_sale(
+        &pool,
+        variant_id,
+        "completed",
+        "2026-10-09T18:00:00Z",
+        1_000,
+        0,
+        1_000,
+        0,
+        Some("Cortesía"),
+        2,
+        500,
+        0,
+        0,
+        1_000,
+        Some(200),
+    )
+    .await;
+    insert_sale(
+        &pool,
+        variant_id,
+        "completed",
+        "2026-10-01T15:00:00Z",
+        1_000,
+        0,
+        0,
+        1_000,
+        None,
+        2,
+        500,
+        0,
+        0,
+        1_000,
+        Some(200),
+    )
+    .await;
+
+    let make_filter = |from: &str, to: &str| ReportFilter {
+        date_from: date(from),
+        date_to: date(to),
+        granularity: None,
+        compare_previous: false,
+        category_id: Some(category_id),
+        limit: None,
+        rank_by: None,
+    };
+    let one_day = service::get_inventory_turnover(&pool, make_filter("2026-10-09", "2026-10-09"))
+        .await
+        .unwrap();
+    assert_eq!(one_day.cogs, 600);
+    assert_eq!(one_day.inventory_value_at_cost, 2_000);
+    assert_eq!(one_day.turnover_bps, Some(3_000));
+    assert_eq!(one_day.days_of_inventory, Some(3));
+    assert_eq!(one_day.range_days, 1);
+    assert_eq!(one_day.uncosted_items, 1);
+
+    let thirty_days =
+        service::get_inventory_turnover(&pool, make_filter("2026-10-01", "2026-10-30"))
+            .await
+            .unwrap();
+    assert_eq!(thirty_days.cogs, 1_000);
+    assert_eq!(thirty_days.days_of_inventory, Some(60));
+    assert_eq!(thirty_days.range_days, 30);
+
+    let no_cogs = service::get_inventory_turnover(&pool, make_filter("2026-10-08", "2026-10-08"))
+        .await
+        .unwrap();
+    assert_eq!(no_cogs.cogs, 0);
+    assert_eq!(no_cogs.turnover_bps, Some(0));
+    assert_eq!(no_cogs.days_of_inventory, None);
+
+    sqlx::query("UPDATE product_variants SET stock = 0 WHERE id = $1")
+        .bind(variant_id)
+        .execute(&pool)
+        .await
+        .unwrap();
+    let no_inventory =
+        service::get_inventory_turnover(&pool, make_filter("2026-10-09", "2026-10-09"))
+            .await
+            .unwrap();
+    assert_eq!(no_inventory.inventory_value_at_cost, 0);
+    assert_eq!(no_inventory.turnover_bps, None);
+}
+
+#[sqlx::test(migrations = "./migrations")]
+async fn stock_alerts_order_status_cover_and_reorder_by_selected_range(pool: PgPool) {
+    sqlx::query("UPDATE app_settings SET timezone = 'America/Bogota' WHERE id = 1")
+        .execute(&pool)
+        .await
+        .unwrap();
+
+    let (category_id, _, out_sold_variant) =
+        seed_inventory_variant(&pool, "alert-a", "Out sold", 0, 0, 100, 300, true, true).await;
+    let (_, _, out_never_variant) = seed_inventory_variant(
+        &pool,
+        "alert-never",
+        "Out never",
+        0,
+        0,
+        100,
+        300,
+        true,
+        true,
+    )
+    .await;
+    let (_, _, low_variant) =
+        seed_inventory_variant(&pool, "alert-low", "Low stock", 2, 5, 100, 300, true, true).await;
+    let (_, _, normal_variant) = seed_inventory_variant(
+        &pool,
+        "alert-normal",
+        "Normal stock",
+        6,
+        5,
+        100,
+        300,
+        true,
+        true,
+    )
+    .await;
+    let (_, _, inactive_variant) = seed_inventory_variant(
+        &pool,
+        "alert-inactive",
+        "Inactive alert",
+        0,
+        0,
+        100,
+        300,
+        false,
+        true,
+    )
+    .await;
+
+    insert_sale(
+        &pool,
+        out_sold_variant,
+        "completed",
+        "2026-10-10T02:30:00Z",
+        1_200,
+        0,
+        0,
+        1_200,
+        None,
+        4,
+        300,
+        0,
+        0,
+        1_200,
+        Some(100),
+    )
+    .await;
+    insert_sale(
+        &pool,
+        low_variant,
+        "completed",
+        "2026-10-09T17:00:00Z",
+        1_200,
+        0,
+        0,
+        1_200,
+        None,
+        4,
+        300,
+        0,
+        0,
+        1_200,
+        Some(100),
+    )
+    .await;
+    insert_sale(
+        &pool,
+        low_variant,
+        "completed",
+        "2026-10-01T17:00:00Z",
+        600,
+        0,
+        0,
+        600,
+        None,
+        2,
+        300,
+        0,
+        0,
+        600,
+        Some(100),
+    )
+    .await;
+
+    let filter = ReportFilter {
+        date_from: date("2026-10-09"),
+        date_to: date("2026-10-09"),
+        granularity: None,
+        compare_previous: false,
+        category_id: None,
+        limit: Some(25),
+        rank_by: None,
+    };
+    let alerts = service::get_stock_alerts(&pool, filter.clone())
+        .await
+        .unwrap();
+    assert_eq!(
+        alerts
+            .iter()
+            .map(|alert| alert.variant_id)
+            .collect::<Vec<_>>(),
+        vec![out_sold_variant, out_never_variant, low_variant]
+    );
+    assert!(alerts
+        .iter()
+        .all(|alert| alert.variant_id != normal_variant));
+    assert!(alerts
+        .iter()
+        .all(|alert| alert.variant_id != inactive_variant));
+    assert_eq!(
+        alerts[0].status,
+        pos_lib::modules::inventory::models::StockStatus::OutOfStock
+    );
+    assert_eq!(alerts[0].units_sold, 4);
+    assert_eq!(alerts[0].days_of_cover, Some(0));
+    assert_eq!(alerts[0].suggested_reorder, 4);
+    assert_eq!(alerts[1].days_of_cover, None);
+    assert_eq!(alerts[1].suggested_reorder, 0);
+    assert_eq!(
+        alerts[2].status,
+        pos_lib::modules::inventory::models::StockStatus::Low
+    );
+    assert_eq!(alerts[2].days_of_cover, Some(1));
+    assert_eq!(alerts[2].suggested_reorder, 2);
+
+    let mut month_filter = filter.clone();
+    month_filter.date_from = date("2026-10-01");
+    month_filter.date_to = date("2026-10-30");
+    month_filter.limit = Some(100);
+    let month_alerts = service::get_stock_alerts(&pool, month_filter)
+        .await
+        .unwrap();
+    let monthly_low = month_alerts
+        .iter()
+        .find(|alert| alert.variant_id == low_variant)
+        .unwrap();
+    assert_eq!(monthly_low.units_sold, 6);
+    assert_eq!(monthly_low.days_of_cover, Some(10));
+    assert_eq!(monthly_low.suggested_reorder, 4);
+
+    let mut limited_filter = filter.clone();
+    limited_filter.limit = Some(1);
+    assert_eq!(
+        service::get_stock_alerts(&pool, limited_filter)
+            .await
+            .unwrap()
+            .len(),
+        1
+    );
+    let mut category_filter = filter;
+    category_filter.category_id = Some(category_id);
+    let category_alerts = service::get_stock_alerts(&pool, category_filter)
+        .await
+        .unwrap();
+    assert_eq!(category_alerts.len(), 1);
+    assert_eq!(category_alerts[0].variant_id, out_sold_variant);
 }
 
 fn zero_kpis() -> pos_lib::modules::reports::dto::SalesKpis {

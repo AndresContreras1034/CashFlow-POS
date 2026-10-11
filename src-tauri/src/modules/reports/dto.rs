@@ -1,6 +1,7 @@
 use chrono::NaiveDate;
 use serde::{Deserialize, Serialize};
 
+use crate::modules::inventory::models::StockStatus;
 use crate::modules::sales::models::PaymentMethod;
 
 fn default_granularity() -> Option<Granularity> {
@@ -151,6 +152,60 @@ pub struct StaleProduct {
     /// True when the inventory value is understated because no unit cost is recorded.
     pub cost_missing: bool,
     pub days_since_last_sale: Option<i64>,
+}
+
+/// Current stock and cost snapshot; date filters are intentionally ignored.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct InventoryValuation {
+    pub value_at_cost: i64,
+    /// Mirrors inventory's existing valuation: variants without a recorded cost are excluded.
+    pub potential_sale_value: i64,
+    pub potential_margin_bps: Option<i32>,
+    /// Active variants with a positive recorded cost, matching InventoryValueDto semantics.
+    pub variants_valued: i64,
+    pub variants_without_cost: i64,
+    pub negative_stock_variants: i64,
+    pub units_in_stock: i64,
+    pub by_category: Vec<CategoryValuation>,
+}
+
+/// Current stock snapshot by category; sales dates do not affect these values.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct CategoryValuation {
+    pub category_id: i32,
+    pub category_name: String,
+    pub units: i64,
+    pub value_at_cost: i64,
+    pub potential_sale_value: i64,
+    pub share_bps: i32,
+    pub variants_without_cost: i64,
+}
+
+/// Current inventory snapshot compared with cost of completed non-courtesy sales in the range.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct InventoryTurnover {
+    pub cogs: i64,
+    pub inventory_value_at_cost: i64,
+    pub turnover_bps: Option<i32>,
+    pub days_of_inventory: Option<i64>,
+    pub range_days: i64,
+    pub uncosted_items: i64,
+}
+
+/// Current stock snapshot with sales demand calculated over the requested date range.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct StockAlert {
+    pub variant_id: i32,
+    pub product_name: String,
+    pub attributes: serde_json::Value,
+    pub category_name: String,
+    pub stock: i32,
+    pub stock_min: i32,
+    pub status: StockStatus,
+    pub units_sold: i64,
+    pub days_of_cover: Option<i64>,
+    /// Expected demand over the selected range, less current stock, floored at zero.
+    pub suggested_reorder: i64,
 }
 
 #[cfg(test)]

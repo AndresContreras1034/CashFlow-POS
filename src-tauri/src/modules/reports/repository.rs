@@ -95,9 +95,11 @@ const ALLOCATED_ITEMS_CTES: &str = r#",
 
 use crate::{
     modules::{
+        inventory::repository::ACTIVE_INVENTORY_VARIANTS_CTE,
         reports::dto::{
-            CategorySales, DateRange, HeatmapCell, PaymentMethodStat, RankBy, SalesKpis,
-            StaleProduct, TimeSeriesPoint, TopProduct,
+            CategorySales, CategoryValuation, DateRange, HeatmapCell, InventoryTurnover,
+            InventoryValuation, PaymentMethodStat, RankBy, SalesKpis, StaleProduct, StockAlert,
+            TimeSeriesPoint, TopProduct,
         },
         sales::models::PaymentMethod,
     },
@@ -190,6 +192,45 @@ struct StaleProductRow {
     stock_value_at_cost: i64,
     cost_missing: bool,
     days_since_last_sale: Option<i64>,
+}
+
+#[derive(sqlx::FromRow)]
+struct InventoryTotalsRow {
+    value_at_cost: i64,
+    potential_sale_value: i64,
+    variants_valued: i64,
+    variants_without_cost: i64,
+    negative_stock_variants: i64,
+    units_in_stock: i64,
+}
+
+#[derive(sqlx::FromRow)]
+struct CategoryValuationRow {
+    category_id: i32,
+    category_name: String,
+    units: i64,
+    value_at_cost: i64,
+    potential_sale_value: i64,
+    variants_without_cost: i64,
+}
+
+#[derive(sqlx::FromRow)]
+struct TurnoverCogsRow {
+    cogs: i64,
+    uncosted_items: i64,
+}
+
+#[derive(sqlx::FromRow)]
+struct StockAlertRow {
+    variant_id: i32,
+    product_name: String,
+    attributes: serde_json::Value,
+    category_name: String,
+    stock: i32,
+    stock_min: i32,
+    units_sold: i64,
+    days_of_cover: Option<i64>,
+    suggested_reorder: i64,
 }
 
 pub async fn fetch_sales_kpis(
@@ -654,4 +695,241 @@ pub async fn fetch_stale_products(
             days_since_last_sale: row.days_since_last_sale,
         })
         .collect())
+}
+
+pub async fn fetch_inventory_valuation(
+    pool: &PgPool,
+    category_id: Option<i32>,
+) -> Result<InventoryValuation, sqlx::Error> {
+    let totals_query = format!(
+        r#"{ACTIVE_INVENTORY_VARIANTS_CTE}
+           SELECT
+               COALESCE(SUM(stock::NUMERIC * cost::NUMERIC)
+                   FILTER (WHERE stock > 0 AND cost > 0), 0)::BIGINT AS value_at_cost,
+               COALESCE(SUM(stock::NUMERIC * price::NUMERIC)
+                   FILTER (WHERE stock > 0 AND cost > 0), 0)::BIGINT AS potential_sale_value,
+               COUNT(*) FILTER (WHERE cost > 0)::BIGINT AS variants_valued,
+               COUNT(*) FILTER (WHERE stock > 0 AND cost = 0)::BIGINT AS variants_without_cost,
+               COUNT(*) FILTER (WHERE stock < 0)::BIGINT AS negative_stock_variants,
+               COALESCE(SUM(stock::BIGINT) FILTER (WHERE stock > 0), 0)::BIGINT AS units_in_stock
+           FROM active_inventory_variants
+           WHERE ($1::INT IS NULL OR category_id = $1)"#
+    );
+    let totals = sqlx::query_as::<_, InventoryTotalsRow>(&totals_query)
+        .bind(category_id)
+        .fetch_one(pool)
+        .await?;
+
+    let categories_query = format!(
+        r#"{ACTIVE_INVENTORY_VARIANTS_CTE}
+           SELECT
+               c.id AS category_id,
+               c.name AS category_name,
+               COALESCE(SUM(v.stock::BIGINT), 0)::BIGINT AS units,
+               COALESCE(SUM(v.stock::NUMERIC * v.cost::NUMERIC)
+                   FILTER (WHERE v.cost > 0), 0)::BIGINT AS value_at_cost,
+               COALESCE(SUM(v.stock::NUMERIC * v.price::NUMERIC)
+                   FILTER (WHERE v.cost > 0), 0)::BIGINT AS potential_sale_value,
+               COUNT(*) FILTER (WHERE v.cost = 0)::BIGINT AS variants_without_cost
+           FROM active_inventory_variants v
+           JOIN categories c ON c.id = v.category_id
+           WHERE v.stock > 0
+             AND ($1::INT IS NULL OR v.category_id = $1)
+           GROUP BY c.id, c.name
+           ORDER BY value_at_cost DESC, category_id ASC"#
+    );
+    let category_rows = sqlx::query_as::<_, CategoryValuationRow>(&categories_query)
+        .bind(category_id)
+        .fetch_all(pool)
+        .await?;
+    let by_category = category_rows
+        .into_iter()
+        .map(|row| CategoryValuation {
+            category_id: row.category_id,
+            category_name: row.category_name,
+            units: row.units,
+            value_at_cost: row.value_at_cost,
+            potential_sale_value: row.potential_sale_value,
+            share_bps: super::range::share_bps(row.value_at_cost, totals.value_at_cost),
+            variants_without_cost: row.variants_without_cost,
+        })
+        .collect();
+
+    let potential_margin_bps = (totals.potential_sale_value > 0).then(|| {
+        super::range::margin_bps(
+            totals.potential_sale_value - totals.value_at_cost,
+            totals.potential_sale_value,
+        )
+    });
+
+    Ok(InventoryValuation {
+        value_at_cost: totals.value_at_cost,
+        potential_sale_value: totals.potential_sale_value,
+        potential_margin_bps,
+        variants_valued: totals.variants_valued,
+        variants_without_cost: totals.variants_without_cost,
+        negative_stock_variants: totals.negative_stock_variants,
+        units_in_stock: totals.units_in_stock,
+        by_category,
+    })
+}
+
+pub async fn fetch_inventory_turnover(
+    pool: &PgPool,
+    range: &DateRange,
+    timezone: &str,
+    range_days: i64,
+    category_id: Option<i32>,
+) -> Result<InventoryTurnover, sqlx::Error> {
+    let inventory_query = format!(
+        r#"{ACTIVE_INVENTORY_VARIANTS_CTE}
+           SELECT COALESCE(
+               SUM(stock::NUMERIC * cost::NUMERIC)
+                   FILTER (WHERE stock > 0 AND cost > 0), 0
+           )::BIGINT
+           FROM active_inventory_variants
+           WHERE ($1::INT IS NULL OR category_id = $1)"#
+    );
+    let inventory_value = sqlx::query_scalar::<_, i64>(&inventory_query)
+        .bind(category_id)
+        .fetch_one(pool)
+        .await?;
+
+    let cogs_query = r#"
+        SELECT
+            COALESCE(SUM(si.unit_cost::NUMERIC * si.quantity::NUMERIC)
+                FILTER (WHERE si.unit_cost IS NOT NULL), 0)::BIGINT AS cogs,
+            COUNT(*) FILTER (WHERE si.unit_cost IS NULL)::BIGINT AS uncosted_items
+        FROM sales s
+        JOIN sale_items si ON si.sale_id = s.id
+        JOIN product_variants v ON v.id = si.variant_id AND v.is_active
+        JOIN products p ON p.id = v.product_id AND p.is_active
+        WHERE s.status = 'completed'
+          AND s.courtesy_reason IS NULL
+          AND s.created_at >= ($1::DATE::TIMESTAMP AT TIME ZONE $3)
+          AND s.created_at < (($2::DATE + 1)::TIMESTAMP AT TIME ZONE $3)
+          AND ($4::INT IS NULL OR p.category_id = $4)
+    "#;
+    let cogs = sqlx::query_as::<_, TurnoverCogsRow>(cogs_query)
+        .bind(range.from)
+        .bind(range.to)
+        .bind(timezone)
+        .bind(category_id)
+        .fetch_one(pool)
+        .await?;
+
+    let turnover_bps = (inventory_value > 0)
+        .then(|| round_ratio_to_i32(cogs.cogs as i128 * 10_000, inventory_value as i128));
+    let days_of_inventory = (cogs.cogs > 0).then(|| {
+        round_ratio_to_i64(
+            inventory_value as i128 * range_days as i128,
+            cogs.cogs as i128,
+        )
+    });
+
+    Ok(InventoryTurnover {
+        cogs: cogs.cogs,
+        inventory_value_at_cost: inventory_value,
+        turnover_bps,
+        days_of_inventory,
+        range_days,
+        uncosted_items: cogs.uncosted_items,
+    })
+}
+
+pub async fn fetch_stock_alerts(
+    pool: &PgPool,
+    range: &DateRange,
+    timezone: &str,
+    range_days: i64,
+    category_id: Option<i32>,
+    limit: i64,
+) -> Result<Vec<StockAlert>, sqlx::Error> {
+    let query = format!(
+        r#"{ACTIVE_INVENTORY_VARIANTS_CTE},
+           sales_by_variant AS (
+               SELECT
+                   si.variant_id,
+                   SUM(si.quantity::BIGINT)::BIGINT AS units_sold
+               FROM sales s
+               JOIN sale_items si ON si.sale_id = s.id
+               JOIN active_inventory_variants active_v ON active_v.variant_id = si.variant_id
+               WHERE s.status = 'completed'
+                 AND s.courtesy_reason IS NULL
+                 AND s.created_at >= ($1::DATE::TIMESTAMP AT TIME ZONE $3)
+                 AND s.created_at < (($2::DATE + 1)::TIMESTAMP AT TIME ZONE $3)
+               GROUP BY si.variant_id
+           )
+           SELECT
+               v.variant_id,
+               p.name AS product_name,
+               pv.attributes,
+               c.name AS category_name,
+               pv.stock,
+               pv.stock_min,
+               COALESCE(sales.units_sold, 0)::BIGINT AS units_sold,
+               CASE
+                   WHEN COALESCE(sales.units_sold, 0) = 0 THEN NULL
+                   ELSE ROUND(pv.stock::NUMERIC * $5::NUMERIC / sales.units_sold)::BIGINT
+               END AS days_of_cover,
+               GREATEST(
+                   0::NUMERIC,
+                   CEIL(COALESCE(sales.units_sold, 0)::NUMERIC - pv.stock::NUMERIC)
+               )::BIGINT AS suggested_reorder
+           FROM active_inventory_variants v
+           JOIN product_variants pv ON pv.id = v.variant_id
+           JOIN products p ON p.id = v.product_id
+           JOIN categories c ON c.id = v.category_id
+           LEFT JOIN sales_by_variant sales ON sales.variant_id = v.variant_id
+           WHERE (v.stock <= pv.stock_min OR v.stock <= 0)
+             AND ($4::INT IS NULL OR v.category_id = $4)
+           ORDER BY
+               CASE WHEN v.stock <= 0 THEN 0 ELSE 1 END ASC,
+               days_of_cover ASC NULLS LAST,
+               v.variant_id ASC
+           LIMIT $6"#
+    );
+    let rows = sqlx::query_as::<_, StockAlertRow>(&query)
+        .bind(range.from)
+        .bind(range.to)
+        .bind(timezone)
+        .bind(category_id)
+        .bind(range_days)
+        .bind(limit)
+        .fetch_all(pool)
+        .await?;
+
+    Ok(rows
+        .into_iter()
+        .map(|row| StockAlert {
+            variant_id: row.variant_id,
+            product_name: row.product_name,
+            attributes: row.attributes,
+            category_name: row.category_name,
+            stock: row.stock,
+            stock_min: row.stock_min,
+            status: if row.stock <= 0 {
+                crate::modules::inventory::models::StockStatus::OutOfStock
+            } else {
+                crate::modules::inventory::models::StockStatus::Low
+            },
+            units_sold: row.units_sold,
+            days_of_cover: row.days_of_cover,
+            suggested_reorder: row.suggested_reorder,
+        })
+        .collect())
+}
+
+fn round_ratio_to_i64(numerator: i128, denominator: i128) -> i64 {
+    let magnitude = numerator.abs();
+    let rounded = (magnitude + denominator / 2) / denominator;
+    let signed = if numerator < 0 { -rounded } else { rounded };
+    signed.clamp(i64::MIN as i128, i64::MAX as i128) as i64
+}
+
+fn round_ratio_to_i32(numerator: i128, denominator: i128) -> i32 {
+    let magnitude = numerator.abs();
+    let rounded = (magnitude + denominator / 2) / denominator;
+    let signed = if numerator < 0 { -rounded } else { rounded };
+    signed.clamp(i32::MIN as i128, i32::MAX as i128) as i32
 }

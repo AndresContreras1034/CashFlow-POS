@@ -58,6 +58,31 @@ use crate::modules::inventory::{
     },
 };
 
+pub const ACTIVE_INVENTORY_VARIANTS_CTE: &str = r#"
+    WITH active_inventory_variants AS (
+        SELECT
+            v.id AS variant_id,
+            v.product_id,
+            p.category_id,
+            v.stock,
+            v.cost,
+            v.price
+        FROM product_variants v
+        JOIN products p ON p.id = v.product_id
+        WHERE v.is_active = TRUE
+          AND p.is_active = TRUE
+    )
+"#;
+
+#[derive(sqlx::FromRow)]
+struct InventoryValueRow {
+    value_at_cost: i64,
+    potential_sale_value: i64,
+    variants_without_cost: i64,
+    negative_stock_variants: i64,
+    variants_valued: i64,
+}
+
 // ============================================================
 // CATEGORÍAS
 // ============================================================
@@ -843,15 +868,16 @@ pub async fn apply_stock_return(
     notes: &str,
     created_by: &str,
 ) -> Result<ProductVariant, sqlx::Error> {
-    let stock_before = sqlx::query_scalar::<_, i32>(
-        "SELECT stock FROM product_variants WHERE id = $1 FOR UPDATE",
-    )
-    .bind(variant_id)
-    .fetch_one(&mut *conn)
-    .await?;
+    let stock_before =
+        sqlx::query_scalar::<_, i32>("SELECT stock FROM product_variants WHERE id = $1 FOR UPDATE")
+            .bind(variant_id)
+            .fetch_one(&mut *conn)
+            .await?;
     let stock_after = stock_before
         .checked_add(quantity)
-        .ok_or(sqlx::Error::Protocol("stock overflow on sale return".into()))?;
+        .ok_or(sqlx::Error::Protocol(
+            "stock overflow on sale return".into(),
+        ))?;
 
     let variant = sqlx::query_as::<_, ProductVariant>(
         "UPDATE product_variants SET stock = $1 WHERE id = $2 RETURNING *",
@@ -1047,30 +1073,34 @@ pub async fn get_low_stock_items(pool: &PgPool) -> Result<Vec<LowStockItemDto>, 
 }
 
 pub async fn get_inventory_value(pool: &PgPool) -> Result<InventoryValueDto, sqlx::Error> {
-    sqlx::query_as!(
-        InventoryValueDto,
-        r#"SELECT
+    let query = format!(
+        r#"{ACTIVE_INVENTORY_VARIANTS_CTE}
+           SELECT
                COALESCE(
-                   SUM(GREATEST(v.stock, 0)::BIGINT * v.cost)
-                       FILTER (WHERE v.cost > 0), 0
-               )::BIGINT AS "value_at_cost!",
+                   SUM(GREATEST(stock, 0)::NUMERIC * cost::NUMERIC)
+                       FILTER (WHERE cost > 0), 0
+               )::BIGINT AS value_at_cost,
                COALESCE(
-                   SUM(GREATEST(v.stock, 0)::BIGINT * v.price)
-                       FILTER (WHERE v.cost > 0), 0
-               )::BIGINT AS "potential_sale_value!",
-               COUNT(*) FILTER (WHERE v.cost = 0 AND v.stock > 0)
-                   AS "variants_without_cost!",
-               COUNT(*) FILTER (WHERE v.stock < 0)
-                   AS "negative_stock_variants!",
-               COUNT(*) FILTER (WHERE v.cost > 0)
-                   AS "variants_valued!"
-           FROM product_variants v
-           JOIN products p ON p.id = v.product_id
-           WHERE v.is_active = TRUE
-             AND p.is_active = TRUE"#
-    )
-    .fetch_one(pool)
-    .await
+                   SUM(GREATEST(stock, 0)::NUMERIC * price::NUMERIC)
+                       FILTER (WHERE cost > 0), 0
+               )::BIGINT AS potential_sale_value,
+               COUNT(*) FILTER (WHERE cost = 0 AND stock > 0)::BIGINT
+                   AS variants_without_cost,
+               COUNT(*) FILTER (WHERE stock < 0)::BIGINT
+                   AS negative_stock_variants,
+               COUNT(*) FILTER (WHERE cost > 0)::BIGINT AS variants_valued
+           FROM active_inventory_variants"#
+    );
+    let row = sqlx::query_as::<_, InventoryValueRow>(&query)
+        .fetch_one(pool)
+        .await?;
+    Ok(InventoryValueDto {
+        value_at_cost: row.value_at_cost,
+        potential_sale_value: row.potential_sale_value,
+        variants_without_cost: row.variants_without_cost,
+        negative_stock_variants: row.negative_stock_variants,
+        variants_valued: row.variants_valued,
+    })
 }
 
 pub async fn get_product_stock_stats(

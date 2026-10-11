@@ -233,6 +233,9 @@ pub fn run() {
             get_top_products,
             get_sales_by_category,
             get_stale_products,
+            get_inventory_valuation,
+            get_inventory_turnover,
+            get_stock_alerts,
             // =================================================
             // Audit
             // =================================================

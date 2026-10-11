@@ -6,7 +6,8 @@ use crate::{
         reports::{
             dto::{
                 CategorySales, DashboardKpis, DateRange, Delta, Granularity, HeatmapCell,
-                PaymentMethodStat, RankBy, ReportFilter, StaleProduct, TimeSeriesPoint, TopProduct,
+                InventoryTurnover, InventoryValuation, PaymentMethodStat, RankBy, ReportFilter,
+                StaleProduct, StockAlert, TimeSeriesPoint, TopProduct,
             },
             range::{change_bps, fill_buckets, previous_range},
             repository,
@@ -182,6 +183,55 @@ pub async fn get_stale_products(
         &timezone,
         filter.category_id,
         filter.limit.unwrap_or(10),
+    )
+    .await
+    .map_err(AppError::from)
+}
+
+pub async fn get_inventory_valuation(
+    pool: &PgPool,
+    filter: ReportFilter,
+) -> Result<InventoryValuation, AppError> {
+    filter.validate()?;
+    repository::fetch_inventory_valuation(pool, filter.category_id)
+        .await
+        .map_err(AppError::from)
+}
+
+pub async fn get_inventory_turnover(
+    pool: &PgPool,
+    filter: ReportFilter,
+) -> Result<InventoryTurnover, AppError> {
+    filter.validate()?;
+    let (timezone, _) = resolve_timezone_and_decimals(pool).await?;
+    let range = DateRange {
+        from: filter.date_from,
+        to: filter.date_to,
+    };
+    let range_days = (range.to - range.from).num_days() + 1;
+    repository::fetch_inventory_turnover(pool, &range, &timezone, range_days, filter.category_id)
+        .await
+        .map_err(AppError::from)
+}
+
+pub async fn get_stock_alerts(
+    pool: &PgPool,
+    filter: ReportFilter,
+) -> Result<Vec<StockAlert>, AppError> {
+    filter.validate()?;
+    let (timezone, _) = resolve_timezone_and_decimals(pool).await?;
+    let range = DateRange {
+        from: filter.date_from,
+        to: filter.date_to,
+    };
+    let range_days = (range.to - range.from).num_days() + 1;
+    repository::fetch_stock_alerts(
+        pool,
+        &range,
+        &timezone,
+        range_days,
+        filter.category_id,
+        filter.limit.unwrap_or(25),
     )
     .await
     .map_err(AppError::from)

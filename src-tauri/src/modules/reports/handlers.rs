@@ -5,8 +5,8 @@ use crate::{
     errors::app_error::AppError,
     modules::reports::{
         dto::{
-            CategorySales, DashboardKpis, HeatmapCell, PaymentMethodStat, ReportFilter,
-            StaleProduct, TimeSeriesPoint, TopProduct,
+            CategorySales, DashboardKpis, HeatmapCell, InventoryTurnover, InventoryValuation,
+            PaymentMethodStat, ReportFilter, StaleProduct, StockAlert, TimeSeriesPoint, TopProduct,
         },
         service,
     },
@@ -78,6 +78,36 @@ pub async fn get_stale_products(
     filter: ReportFilter,
 ) -> Result<Vec<StaleProduct>, String> {
     service::get_stale_products(&pool, filter)
+        .await
+        .map_err(|error: AppError| error.to_string())
+}
+
+#[tauri::command]
+pub async fn get_inventory_valuation(
+    pool: State<'_, DbPool>,
+    filter: ReportFilter,
+) -> Result<InventoryValuation, String> {
+    service::get_inventory_valuation(&pool, filter)
+        .await
+        .map_err(|error: AppError| error.to_string())
+}
+
+#[tauri::command]
+pub async fn get_inventory_turnover(
+    pool: State<'_, DbPool>,
+    filter: ReportFilter,
+) -> Result<InventoryTurnover, String> {
+    service::get_inventory_turnover(&pool, filter)
+        .await
+        .map_err(|error: AppError| error.to_string())
+}
+
+#[tauri::command]
+pub async fn get_stock_alerts(
+    pool: State<'_, DbPool>,
+    filter: ReportFilter,
+) -> Result<Vec<StockAlert>, String> {
+    service::get_stock_alerts(&pool, filter)
         .await
         .map_err(|error: AppError| error.to_string())
 }

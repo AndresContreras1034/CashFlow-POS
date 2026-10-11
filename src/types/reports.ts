@@ -113,3 +113,48 @@ export interface StaleProduct {
   cost_missing: boolean;
   days_since_last_sale: number | null;
 }
+
+export interface CategoryValuation {
+  category_id: number;
+  category_name: string;
+  units: number;
+  value_at_cost: number;
+  potential_sale_value: number;
+  share_bps: number;
+  variants_without_cost: number;
+}
+
+export interface InventoryValuation {
+  value_at_cost: number;
+  potential_sale_value: number;
+  potential_margin_bps: number | null;
+  variants_valued: number;
+  variants_without_cost: number;
+  negative_stock_variants: number;
+  units_in_stock: number;
+  by_category: CategoryValuation[];
+}
+
+export interface InventoryTurnover {
+  cogs: number;
+  inventory_value_at_cost: number;
+  turnover_bps: number | null;
+  days_of_inventory: number | null;
+  range_days: number;
+  uncosted_items: number;
+}
+
+export type StockStatus = 'low' | 'out_of_stock';
+
+export interface StockAlert {
+  variant_id: number;
+  product_name: string;
+  attributes: unknown;
+  category_name: string;
+  stock: number;
+  stock_min: number;
+  status: StockStatus;
+  units_sold: number;
+  days_of_cover: number | null;
+  suggested_reorder: number;
+}
