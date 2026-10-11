@@ -1,9 +1,13 @@
 import { describe, expect, it } from 'vitest';
 import {
+  agingLabel,
+  debtCategoryLabel,
+  debtUrgencyLabel,
   fillHeatmap,
   formatBps,
   formatDaysOfCover,
   formatDaysSinceSale,
+  formatDueDays,
   formatTurnover,
   formatVariantAttributes,
   stockStatusLabel,
@@ -66,5 +70,24 @@ describe('report formatting helpers', () => {
     expect(formatDaysOfCover(12)).toBe('12 días');
     expect(stockStatusLabel('out_of_stock')).toBe('Agotado');
     expect(stockStatusLabel('low')).toBe('Bajo');
+  });
+
+  it('formats debt due days and labels with the debt catalog wording', () => {
+    expect(formatDueDays(-1)).toBe('hace 1 día');
+    expect(formatDueDays(-12)).toBe('hace 12 días');
+    expect(formatDueDays(0)).toBe('hoy');
+    expect(formatDueDays(1)).toBe('en 1 día');
+    expect(formatDueDays(12)).toBe('en 12 días');
+
+    expect(agingLabel('overdue_1_30')).toBe('Vencidas 1–30 días');
+    expect(agingLabel('no_due_date')).toBe('Sin fecha de vencimiento');
+    expect(debtUrgencyLabel('overdue')).toBe('Vencida');
+    expect(debtUrgencyLabel('due_today')).toBe('Hoy');
+    expect(debtUrgencyLabel('alert')).toBe('Alerta');
+    expect(debtUrgencyLabel('ok')).toBe('Ok');
+    expect(debtCategoryLabel('maintenance')).toBe('Mantenimiento');
+    expect(debtCategoryLabel('business_operation')).toBe('Operación del negocio');
+    expect(debtCategoryLabel('fixed_services')).toBe('Servicios y gastos fijos');
+    expect(debtCategoryLabel('other_obligations')).toBe('Otras obligaciones');
   });
 });

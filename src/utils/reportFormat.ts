@@ -1,4 +1,10 @@
-import type { HeatmapCell, StockStatus } from '../types/reports';
+import type {
+  AgingLabel,
+  DebtCategory,
+  DebtUrgency,
+  HeatmapCell,
+  StockStatus,
+} from '../types/reports';
 import { formatAttributes } from './format';
 
 export function formatBps(bps: number | null): string {
@@ -68,4 +74,43 @@ export function formatDaysOfCover(days: number | null): string {
 
 export function stockStatusLabel(status: StockStatus): string {
   return status === 'out_of_stock' ? 'Agotado' : 'Bajo';
+}
+
+export function formatDueDays(days: number): string {
+  if (days < 0) return `hace ${new Intl.NumberFormat('es-CO').format(Math.abs(days))} ${Math.abs(days) === 1 ? 'día' : 'días'}`;
+  if (days === 0) return 'hoy';
+  return `en ${new Intl.NumberFormat('es-CO').format(days)} ${days === 1 ? 'día' : 'días'}`;
+}
+
+export function agingLabel(label: AgingLabel): string {
+  const labels: Record<AgingLabel, string> = {
+    not_due: 'No vencidas',
+    overdue_1_30: 'Vencidas 1–30 días',
+    overdue_31_60: 'Vencidas 31–60 días',
+    overdue_61_90: 'Vencidas 61–90 días',
+    overdue_90_plus: 'Vencidas más de 90 días',
+    no_due_date: 'Sin fecha de vencimiento',
+  };
+  return labels[label];
+}
+
+export function debtUrgencyLabel(urgency: DebtUrgency): string {
+  const labels: Record<DebtUrgency, string> = {
+    none: '—',
+    ok: 'Ok',
+    alert: 'Alerta',
+    due_today: 'Hoy',
+    overdue: 'Vencida',
+  };
+  return labels[urgency];
+}
+
+export function debtCategoryLabel(category: DebtCategory): string {
+  const labels: Record<DebtCategory, string> = {
+    maintenance: 'Mantenimiento',
+    business_operation: 'Operación del negocio',
+    fixed_services: 'Servicios y gastos fijos',
+    other_obligations: 'Otras obligaciones',
+  };
+  return labels[category];
 }

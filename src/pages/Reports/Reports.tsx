@@ -23,6 +23,11 @@ const InventoryTab = lazy(() =>
     default: module.InventoryTab,
   })),
 );
+const PayablesTab = lazy(() =>
+  import('../../components/reports/PayablesTab').then(module => ({
+    default: module.PayablesTab,
+  })),
+);
 
 const PRESETS: Array<{ id: ReportRangePreset; label: string }> = [
   { id: 'today', label: 'Hoy' },
@@ -59,12 +64,14 @@ export default function Reports() {
     granularity: 'day',
     compare_previous: false,
   }));
-  const [activeTab, setActiveTab] = useState<'summary' | 'products' | 'inventory'>('summary');
+  const [activeTab, setActiveTab] = useState<'summary' | 'products' | 'inventory' | 'payables'>('summary');
   const [categoryId, setCategoryId] = useState<number | null>(null);
   const [rankBy, setRankBy] = useState<'units' | 'revenue' | 'profit'>('revenue');
   const [productLimit, setProductLimit] = useState(10);
   const [inventoryCategoryId, setInventoryCategoryId] = useState<number | null>(null);
   const [alertLimit, setAlertLimit] = useState(25);
+  const [creditorLimit, setCreditorLimit] = useState(10);
+  const [dueLimit, setDueLimit] = useState(25);
 
   const applyPreset = (nextPreset: ReportRangePreset) => {
     if (!today) return;
@@ -191,6 +198,17 @@ export default function Reports() {
         >
           Inventario
         </button>
+        <button
+          type="button"
+          role="tab"
+          id="reports-tab-payables"
+          aria-selected={activeTab === 'payables'}
+          aria-controls="reports-panel-payables"
+          className={activeTab === 'payables' ? 'reports-tab--active' : ''}
+          onClick={() => setActiveTab('payables')}
+        >
+          Obligaciones
+        </button>
       </div>
 
       {activeTab === 'summary' ? (
@@ -223,7 +241,7 @@ export default function Reports() {
             />
           </Suspense>
         </div>
-      ) : (
+      ) : activeTab === 'inventory' ? (
         <div
           id="reports-panel-inventory"
           role="tabpanel"
@@ -237,6 +255,23 @@ export default function Reports() {
               onCategoryIdChange={setInventoryCategoryId}
               alertLimit={alertLimit}
               onAlertLimitChange={setAlertLimit}
+            />
+          </Suspense>
+        </div>
+      ) : (
+        <div
+          id="reports-panel-payables"
+          role="tabpanel"
+          aria-labelledby="reports-tab-payables"
+          className="reports-tab-panel"
+        >
+          <Suspense fallback={<p className="reports-empty">Cargando obligaciones…</p>}>
+            <PayablesTab
+              filter={filter}
+              creditorLimit={creditorLimit}
+              onCreditorLimitChange={setCreditorLimit}
+              dueLimit={dueLimit}
+              onDueLimitChange={setDueLimit}
             />
           </Suspense>
         </div>

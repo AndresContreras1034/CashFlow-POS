@@ -4,7 +4,11 @@ import type {
   HeatmapCell,
   InventoryTurnover,
   InventoryValuation,
+  AgingBucket,
   PaymentMethodStat,
+  PayablesSummary,
+  TopCreditor,
+  UpcomingDue,
   ReportFilter,
   CategorySales,
   StaleProduct,
@@ -53,4 +57,20 @@ export function getInventoryTurnover(filter: ReportFilter): Promise<InventoryTur
 
 export function getStockAlerts(filter: ReportFilter): Promise<StockAlert[]> {
   return invoke('get_stock_alerts', { filter });
+}
+
+export function getPayablesSummary(filter: ReportFilter): Promise<PayablesSummary> {
+  return invoke('get_payables_summary', { filter });
+}
+
+export function getPayablesAging(filter: ReportFilter): Promise<AgingBucket[]> {
+  return invoke('get_payables_aging', { filter });
+}
+
+export function getTopCreditors(filter: ReportFilter): Promise<TopCreditor[]> {
+  return invoke('get_top_creditors', { filter });
+}
+
+export function getUpcomingDues(filter: ReportFilter): Promise<UpcomingDue[]> {
+  return invoke('get_upcoming_dues', { filter });
 }

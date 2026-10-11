@@ -200,7 +200,7 @@ export type AgingLabel =
   | 'overdue_1_30'
   | 'overdue_31_60'
   | 'overdue_61_90'
-  | 'overdue90_plus'
+  | 'overdue_90_plus'
   | 'no_due_date';
 
 export interface AgingBucket {
