@@ -197,9 +197,9 @@ export interface UrgencyBucket {
 
 export type AgingLabel =
   | 'not_due'
-  | 'overdue1to30'
-  | 'overdue31to60'
-  | 'overdue61to90'
+  | 'overdue_1_30'
+  | 'overdue_31_60'
+  | 'overdue_61_90'
   | 'overdue90_plus'
   | 'no_due_date';
 

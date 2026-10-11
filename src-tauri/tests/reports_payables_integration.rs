@@ -111,13 +111,15 @@ async fn payables_summary_excludes_voided_debts_and_payments_and_reconciles_with
         &pool,
         "Partial",
         2_000,
-        from,
+        from - Duration::days(3),
         Some(current + Duration::days(3)),
         DebtCategory::BusinessOperation,
         false,
     )
     .await;
+    add_payment(&pool, partial, 100, from - Duration::days(1), false).await;
     add_payment(&pool, partial, 200, current, false).await;
+    add_payment(&pool, partial, 300, current + Duration::days(1), false).await;
 
     let overdue = add_debt(
         &pool,
@@ -155,15 +157,15 @@ async fn payables_summary_excludes_voided_debts_and_payments_and_reconciles_with
 
     let filter = report_filter(from, current);
     let report = service::get_payables_summary(&pool, filter).await.unwrap();
-    assert_eq!(report.pending_total, 5_700);
+    assert_eq!(report.pending_total, 5_300);
     assert_eq!(report.overdue_total, 2_900);
-    assert_eq!(report.due_soon_total, 1_800);
+    assert_eq!(report.due_soon_total, 1_400);
     assert_eq!(report.active_count, 3);
     assert_eq!(report.overdue_count, 1);
     assert_eq!(report.due_soon_count, 1);
     assert_eq!(report.paid_in_range, 4_300);
     assert_eq!(report.payments_in_range_count, 3);
-    assert_eq!(report.issued_in_range, 7_000);
+    assert_eq!(report.issued_in_range, 5_000);
     for (id, status) in [
         (pending, "pending"),
         (partial, "partially_paid"),
@@ -189,6 +191,18 @@ async fn payables_summary_excludes_voided_debts_and_payments_and_reconciles_with
     assert_eq!(report.active_count, summary.active_count);
     assert_eq!(report.overdue_count, summary.overdue_count);
     assert_eq!(report.due_soon_count, summary.due_soon_count);
+    assert_eq!(
+        report
+            .by_urgency
+            .iter()
+            .map(|bucket| (bucket.urgency, bucket.count, bucket.balance_total))
+            .collect::<Vec<_>>(),
+        vec![
+            (DebtUrgency::Ok, 1, 1_000),
+            (DebtUrgency::Alert, 1, 1_400),
+            (DebtUrgency::Overdue, 1, 2_900),
+        ]
+    );
 
     let maintenance = report
         .by_category
@@ -198,7 +212,7 @@ async fn payables_summary_excludes_voided_debts_and_payments_and_reconciles_with
     assert_eq!(maintenance.count, 2);
     assert_eq!(maintenance.balance_total, 3_900);
     assert_eq!(maintenance.overdue_total, 2_900);
-    assert_eq!(maintenance.share_bps, 6_842);
+    assert_eq!(maintenance.share_bps, 7_358);
 }
 
 #[sqlx::test(migrations = "./migrations")]

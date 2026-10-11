@@ -243,13 +243,18 @@ pub struct UrgencyBucket {
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
-#[serde(rename_all = "snake_case")]
 pub enum AgingLabel {
+    #[serde(rename = "not_due")]
     NotDue,
+    #[serde(rename = "overdue_1_30")]
     Overdue1to30,
+    #[serde(rename = "overdue_31_60")]
     Overdue31to60,
+    #[serde(rename = "overdue_61_90")]
     Overdue61to90,
+    #[serde(rename = "overdue_90_plus")]
     Overdue90Plus,
+    #[serde(rename = "no_due_date")]
     NoDueDate,
 }
 
@@ -286,7 +291,26 @@ pub struct UpcomingDue {
 
 #[cfg(test)]
 mod tests {
-    use super::{Granularity, RankBy, ReportFilter};
+    use super::{AgingLabel, Granularity, RankBy, ReportFilter};
+
+    #[test]
+    fn aging_labels_serialize_to_their_explicit_api_names() {
+        let labels = [
+            (AgingLabel::NotDue, "not_due"),
+            (AgingLabel::Overdue1to30, "overdue_1_30"),
+            (AgingLabel::Overdue31to60, "overdue_31_60"),
+            (AgingLabel::Overdue61to90, "overdue_61_90"),
+            (AgingLabel::Overdue90Plus, "overdue_90_plus"),
+            (AgingLabel::NoDueDate, "no_due_date"),
+        ];
+
+        for (label, expected) in labels {
+            assert_eq!(
+                serde_json::to_string(&label).unwrap(),
+                format!("\"{expected}\"")
+            );
+        }
+    }
 
     #[test]
     fn report_filter_defaults_to_daily_without_comparison() {
