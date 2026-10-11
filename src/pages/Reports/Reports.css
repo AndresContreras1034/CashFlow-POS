@@ -1,0 +1,331 @@
+.reports-page {
+  display: flex;
+  flex-direction: column;
+  gap: 18px;
+  min-height: 100%;
+  padding: 26px 28px 36px;
+  color: var(--text-primary);
+  font-family: var(--font-sans);
+}
+
+.reports-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.reports-header h1 {
+  margin: 0;
+  font-size: 22px;
+  line-height: 1.2;
+}
+
+.reports-header p,
+.reports-panel-heading p {
+  margin: 6px 0 0;
+  color: var(--text-muted);
+  font-size: 12.5px;
+}
+
+.reports-panel {
+  min-width: 0;
+  padding: 18px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  background: var(--bg-surface);
+}
+
+.reports-filters {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.reports-presets {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 7px;
+}
+
+.reports-preset,
+.reports-filter-controls input,
+.reports-filter-controls select,
+.reports-error button {
+  min-height: 36px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  background: var(--bg-surface);
+  color: var(--text-primary);
+  font: inherit;
+  font-size: 12px;
+}
+
+.reports-preset {
+  padding: 0 11px;
+  cursor: pointer;
+  transition: background var(--transition), border-color var(--transition);
+}
+
+.reports-preset:hover,
+.reports-filter-controls input:hover,
+.reports-filter-controls select:hover {
+  border-color: var(--accent);
+}
+
+.reports-preset--active {
+  border-color: var(--accent);
+  background: var(--accent-dim);
+  color: var(--accent);
+  font-weight: 650;
+}
+
+.reports-filter-controls {
+  display: flex;
+  align-items: flex-end;
+  flex-wrap: wrap;
+  gap: 12px 16px;
+}
+
+.reports-filter-controls > label:not(.reports-compare) {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  color: var(--text-secondary);
+  font-size: 11px;
+  font-weight: 600;
+}
+
+.reports-filter-controls input[type="date"],
+.reports-filter-controls select {
+  box-sizing: border-box;
+  min-width: 148px;
+  padding: 0 9px;
+  outline: none;
+}
+
+.reports-filter-controls select {
+  min-width: 116px;
+}
+
+.reports-compare {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-height: 36px;
+  color: var(--text-secondary);
+  font-size: 12px;
+  cursor: pointer;
+}
+
+.reports-compare input {
+  width: 15px;
+  min-height: auto;
+  height: 15px;
+  accent-color: var(--accent);
+}
+
+.reports-error,
+.reports-warning {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  padding: 12px 15px;
+  border: 1px solid var(--danger);
+  border-radius: var(--radius);
+  background: var(--danger-dim);
+  color: var(--danger);
+  font-size: 13px;
+}
+
+.reports-error button {
+  padding: 0 11px;
+  border-color: currentColor;
+  cursor: pointer;
+  white-space: nowrap;
+}
+
+.reports-loading {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  min-height: 140px;
+  color: var(--text-muted);
+  font-size: 13px;
+}
+
+.reports-spinner {
+  width: 18px;
+  height: 18px;
+  border: 2px solid var(--border);
+  border-top-color: var(--accent);
+  border-radius: 50%;
+  animation: reports-spin 700ms linear infinite;
+}
+
+@keyframes reports-spin {
+  to { transform: rotate(360deg); }
+}
+
+.reports-kpis {
+  display: grid;
+  grid-template-columns: repeat(6, minmax(0, 1fr));
+  gap: 10px;
+}
+
+.reports-kpi {
+  display: flex;
+  min-width: 0;
+  flex-direction: column;
+  gap: 10px;
+  padding: 15px;
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius);
+  background: var(--bg-surface);
+}
+
+.reports-kpi-label {
+  color: var(--text-muted);
+  font-size: 11px;
+  font-weight: 650;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+
+.reports-kpi-value {
+  overflow-wrap: anywhere;
+  color: var(--text-primary);
+  font-size: clamp(16px, 1.6vw, 21px);
+  font-weight: 700;
+}
+
+.reports-delta {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  min-height: 16px;
+  font-size: 11px;
+  font-weight: 600;
+}
+
+.reports-delta--positive {
+  color: var(--success);
+}
+
+.reports-delta--negative {
+  color: var(--danger);
+}
+
+.reports-delta--neutral {
+  color: var(--text-muted);
+}
+
+.reports-warning {
+  align-items: flex-start;
+  flex-direction: column;
+  gap: 4px;
+  border-color: var(--warning);
+  background: var(--warning-dim);
+  color: var(--warning);
+}
+
+.reports-warning span {
+  font-size: 12px;
+}
+
+.reports-summary {
+  display: grid;
+  grid-template-columns: repeat(5, minmax(0, 1fr));
+  gap: 1px;
+  overflow: hidden;
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius);
+  background: var(--border-subtle);
+}
+
+.reports-summary > div {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding: 13px 15px;
+  background: var(--bg-surface);
+}
+
+.reports-summary span {
+  color: var(--text-muted);
+  font-size: 11px;
+}
+
+.reports-summary strong {
+  color: var(--text-primary);
+  font-size: 14px;
+}
+
+.reports-panel-heading {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  margin-bottom: 14px;
+}
+
+.reports-panel-heading h2 {
+  margin: 0;
+  color: var(--text-primary);
+  font-size: 14px;
+  font-weight: 650;
+}
+
+.reports-chart-grid {
+  display: grid;
+  grid-template-columns: minmax(240px, 0.8fr) minmax(0, 1.4fr);
+  gap: 14px;
+}
+
+.reports-empty-state {
+  padding: 16px;
+  border: 1px dashed var(--border);
+  border-radius: var(--radius);
+  color: var(--text-muted);
+  font-size: 13px;
+  text-align: center;
+}
+
+@media (max-width: 1200px) {
+  .reports-kpis {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
+}
+
+@media (max-width: 760px) {
+  .reports-page {
+    padding: 18px 14px 28px;
+  }
+
+  .reports-kpis {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .reports-summary {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .reports-summary > div:last-child {
+    grid-column: 1 / -1;
+  }
+
+  .reports-chart-grid {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .reports-error {
+    align-items: flex-start;
+    flex-direction: column;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .reports-spinner {
+    animation-duration: 1.4s;
+  }
+}

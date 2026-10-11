@@ -12,6 +12,7 @@ import Cash from '../pages/Cash/Cash';
 import Sales from '../pages/Sales/Sales';
 import SalesHistory from '../pages/SalesHistory/SalesHistory';
 import { StocktakePage } from '../pages/Stocktake/Stocktake';
+import Reports from '../pages/Reports/Reports';
 
 const Placeholder: React.FC<{ name: string }> = ({ name }) => (
   <div
@@ -71,10 +72,7 @@ export const AppRouter: React.FC = () => (
         />
 
         {/* Reportes */}
-        <Route
-          path="/reports"
-          element={<Placeholder name="Reportes" />}
-        />
+        <Route path="/reports" element={<Reports />} />
 
         {/* Auditoría */}
         <Route path="/audit" element={<Audit />} />
