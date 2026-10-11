@@ -38,6 +38,9 @@ export interface SalesKpis {
   refunded_count: number;
   courtesy_count: number;
   courtesy_cost: number;
+  uncosted_tickets: number;
+  profit_base_net_sales: number;
+  courtesy_value: number;
 }
 
 export interface DashboardKpis {
