@@ -11,6 +11,24 @@ export interface ReportDateRange {
   date_to: string;
 }
 
+export function validateReportRange(from: string, to: string): string | null {
+  if (!from || !to) return 'Selecciona las dos fechas del período.';
+
+  const isValidDate = (value: string): boolean => {
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(value)) return false;
+    const parsed = new Date(`${value}T00:00:00Z`);
+    return Number.isFinite(parsed.getTime()) && parsed.toISOString().slice(0, 10) === value;
+  };
+  if (!isValidDate(from) || !isValidDate(to)) return 'Ingresa fechas válidas.';
+  if (from > to) return 'La fecha Desde no puede ser posterior a Hasta.';
+
+  const inclusiveDays = Math.round(
+    (parseDate(to).getTime() - parseDate(from).getTime()) / 86_400_000,
+  ) + 1;
+  if (inclusiveDays > 366) return 'El rango no puede superar 366 días.';
+  return null;
+}
+
 const parseDate = (value: string): Date => {
   const [year, month, day] = value.split('-').map(Number);
   return new Date(Date.UTC(year, month - 1, day));

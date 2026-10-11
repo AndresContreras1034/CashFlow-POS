@@ -3,6 +3,7 @@ import type { Granularity, ReportFilter } from '../../types/reports';
 import { useSettings } from '../../context/AppContext';
 import {
   getReportRange,
+  validateReportRange,
   type ReportRangePreset,
 } from '../../utils/reportRanges';
 import './Reports.css';
@@ -72,6 +73,7 @@ export default function Reports() {
   const [alertLimit, setAlertLimit] = useState(25);
   const [creditorLimit, setCreditorLimit] = useState(10);
   const [dueLimit, setDueLimit] = useState(25);
+  const rangeError = validateReportRange(filter.date_from, filter.date_to);
 
   const applyPreset = (nextPreset: ReportRangePreset) => {
     if (!today) return;
@@ -211,7 +213,9 @@ export default function Reports() {
         </button>
       </div>
 
-      {activeTab === 'summary' ? (
+      {rangeError ? (
+        <div className="reports-error" role="alert">{rangeError}</div>
+      ) : activeTab === 'summary' ? (
         <div
           id="reports-panel-summary"
           role="tabpanel"

@@ -1,5 +1,9 @@
 import { describe, expect, it } from 'vitest';
-import { getPreviousReportRange, getReportRange } from './reportRanges';
+import {
+  getPreviousReportRange,
+  getReportRange,
+  validateReportRange,
+} from './reportRanges';
 
 describe('report date ranges', () => {
   it('returns a single local day for the today preset', () => {
@@ -47,5 +51,15 @@ describe('report date ranges', () => {
       date_from: '2025-12-01',
       date_to: '2025-12-31',
     });
+  });
+
+  it('validates range presence, date order and the backend maximum', () => {
+    expect(validateReportRange('', '2026-10-11')).toBe('Selecciona las dos fechas del período.');
+    expect(validateReportRange('2026-10-12', '2026-10-11'))
+      .toBe('La fecha Desde no puede ser posterior a Hasta.');
+    expect(validateReportRange('2026-02-30', '2026-03-01')).toBe('Ingresa fechas válidas.');
+    expect(validateReportRange('2026-01-01', '2027-01-02'))
+      .toBe('El rango no puede superar 366 días.');
+    expect(validateReportRange('2026-01-01', '2027-01-01')).toBeNull();
   });
 });
