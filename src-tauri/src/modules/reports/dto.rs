@@ -1,6 +1,7 @@
 use chrono::NaiveDate;
 use serde::{Deserialize, Serialize};
 
+use crate::modules::debts::models::{DebtCategory, DebtUrgency};
 use crate::modules::inventory::models::StockStatus;
 use crate::modules::sales::models::PaymentMethod;
 
@@ -208,6 +209,79 @@ pub struct StockAlert {
     pub days_of_cover: Option<i64>,
     /// Expected demand over the selected range, less current stock, floored at zero.
     pub suggested_reorder: i64,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct PayablesSummary {
+    pub pending_total: i64,
+    pub overdue_total: i64,
+    pub due_soon_total: i64,
+    pub active_count: i64,
+    pub overdue_count: i64,
+    pub due_soon_count: i64,
+    pub paid_in_range: i64,
+    pub payments_in_range_count: i64,
+    pub issued_in_range: i64,
+    pub by_category: Vec<PayablesByCategory>,
+    pub by_urgency: Vec<UrgencyBucket>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct PayablesByCategory {
+    pub category: DebtCategory,
+    pub count: i64,
+    pub balance_total: i64,
+    pub overdue_total: i64,
+    pub share_bps: i32,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct UrgencyBucket {
+    pub urgency: DebtUrgency,
+    pub count: i64,
+    pub balance_total: i64,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum AgingLabel {
+    NotDue,
+    Overdue1to30,
+    Overdue31to60,
+    Overdue61to90,
+    Overdue90Plus,
+    NoDueDate,
+}
+
+/// Balance actual por antigüedad del vencimiento de deudas activas con saldo.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct AgingBucket {
+    pub label: AgingLabel,
+    pub count: i64,
+    pub balance_total: i64,
+}
+
+/// Creditor names are grouped by exact string; spelling variations stay separate.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct TopCreditor {
+    pub creditor_name: String,
+    pub active_count: i64,
+    pub balance_total: i64,
+    pub overdue_total: i64,
+    pub next_due_on: Option<NaiveDate>,
+}
+
+/// The report filter's category_id is intentionally ignored for payables.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct UpcomingDue {
+    pub debt_id: i32,
+    pub creditor_name: String,
+    pub concept: String,
+    pub category: DebtCategory,
+    pub due_on: NaiveDate,
+    pub balance: i64,
+    pub days_until_due: i32,
+    pub urgency: DebtUrgency,
 }
 
 #[cfg(test)]

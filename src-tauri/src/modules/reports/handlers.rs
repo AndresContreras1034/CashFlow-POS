@@ -5,8 +5,9 @@ use crate::{
     errors::app_error::AppError,
     modules::reports::{
         dto::{
-            CategorySales, DashboardKpis, HeatmapCell, InventoryTurnover, InventoryValuation,
-            PaymentMethodStat, ReportFilter, StaleProduct, StockAlert, TimeSeriesPoint, TopProduct,
+            AgingBucket, CategorySales, DashboardKpis, HeatmapCell, InventoryTurnover,
+            InventoryValuation, PayablesSummary, PaymentMethodStat, ReportFilter, StaleProduct,
+            StockAlert, TimeSeriesPoint, TopCreditor, TopProduct, UpcomingDue,
         },
         service,
     },
@@ -108,6 +109,46 @@ pub async fn get_stock_alerts(
     filter: ReportFilter,
 ) -> Result<Vec<StockAlert>, String> {
     service::get_stock_alerts(&pool, filter)
+        .await
+        .map_err(|error: AppError| error.to_string())
+}
+
+#[tauri::command]
+pub async fn get_payables_summary(
+    pool: State<'_, DbPool>,
+    filter: ReportFilter,
+) -> Result<PayablesSummary, String> {
+    service::get_payables_summary(&pool, filter)
+        .await
+        .map_err(|error: AppError| error.to_string())
+}
+
+#[tauri::command]
+pub async fn get_payables_aging(
+    pool: State<'_, DbPool>,
+    filter: ReportFilter,
+) -> Result<Vec<AgingBucket>, String> {
+    service::get_payables_aging(&pool, filter)
+        .await
+        .map_err(|error: AppError| error.to_string())
+}
+
+#[tauri::command]
+pub async fn get_top_creditors(
+    pool: State<'_, DbPool>,
+    filter: ReportFilter,
+) -> Result<Vec<TopCreditor>, String> {
+    service::get_top_creditors(&pool, filter)
+        .await
+        .map_err(|error: AppError| error.to_string())
+}
+
+#[tauri::command]
+pub async fn get_upcoming_dues(
+    pool: State<'_, DbPool>,
+    filter: ReportFilter,
+) -> Result<Vec<UpcomingDue>, String> {
+    service::get_upcoming_dues(&pool, filter)
         .await
         .map_err(|error: AppError| error.to_string())
 }

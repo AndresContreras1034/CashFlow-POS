@@ -158,3 +158,72 @@ export interface StockAlert {
   days_of_cover: number | null;
   suggested_reorder: number;
 }
+
+export interface PayablesSummary {
+  pending_total: number;
+  overdue_total: number;
+  due_soon_total: number;
+  active_count: number;
+  overdue_count: number;
+  due_soon_count: number;
+  paid_in_range: number;
+  payments_in_range_count: number;
+  issued_in_range: number;
+  by_category: PayablesByCategory[];
+  by_urgency: UrgencyBucket[];
+}
+
+export type DebtCategory =
+  | 'maintenance'
+  | 'business_operation'
+  | 'fixed_services'
+  | 'other_obligations';
+
+export type DebtUrgency = 'none' | 'ok' | 'alert' | 'due_today' | 'overdue';
+
+export interface PayablesByCategory {
+  category: DebtCategory;
+  count: number;
+  balance_total: number;
+  overdue_total: number;
+  share_bps: number;
+}
+
+export interface UrgencyBucket {
+  urgency: DebtUrgency;
+  count: number;
+  balance_total: number;
+}
+
+export type AgingLabel =
+  | 'not_due'
+  | 'overdue1to30'
+  | 'overdue31to60'
+  | 'overdue61to90'
+  | 'overdue90_plus'
+  | 'no_due_date';
+
+export interface AgingBucket {
+  label: AgingLabel;
+  count: number;
+  balance_total: number;
+}
+
+export interface TopCreditor {
+  creditor_name: string;
+  active_count: number;
+  balance_total: number;
+  overdue_total: number;
+  next_due_on: string | null;
+}
+
+export interface UpcomingDue {
+  debt_id: number;
+  creditor_name: string;
+  concept: string;
+  category: DebtCategory;
+  due_on: string;
+  balance: number;
+  days_until_due: number;
+  urgency: DebtUrgency;
+}

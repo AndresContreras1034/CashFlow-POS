@@ -236,6 +236,10 @@ pub fn run() {
             get_inventory_valuation,
             get_inventory_turnover,
             get_stock_alerts,
+            get_payables_summary,
+            get_payables_aging,
+            get_top_creditors,
+            get_upcoming_dues,
             // =================================================
             // Audit
             // =================================================

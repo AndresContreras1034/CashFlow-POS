@@ -4,10 +4,12 @@ use crate::{
     errors::app_error::AppError,
     modules::{
         reports::{
+            debt_report,
             dto::{
-                CategorySales, DashboardKpis, DateRange, Delta, Granularity, HeatmapCell,
-                InventoryTurnover, InventoryValuation, PaymentMethodStat, RankBy, ReportFilter,
-                StaleProduct, StockAlert, TimeSeriesPoint, TopProduct,
+                AgingBucket, CategorySales, DashboardKpis, DateRange, Delta, Granularity,
+                HeatmapCell, InventoryTurnover, InventoryValuation, PayablesSummary,
+                PaymentMethodStat, RankBy, ReportFilter, StaleProduct, StockAlert, TimeSeriesPoint,
+                TopCreditor, TopProduct, UpcomingDue,
             },
             range::{change_bps, fill_buckets, previous_range},
             repository,
@@ -235,6 +237,53 @@ pub async fn get_stock_alerts(
     )
     .await
     .map_err(AppError::from)
+}
+
+pub async fn get_payables_summary(
+    pool: &PgPool,
+    filter: ReportFilter,
+) -> Result<PayablesSummary, AppError> {
+    filter.validate()?;
+    debt_report::fetch_payables_summary(
+        pool,
+        &DateRange {
+            from: filter.date_from,
+            to: filter.date_to,
+        },
+    )
+    .await
+    .map_err(AppError::from)
+}
+
+pub async fn get_payables_aging(
+    pool: &PgPool,
+    filter: ReportFilter,
+) -> Result<Vec<AgingBucket>, AppError> {
+    filter.validate()?;
+    debt_report::fetch_payables_aging(pool)
+        .await
+        .map_err(AppError::from)
+}
+
+pub async fn get_top_creditors(
+    pool: &PgPool,
+    filter: ReportFilter,
+) -> Result<Vec<TopCreditor>, AppError> {
+    filter.validate()?;
+    debt_report::fetch_top_creditors(pool, filter.limit.unwrap_or(10).clamp(1, 100))
+        .await
+        .map_err(AppError::from)
+}
+
+/// Category filters do not apply to debts; the filter is validated for API consistency.
+pub async fn get_upcoming_dues(
+    pool: &PgPool,
+    filter: ReportFilter,
+) -> Result<Vec<UpcomingDue>, AppError> {
+    filter.validate()?;
+    debt_report::fetch_upcoming_dues(pool, filter.limit.unwrap_or(25).clamp(1, 100))
+        .await
+        .map_err(AppError::from)
 }
 
 async fn resolve_timezone_and_decimals(pool: &PgPool) -> Result<(String, u8), AppError> {
