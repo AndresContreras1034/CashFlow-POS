@@ -708,3 +708,5 @@ export interface StocktakeApplyResultDto {
   unchanged: number;
   uncounted: number;
 }
+
+export * from './reports';
