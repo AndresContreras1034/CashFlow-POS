@@ -240,6 +240,7 @@ pub fn run() {
             get_payables_aging,
             get_top_creditors,
             get_upcoming_dues,
+            save_report_csv,
             // =================================================
             // Audit
             // =================================================

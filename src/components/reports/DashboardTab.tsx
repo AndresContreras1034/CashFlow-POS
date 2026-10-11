@@ -18,6 +18,8 @@ import { getPreviousReportRange } from '../../utils/reportRanges';
 import { formatBps } from '../../utils/reportFormat';
 import { PaymentMethodChart } from './PaymentMethodChart';
 import { SalesHeatmap } from './SalesHeatmap';
+import { ReportCsvButton } from './ReportCsvButton';
+import { buildSummaryCsv } from '../../utils/reportExport';
 
 const SalesChart = lazy(() =>
   import('./SalesChart').then(module => ({
@@ -213,6 +215,22 @@ export function DashboardTab({ filter }: DashboardTabProps) {
 
   return (
     <>
+      <ReportCsvButton
+        disabled={loading || !data || !current}
+        buildReport={() => data
+          ? buildSummaryCsv(
+              { dashboard: data.dashboard },
+              {
+                date_from: filter.date_from,
+                date_to: filter.date_to,
+                timezone: settings.timezone,
+                generatedAt: new Date(),
+              },
+              settings.currency_decimals,
+              filter.compare_previous ?? false,
+            )
+          : null}
+      />
       {error && (
         <div className="reports-error" role="alert">
           <span>{error}</span>

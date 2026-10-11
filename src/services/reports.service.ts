@@ -74,3 +74,7 @@ export function getTopCreditors(filter: ReportFilter): Promise<TopCreditor[]> {
 export function getUpcomingDues(filter: ReportFilter): Promise<UpcomingDue[]> {
   return invoke('get_upcoming_dues', { filter });
 }
+
+export function saveReportCsv(filePath: string, contents: string): Promise<void> {
+  return invoke('save_report_csv', { filePath, contents });
+}

@@ -11,6 +11,7 @@ import {
 } from 'recharts';
 import type {
   AgingBucket,
+  PayablesByCategory,
   PayablesSummary,
   ReportFilter,
   TopCreditor,
@@ -30,6 +31,8 @@ import {
   debtUrgencyLabel,
   formatDueDays,
 } from '../../utils/reportFormat';
+import { buildPayablesCsv } from '../../utils/reportExport';
+import { ReportCsvButton } from './ReportCsvButton';
 import './PayablesTab.css';
 
 interface PayablesTabProps {
@@ -48,10 +51,10 @@ interface SectionState<T> {
 
 const AGING_COLORS = [
   'var(--text-muted)',
-  'var(--success)',
   'var(--warning)',
   'var(--warning)',
   'var(--danger)',
+  'color-mix(in srgb, var(--danger) 78%, var(--text-primary))',
   'var(--text-secondary)',
 ];
 
@@ -121,11 +124,15 @@ export function PayablesTab({
 }: PayablesTabProps) {
   const { settings } = useSettings();
   const [summaryRetry, setSummaryRetry] = useState(0);
+  const [categoryRetry, setCategoryRetry] = useState(0);
   const [agingRetry, setAgingRetry] = useState(0);
   const [creditorsRetry, setCreditorsRetry] = useState(0);
   const [duesRetry, setDuesRetry] = useState(0);
   const [summary, setSummary] = useState<SectionState<PayablesSummary>>(
     initialSection<PayablesSummary>(),
+  );
+  const [categories, setCategories] = useState<SectionState<PayablesByCategory[]>>(
+    initialSection<PayablesByCategory[]>(),
   );
   const [aging, setAging] = useState<SectionState<AgingBucket[]>>(
     initialSection<AgingBucket[]>(),
@@ -154,6 +161,24 @@ export function PayablesTab({
       active = false;
     };
   }, [filter.date_from, filter.date_to, summaryRetry]);
+
+  useEffect(() => {
+    let active = true;
+    setCategories({ data: null, loading: true, error: null });
+    getPayablesSummary({
+      date_from: filter.date_from,
+      date_to: filter.date_to,
+    })
+      .then(data => {
+        if (active) setCategories({ data: data.by_category, loading: false, error: null });
+      })
+      .catch(error => {
+        if (active) setCategories({ data: null, loading: false, error: messageFromError(error) });
+      });
+    return () => {
+      active = false;
+    };
+  }, [filter.date_from, filter.date_to, categoryRetry]);
 
   useEffect(() => {
     let active = true;
@@ -214,11 +239,36 @@ export function PayablesTab({
   const money = (amount: number) =>
     formatMoney(amount, settings.currency, settings.currency_decimals);
   const number = (value: number) => new Intl.NumberFormat('es-CO').format(value);
-  const sortedCategories = [...(summary.data?.by_category ?? [])]
+  const sortedCategories = [...(categories.data ?? [])]
     .sort((left, right) => right.balance_total - left.balance_total);
 
   return (
     <div className="reports-payables">
+      <ReportCsvButton
+        disabled={summary.loading || categories.loading || aging.loading || creditors.loading || dues.loading
+          || summary.data === null || categories.data === null || aging.data === null
+          || creditors.data === null || dues.data === null}
+        buildReport={() => (
+          summary.data !== null && categories.data !== null && aging.data !== null
+            && creditors.data !== null && dues.data !== null
+            ? buildPayablesCsv(
+                {
+                  summary: { ...summary.data, by_category: categories.data },
+                  aging: aging.data,
+                  creditors: creditors.data,
+                  dues: dues.data,
+                },
+                {
+                  date_from: filter.date_from,
+                  date_to: filter.date_to,
+                  timezone: settings.timezone,
+                  generatedAt: new Date(),
+                },
+                settings.currency_decimals,
+              )
+            : null
+        )}
+      />
       <section className="reports-panel reports-payables-filters" aria-label="Filtros de obligaciones">
         <label>
           <span>Cantidad de acreedores</span>
@@ -289,7 +339,10 @@ export function PayablesTab({
 
       <section className="reports-panel">
         <div className="reports-panel-heading">
-          <div><h2>Antigüedad del vencimiento</h2></div>
+          <div>
+            <h2>Antigüedad del vencimiento</h2>
+            <p>Foto actual de los saldos pendientes</p>
+          </div>
         </div>
         <SectionStatus
           state={aging}
@@ -361,13 +414,16 @@ export function PayablesTab({
 
       <section className="reports-panel">
         <div className="reports-panel-heading">
-          <div><h2>Por categoría</h2></div>
+          <div>
+            <h2>Por categoría</h2>
+            <p>Foto actual de los saldos</p>
+          </div>
         </div>
         <SectionStatus
-          state={summary}
-          retry={() => setSummaryRetry(value => value + 1)}
+          state={categories}
+          retry={() => setCategoryRetry(value => value + 1)}
           emptyText="No hay obligaciones activas por categoría."
-          isEmpty={data => data.by_category.length === 0}
+          isEmpty={rows => rows.length === 0}
         >
           {() => (
             <div className="reports-table-scroll">
@@ -395,7 +451,7 @@ export function PayablesTab({
         <div className="reports-panel-heading">
           <div>
             <h2>Principales acreedores</h2>
-            <p>Los nombres se agrupan tal como están escritos</p>
+            <p>Foto actual · Los nombres se agrupan tal como están escritos</p>
           </div>
         </div>
         <SectionStatus
@@ -431,7 +487,10 @@ export function PayablesTab({
 
       <section className="reports-panel">
         <div className="reports-panel-heading">
-          <div><h2>Próximos vencimientos</h2></div>
+          <div>
+            <h2>Próximos vencimientos</h2>
+            <p>Demanda calculada entre {filter.date_from} y {filter.date_to}</p>
+          </div>
         </div>
         <SectionStatus
           state={dues}

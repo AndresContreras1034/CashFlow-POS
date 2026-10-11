@@ -152,3 +152,10 @@ pub async fn get_upcoming_dues(
         .await
         .map_err(|error: AppError| error.to_string())
 }
+
+#[tauri::command]
+pub async fn save_report_csv(file_path: String, contents: String) -> Result<(), String> {
+    tokio::fs::write(file_path, contents)
+        .await
+        .map_err(|error| format!("No se pudo guardar el archivo CSV: {error}"))
+}

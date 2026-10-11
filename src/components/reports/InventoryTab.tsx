@@ -30,6 +30,8 @@ import {
   formatVariantAttributes,
   stockStatusLabel,
 } from '../../utils/reportFormat';
+import { buildInventoryCsv } from '../../utils/reportExport';
+import { ReportCsvButton } from './ReportCsvButton';
 import './InventoryTab.css';
 
 interface InventoryTabProps {
@@ -211,6 +213,28 @@ export function InventoryTab({
 
   return (
     <div className="reports-inventory">
+      <ReportCsvButton
+        disabled={valuation.loading || turnover.loading || alerts.loading
+          || valuation.data === null || turnover.data === null || alerts.data === null}
+        buildReport={() => (
+          valuation.data !== null && turnover.data !== null && alerts.data !== null
+            ? buildInventoryCsv(
+                {
+                  valuation: valuation.data,
+                  turnover: turnover.data,
+                  alerts: alerts.data,
+                },
+                {
+                  date_from: filter.date_from,
+                  date_to: filter.date_to,
+                  timezone: settings.timezone,
+                  generatedAt: new Date(),
+                },
+                settings.currency_decimals,
+              )
+            : null
+        )}
+      />
       <section className="reports-panel reports-products-filters" aria-label="Filtros de inventario">
         <label>
           <span>Categoría</span>

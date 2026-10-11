@@ -25,6 +25,8 @@ import {
 import { listCategories } from '../../services/inventory.service';
 import { formatMoney } from '../../utils/format';
 import { formatBps, formatDaysSinceSale, formatVariantAttributes } from '../../utils/reportFormat';
+import { buildProductsCsv } from '../../utils/reportExport';
+import { ReportCsvButton } from './ReportCsvButton';
 import './ProductsTab.css';
 
 interface ProductsTabProps {
@@ -198,6 +200,31 @@ export function ProductsTab({
 
   return (
     <div className="reports-products">
+      <ReportCsvButton
+        disabled={
+          topProducts.loading || categorySales.loading || staleProducts.loading
+          || topProducts.rows === null || categorySales.rows === null || staleProducts.rows === null
+          || !(topProducts.rows.length + categorySales.rows.length + staleProducts.rows.length)
+        }
+        buildReport={() => (
+          topProducts.rows !== null && categorySales.rows !== null && staleProducts.rows !== null
+            ? buildProductsCsv(
+                {
+                  topProducts: topProducts.rows,
+                  categories: categorySales.rows,
+                  staleProducts: staleProducts.rows,
+                },
+                {
+                  date_from: filter.date_from,
+                  date_to: filter.date_to,
+                  timezone: settings.timezone,
+                  generatedAt: new Date(),
+                },
+                settings.currency_decimals,
+              )
+            : null
+        )}
+      />
       <section className="reports-panel reports-products-filters" aria-label="Filtros de productos">
         <label>
           <span>Categoría</span>
