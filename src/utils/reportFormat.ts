@@ -1,4 +1,5 @@
 import type { HeatmapCell } from '../types/reports';
+import { formatAttributes } from './format';
 
 export function formatBps(bps: number | null): string {
   if (bps === null) return '—';
@@ -27,4 +28,26 @@ export function fillHeatmap(cells: HeatmapCell[]): HeatmapCell[][] {
   }
 
   return matrix;
+}
+
+export function formatVariantAttributes(attributes: unknown): string {
+  if (
+    typeof attributes !== 'object'
+    || attributes === null
+    || Array.isArray(attributes)
+  ) {
+    return '';
+  }
+
+  const stringAttributes = Object.fromEntries(
+    Object.entries(attributes).filter(
+      (entry): entry is [string, string] => typeof entry[1] === 'string',
+    ),
+  );
+  return formatAttributes(stringAttributes);
+}
+
+export function formatDaysSinceSale(days: number | null): string {
+  if (days === null) return 'Nunca vendido';
+  return `${new Intl.NumberFormat('es-CO').format(days)} ${days === 1 ? 'día' : 'días'}`;
 }

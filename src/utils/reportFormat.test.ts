@@ -1,5 +1,10 @@
 import { describe, expect, it } from 'vitest';
-import { fillHeatmap, formatBps } from './reportFormat';
+import {
+  fillHeatmap,
+  formatBps,
+  formatDaysSinceSale,
+  formatVariantAttributes,
+} from './reportFormat';
 
 describe('report formatting helpers', () => {
   it('formats basis-point values with a sign and Spanish decimal separator', () => {
@@ -30,5 +35,19 @@ describe('report formatting helpers', () => {
       gross_sales: 0,
     });
     expect(cells[6][23].gross_sales).toBe(8_000);
+  });
+
+  it('formats variant attributes defensively and reuses inventory labels', () => {
+    expect(formatVariantAttributes({ volumen: '100ml' })).toBe('Volumen: 100ml');
+    expect(formatVariantAttributes({ talla: 4, color: 'Azul' })).toBe('Color: Azul');
+    expect(formatVariantAttributes(null)).toBe('');
+    expect(formatVariantAttributes({})).toBe('');
+    expect(formatVariantAttributes('100ml')).toBe('');
+  });
+
+  it('formats days since last sale including never sold', () => {
+    expect(formatDaysSinceSale(null)).toBe('Nunca vendido');
+    expect(formatDaysSinceSale(1)).toBe('1 día');
+    expect(formatDaysSinceSale(12)).toBe('12 días');
   });
 });

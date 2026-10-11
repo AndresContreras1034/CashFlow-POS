@@ -4,6 +4,9 @@ import type {
   HeatmapCell,
   PaymentMethodStat,
   ReportFilter,
+  CategorySales,
+  StaleProduct,
+  TopProduct,
   TimeSeriesPoint,
 } from '../types/reports';
 
@@ -23,4 +26,16 @@ export function getSalesByPaymentMethod(
 
 export function getSalesHeatmap(filter: ReportFilter): Promise<HeatmapCell[]> {
   return invoke('get_sales_heatmap', { filter });
+}
+
+export function getTopProducts(filter: ReportFilter): Promise<TopProduct[]> {
+  return invoke('get_top_products', { filter });
+}
+
+export function getSalesByCategory(filter: ReportFilter): Promise<CategorySales[]> {
+  return invoke('get_sales_by_category', { filter });
+}
+
+export function getStaleProducts(filter: ReportFilter): Promise<StaleProduct[]> {
+  return invoke('get_stale_products', { filter });
 }
