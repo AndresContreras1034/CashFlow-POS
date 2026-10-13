@@ -1,0 +1,1838 @@
+==== GIT ====
+R  src-tauri/src/modules/debts/Catalog.rs -> src-tauri/src/modules/debts/catalog.rs
+?? salida_etapa3.txt
+f9ae0f2 chore(reports): clippy fixes
+0a2db68 docs(reports): business rules
+6f8aabb fix(reports): empty states and range validation
+aeffe74 test(reports): cross-report reconciliation
+f57f3e7 fix(reports): validate CSV save command
+588e243 feat(reports): CSV export
+2165477 feat(reports): payables tab UI
+bbf850f fix(reports): explicit aging labels and payables range tests
+==== ESTADO ACTUAL DE LAS RUTAS DE DEUDAS ====
+ El volumen de la unidad C no tiene etiqueta.
+ El número de serie del volumen es: 5ACB-20DB
+
+ Directorio de C:\Users\AndresContreras\Downloads\CashFlow-POS\src\pages\Debts
+
+06/09/2026  17:12    <DIR>          .
+08/10/2026  21:30    <DIR>          ..
+06/09/2026  17:12                 0 Debts.css
+06/09/2026  17:12                 0 Debts.tsx
+               2 archivos              0 bytes
+               2 dirs  139.545.227.264 bytes libres
+ El volumen de la unidad C no tiene etiqueta.
+ El número de serie del volumen es: 5ACB-20DB
+
+ Directorio de C:\Users\AndresContreras\Downloads\CashFlow-POS\src\components\debts
+
+06/09/2026  17:12    <DIR>          .
+08/10/2026  21:26    <DIR>          ..
+06/09/2026  17:12                 0 DebtList.css
+06/09/2026  17:12                 0 DebtList.tsx
+06/09/2026  17:12                 0 PaymentForm.css
+06/09/2026  17:12                 0 PaymentForm.tsx
+               4 archivos              0 bytes
+               2 dirs  139.545.227.264 bytes libres
+ El volumen de la unidad C no tiene etiqueta.
+ El número de serie del volumen es: 5ACB-20DB
+
+ Directorio de C:\Users\AndresContreras\Downloads\CashFlow-POS\src\services
+
+06/09/2026  17:12                 0 debts.service.ts
+               1 archivos              0 bytes
+               0 dirs  139.545.227.264 bytes libres
+==== ANCLAS DEL PARCHE DE AUDITORIA ====
+src\types\index.ts:656:  | 'system';
+src\utils\audit.ts:27:  'import', 'licensing', 'billing', 'system',
+69:  'import.execute': 'Importación ejecutada',
+82:  inventory_import: 'Importación de inventario',
+103:  unit_cost: 'Costo unitario', reason: 'Motivo',
+138:  method: { cash: 'Efectivo', card: 'Tarjeta', transfer: 'Transferencia' },
+349:  inventory: ['price', 'cost', 'unit_cost'],
+==== CONFIG ====
+{
+  "compilerOptions": {
+    "target": "ES2020",
+    "useDefineForClassFields": true,
+    "lib": ["ES2020", "DOM", "DOM.Iterable"],
+    "module": "ESNext",
+    "skipLibCheck": true,
+
+    /* Bundler mode */
+    "moduleResolution": "bundler",
+    "allowImportingTsExtensions": true,
+    "resolveJsonModule": true,
+    "isolatedModules": true,
+    "noEmit": true,
+    "jsx": "react-jsx",
+
+    /* Linting */
+    "strict": true,
+    "noUnusedLocals": true,
+    "noUnusedParameters": true,
+    "noFallthroughCasesInSwitch": true
+  },
+  "include": ["src"],
+  "references": [{ "path": "./tsconfig.node.json" }]
+}
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap');
+
+:root {
+  color-scheme: light;
+
+  --bg-base: #F4F4F2;
+  --bg-surface: #FFFFFF;
+  --bg-elevated: #FFFFFF;
+  --bg-hover: #F2F4F7;
+  --sidebar-bg: #1F2933;
+
+  --border: #D0D5DD;
+  --border-subtle: #EAECF0;
+
+  --text-primary: #1F2933;
+  --text-secondary: #667085;
+  --text-muted: #667085;
+
+  --accent: #334155;
+  --accent-hover: #1E293B;
+
+  --success: #3F7D58;
+  --warning: #B7791F;
+  --danger: #B54747;
+  --info: #475569;
+  --overlay-bg: rgba(31, 41, 51, 0.48);
+
+  --accent-dim: color-mix(in srgb, var(--accent) 12%, transparent);
+  --success-dim: color-mix(in srgb, var(--success) 12%, transparent);
+  --warning-dim: color-mix(in srgb, var(--warning) 12%, transparent);
+  --danger-dim: color-mix(in srgb, var(--danger) 12%, transparent);
+  --stock-ok: var(--success);
+  --stock-ok-dim: var(--success-dim);
+  --stock-low: var(--warning);
+  --stock-low-dim: var(--warning-dim);
+  --stock-out: var(--danger);
+  --stock-out-dim: var(--danger-dim);
+
+  --font-sans: 'Inter', system-ui, sans-serif;
+  --font-mono: 'JetBrains Mono', 'Fira Code', monospace;
+
+  --radius-sm: 4px;
+  --radius: 6px;
+  --radius-lg: 6px;
+
+  --shadow-sm: none;
+  --shadow: none;
+  --shadow-lg: none;
+
+  --sidebar-width: 220px;
+  --transition: 150ms ease;
+}
+
+:root[data-theme="violet"] {
+  --bg-base: #F5F3FA; --bg-surface: #FFFFFF; --bg-elevated: #FFFFFF; --bg-hover: #EFEBF7;
+  --sidebar-bg: #2E2A47;
+  --border: #D9D3E8; --border-subtle: #EBE7F3;
+  --text-primary: #231F33; --text-secondary: #5E5878; --text-muted: #6B6585;
+  --accent: #6D4FC2; --accent-hover: #5A3FA6;
+  --info: #5E5878;
+  --overlay-bg: rgba(35, 31, 51, 0.5);
+}
+
+:root[data-theme="breeze"] {
+  --bg-base: #F0F6F4; --bg-surface: #FFFFFF; --bg-elevated: #FFFFFF; --bg-hover: #E8F1EE;
+  --sidebar-bg: #1E3A38;
+  --border: #CFDEDA; --border-subtle: #E4EEEB;
+  --text-primary: #17302D; --text-secondary: #4D6663; --text-muted: #5A726F;
+  --accent: #0F766E; --accent-hover: #0B5F58;
+  --info: #4D6663;
+  --overlay-bg: rgba(23, 48, 45, 0.5);
+}
+
+:root[data-theme="parchment"] {
+  --bg-base: #F4ECDD; --bg-surface: #FBF6EA; --bg-elevated: #FBF6EA; --bg-hover: #EFE5D0;
+  --sidebar-bg: #3B2F26;
+  --border: #DACBAE; --border-subtle: #E8DDC5;
+  --text-primary: #3A2E22; --text-secondary: #6B5A45; --text-muted: #75644E;
+  --accent: #8A4B2A; --accent-hover: #70391D;
+  --warning: #A5681A; --info: #6B5A45;
+  --overlay-bg: rgba(58, 46, 34, 0.5);
+}
+
+:root[data-theme="coral"] {
+  --bg-base: #FBF3F0; --bg-surface: #FFFFFF; --bg-elevated: #FFFFFF; --bg-hover: #F7E9E4;
+  --sidebar-bg: #3F2A2E;
+  --border: #EBD3CC; --border-subtle: #F3E3DE;
+  --text-primary: #2E1F20; --text-secondary: #6E5558; --text-muted: #7A5F62;
+  --accent: #C2410C; --accent-hover: #9A3412;
+  --info: #6E5558;
+  --overlay-bg: rgba(46, 31, 32, 0.5);
+}
+
+:root[data-theme="ocean"] {
+  --bg-base: #F1F5FA; --bg-surface: #FFFFFF; --bg-elevated: #FFFFFF; --bg-hover: #E9EFF7;
+  --sidebar-bg: #14304F;
+  --border: #CCD8E6; --border-subtle: #E3EAF3;
+  --text-primary: #14243A; --text-secondary: #4F6178; --text-muted: #5B6C82;
+  --accent: #1D5FB8; --accent-hover: #174C93;
+  --info: #4F6178;
+  --overlay-bg: rgba(20, 36, 58, 0.5);
+}
+
+:root[data-theme="forest"] {
+  --bg-base: #F2F5EE; --bg-surface: #FDFEFB; --bg-elevated: #FDFEFB; --bg-hover: #E9EFE1;
+  --sidebar-bg: #263A27;
+  --border: #D0DAC4; --border-subtle: #E3EADA;
+  --text-primary: #1E2B1E; --text-secondary: #566350; --text-muted: #606D5A;
+  --accent: #3F6B2A; --accent-hover: #31551F;
+  --info: #566350;
+  --overlay-bg: rgba(30, 43, 30, 0.5);
+}
+
+:root[data-theme="midnight"] {
+  color-scheme: dark;
+  --bg-base: #111827; --bg-surface: #1B2433; --bg-elevated: #232F42; --bg-hover: #2D3B52;
+  --sidebar-bg: #0B1220;
+  --border: #34445C; --border-subtle: #29374B;
+  --text-primary: #F3F6FB; --text-secondary: #B0BED0; --text-muted: #91A2B8;
+  --accent: #3B6FD4; --accent-hover: #5685E2;
+  --success: #62B487; --warning: #E0AD54; --danger: #F07878; --info: #A9BEDB;
+  --overlay-bg: rgba(5, 10, 20, 0.72);
+}
+
+:root[data-theme="graphite"] {
+  color-scheme: dark;
+  --bg-base: #171C1B; --bg-surface: #222A28; --bg-elevated: #2A3431; --bg-hover: #35413D;
+  --sidebar-bg: #0E1412;
+  --border: #3D4A45; --border-subtle: #303B37;
+  --text-primary: #F0F5F2; --text-secondary: #B1C0B9; --text-muted: #91A39A;
+  --accent: #3A7D75; --accent-hover: #4E988E;
+  --success: #6DB889; --warning: #D8AB57; --danger: #E87979; --info: #A9BDB5;
+  --overlay-bg: rgba(3, 8, 6, 0.74);
+}
+
+:root[data-theme="plum"] {
+  color-scheme: dark;
+  --bg-base: #191622; --bg-surface: #242031; --bg-elevated: #2D283D; --bg-hover: #39334B;
+  --sidebar-bg: #100D18;
+  --border: #443C58; --border-subtle: #352F46;
+  --text-primary: #F5F1FA; --text-secondary: #C0B6D1; --text-muted: #9F94B2;
+  --accent: #7B5FD0; --accent-hover: #9279E0;
+  --success: #70B58A; --warning: #DDB15D; --danger: #EB7B84; --info: #B5A9C9;
+  --overlay-bg: rgba(7, 5, 12, 0.76);
+}
+
+:root[data-theme="rose"] {
+  --bg-base: #FBF1F5; --bg-surface: #FFFBFD; --bg-elevated: #FFFFFF; --bg-hover: #F7E5EC;
+  --sidebar-bg: #482638;
+  --border: #E6C8D4; --border-subtle: #F0DDE5;
+  --text-primary: #351B29; --text-secondary: #67485A; --text-muted: #76586A;
+  --accent: #BE185D; --accent-hover: #9D174D;
+  --info: #67485A;
+  --overlay-bg: rgba(53, 27, 41, 0.52);
+}
+
+:root[data-theme="lagoon"] {
+  --bg-base: #EDF8F8; --bg-surface: #FFFFFF; --bg-elevated: #FFFFFF; --bg-hover: #DDF1F2;
+  --sidebar-bg: #12383D;
+  --border: #BEDCDF; --border-subtle: #D9ECEE;
+  --text-primary: #163236; --text-secondary: #45666A; --text-muted: #527276;
+  --accent: #087E8B; --accent-hover: #066571;
+  --info: #45666A;
+  --overlay-bg: rgba(22, 50, 54, 0.5);
+}
+
+:root[data-theme="honey"] {
+  --bg-base: #FAF6E9; --bg-surface: #FFFDF6; --bg-elevated: #FFFDF6; --bg-hover: #F2EBD2;
+  --sidebar-bg: #44361F;
+  --border: #E2D4AE; --border-subtle: #EEE5CC;
+  --text-primary: #332916; --text-secondary: #675936; --text-muted: #746542;
+  --accent: #A16207; --accent-hover: #854D0E;
+  --warning: #94600B; --info: #675936;
+  --overlay-bg: rgba(51, 41, 22, 0.5);
+}
+
+:root[data-theme="lilac"] {
+  --bg-base: #F6F2FA; --bg-surface: #FFFFFF; --bg-elevated: #FFFFFF; --bg-hover: #EEE7F5;
+  --sidebar-bg: #352C46;
+  --border: #D9CBE8; --border-subtle: #EAE1F2;
+  --text-primary: #2D243A; --text-secondary: #5F536F; --text-muted: #6D617D;
+  --accent: #7546A8; --accent-hover: #61388C;
+  --info: #5F536F;
+  --overlay-bg: rgba(45, 36, 58, 0.5);
+}
+
+:root[data-theme="mint"] {
+  --bg-base: #EFF8F2; --bg-surface: #FCFFFD; --bg-elevated: #FCFFFD; --bg-hover: #E1F1E7;
+  --sidebar-bg: #203B30;
+  --border: #C8DECF; --border-subtle: #DDEBE1;
+  --text-primary: #1C3025; --text-secondary: #4D6857; --text-muted: #587362;
+  --accent: #16845B; --accent-hover: #116B49;
+  --success: #287A4B; --info: #4D6857;
+  --overlay-bg: rgba(28, 48, 37, 0.5);
+}
+
+:root[data-theme="cherry"] {
+  color-scheme: dark;
+  --bg-base: #21151B; --bg-surface: #302028; --bg-elevated: #3B2932; --bg-hover: #49323D;
+  --sidebar-bg: #150D11;
+  --border: #593C49; --border-subtle: #442E38;
+  --text-primary: #FFF2F6; --text-secondary: #D1B4BF; --text-muted: #B99BA7;
+  --accent: #F05A78; --accent-hover: #FF7891;
+  --success: #6DCB91; --warning: #E9B45C; --danger: #FF7185; --info: #D1B4BF;
+  --overlay-bg: rgba(8, 3, 6, 0.76);
+}
+
+:root[data-theme="cyberpunk"] {
+  color-scheme: dark;
+  --bg-base: #100A1D; --bg-surface: #1C1230; --bg-elevated: #28183D; --bg-hover: #38204E;
+  --sidebar-bg: #090510;
+  --border: #56366C; --border-subtle: #3B2750;
+  --text-primary: #FFF1FC; --text-secondary: #D4B6D8; --text-muted: #B49ABE;
+  --accent: #F000B8; --accent-hover: #FF42D0;
+  --success: #65E6B4; --warning: #FFE45C; --danger: #FF668A; --info: #D4B6D8;
+  --overlay-bg: rgba(5, 2, 10, 0.82);
+}
+
+:root[data-theme="neon"] {
+  color-scheme: dark;
+  --bg-base: #11150B; --bg-surface: #1C2412; --bg-elevated: #27311A; --bg-hover: #344221;
+  --sidebar-bg: #090D06;
+  --border: #485A2A; --border-subtle: #35431F;
+  --text-primary: #F5FFE6; --text-secondary: #C2D39E; --text-muted: #A8BB82;
+  --accent: #B7F500; --accent-hover: #CFFF42;
+  --success: #7ED957; --warning: #FFD166; --danger: #FF7373; --info: #C2D39E;
+  --overlay-bg: rgba(2, 5, 0, 0.8);
+}
+
+:root[data-theme="deepsea"] {
+  color-scheme: dark;
+  --bg-base: #081820; --bg-surface: #102630; --bg-elevated: #183541; --bg-hover: #214653;
+  --sidebar-bg: #050F16;
+  --border: #2E5966; --border-subtle: #22434F;
+  --text-primary: #E8FAFF; --text-secondary: #A8CBD5; --text-muted: #8EB5C0;
+  --accent: #22B8CF; --accent-hover: #50D0E2;
+  --success: #5EC99A; --warning: #E8BD66; --danger: #F07878; --info: #A8CBD5;
+  --overlay-bg: rgba(0, 5, 9, 0.82);
+}
+
+:root[data-theme="sunset"] {
+  color-scheme: dark;
+  --bg-base: #21130F; --bg-surface: #302019; --bg-elevated: #3D2A20; --bg-hover: #4A3428;
+  --sidebar-bg: #160B08;
+  --border: #634436; --border-subtle: #493329;
+  --text-primary: #FFF3E8; --text-secondary: #D8BDA7; --text-muted: #C0A38C;
+  --accent: #FF7547; --accent-hover: #FF946D;
+  --success: #76C893; --warning: #F2C14E; --danger: #FF7777; --info: #D8BDA7;
+  --overlay-bg: rgba(8, 3, 1, 0.8);
+}
+
+* { box-sizing: border-box; margin: 0; padding: 0; }
+
+html, body, #root {
+  height: 100%;
+  width: 100%;
+  overflow: hidden;
+}
+
+body {
+  font-family: var(--font-sans);
+  background: var(--bg-base);
+  color: var(--text-primary);
+  font-size: 14px;
+  line-height: 1.5;
+  -webkit-font-smoothing: antialiased;
+}
+
+::-webkit-scrollbar { width: 6px; height: 6px; }
+::-webkit-scrollbar-track { background: transparent; }
+::-webkit-scrollbar-thumb { background: var(--border); border-radius: 3px; }
+::-webkit-scrollbar-thumb:hover { background: var(--text-muted); }
+
+.tabular {
+  font-variant-numeric: tabular-nums;
+  font-feature-settings: 'tnum';
+}
+==== UI REUTILIZABLE ====
+==== USO DE TOASTS ====
+src\components\ui\Toast.tsx:31:export const ToastContainer: React.FC<{ toasts: ToastData[]; onDismiss: (id: string) => void }> = ({ toasts, onDismiss }) => (
+src\pages\Inventory\Inventory.tsx:5:import { ToastContainer, ToastData } from '../../components/ui/Toast';
+src\pages\Inventory\Inventory.tsx:534:      <ToastContainer toasts={toasts} onDismiss={dismissToast} />
+src\pages\ProductDetail\ProductDetail.tsx:4:import { ToastContainer, ToastData } from '../../components/ui/Toast';
+src\pages\ProductDetail\ProductDetail.tsx:406:      <ToastContainer toasts={toasts} onDismiss={dismissToast} />
+src\pages\Settings\Settings.tsx:3:import { ToastContainer, ToastData } from '../../components/ui/Toast';
+src\pages\Settings\Settings.tsx:985:      <ToastContainer toasts={toasts} onDismiss={dismissToast} />
+src\pages\Stocktake\Stocktake.tsx:3:import { ToastContainer, ToastData } from '../../components/ui/Toast';
+src\pages\Stocktake\Stocktake.tsx:320:  const toastBox = <ToastContainer toasts={toasts} onDismiss={dismissToast} />;
+==== PAGINA DE AUDITORIA: PATRON DE FILTROS, TABLA Y DETALLE ====
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { useSearchParams } from 'react-router-dom';
+import { AuditDetail } from '../../components/audit/AuditDetail';
+import { AuditFilters } from '../../components/audit/AuditFilters';
+import { AuditTable } from '../../components/audit/AuditTable';
+import { useSettings } from '../../context/AppContext';
+import { listAuditEvents } from '../../services/audit.service';
+import type { AuditEvent, PaginatedResponse } from '../../types';
+import {
+  buildAuditFilter,
+  EMPTY_FILTER,
+  errorMessage,
+  filterToSearchParams,
+  hasActiveFilters,
+  searchParamsToFilter,
+  validateDateRange,
+  type AuditFilterState,
+} from '../../utils/audit';
+import './Audit.css';
+
+export const Audit: React.FC = () => {
+  const { settings } = useSettings();
+  const [searchParams, setSearchParams] = useSearchParams();
+
+  const queryKey = searchParams.toString();
+  const filter = useMemo(() => searchParamsToFilter(new URLSearchParams(queryKey)), [queryKey]);
+  const dateError = useMemo(
+    () => validateDateRange(filter.dateFrom, filter.dateTo),
+    [filter.dateFrom, filter.dateTo],
+  );
+
+  const [result, setResult] = useState<PaginatedResponse<AuditEvent> | null>(null);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+  const [reloadToken, setReloadToken] = useState(0);
+  const [selectedId, setSelectedId] = useState<number | null>(null);
+  const requestRef = useRef(0);
+  const closeDetail = useCallback(() => setSelectedId(null), []);
+
+  /** Cambia filtros en la URL. Salvo que el patch traiga `page`, vuelve a la página 1. */
+  const updateFilter = useCallback(
+    (patch: Partial<AuditFilterState>, replace = true) => {
+      setSearchParams(
+        previous => {
+          const current = searchParamsToFilter(previous);
+          return filterToSearchParams({ ...current, ...patch, page: patch.page ?? 1 });
+        },
+        { replace },
+      );
+    },
+    [setSearchParams],
+  );
+
+  const resetFilters = useCallback(() => {
+    setSearchParams(
+      previous => {
+        const current = searchParamsToFilter(previous);
+        return filterToSearchParams({ ...EMPTY_FILTER, sortDir: current.sortDir });
+      },
+      { replace: true },
+    );
+  }, [setSearchParams]);
+
+  useEffect(() => {
+    if (dateError) {
+      requestRef.current += 1;
+      setLoading(false);
+      setError(null);
+      setResult(null);
+      return;
+    }
+
+    const requestId = ++requestRef.current;
+    const load = async () => {
+      setLoading(true);
+      setError(null);
+      try {
+        const response = await listAuditEvents(buildAuditFilter(filter));
+        if (requestId !== requestRef.current) return;
+
+        if (
+          response.data.length === 0 &&
+          response.page > 1 &&
+          response.total_pages > 0 &&
+          response.page > response.total_pages
+        ) {
+          updateFilter({ page: response.total_pages });
+          return;
+        }
+        setResult(response);
+        setLoading(false);
+      } catch (cause) {
+        if (requestId !== requestRef.current) return;
+        setResult(null);
+        setError(errorMessage(cause));
+        setLoading(false);
+      }
+    };
+    void load();
+
+    return () => {
+      requestRef.current += 1;
+    };
+  }, [filter, dateError, reloadToken, updateFilter]);
+
+  const events = result?.data ?? [];
+  const totalPages = Math.max(result?.total_pages ?? 0, 1);
+  const goToPage = (page: number) => updateFilter({ page }, false);
+
+  let status = '';
+  if (loading) status = 'Cargando…';
+  else if (error) status = 'No se pudieron cargar los eventos';
+  else if (result) {
+    status = `${result.total.toLocaleString('es-CO')} evento${result.total !== 1 ? 's' : ''}`;
+  }
+
+  return (
+    <div className="audit-page">
+      <header className="audit-header">
+        <h1 className="audit-title">Auditoría</h1>
+        <p className="audit-subtitle">Registro de solo lectura de las operaciones del sistema</p>
+      </header>
+
+      <AuditFilters
+        filter={filter}
+        dateError={dateError}
+        hasFilters={hasActiveFilters(filter)}
+        onChange={updateFilter}
+        onReset={resetFilters}
+      />
+
+      <p className="audit-status" role="status" aria-live="polite">{status}</p>
+
+      {error && (
+        <div className="audit-error-block" role="alert">
+          <p>{error}</p>
+          <button
+            type="button"
+            className="btn btn-primary"
+            onClick={() => setReloadToken(token => token + 1)}
+          >
+            Reintentar
+          </button>
+        </div>
+      )}
+
+      {!error && !dateError && !loading && events.length === 0 && (
+        <div className="audit-empty">
+          {hasActiveFilters(filter)
+            ? 'Ningún evento coincide con los filtros.'
+            : 'Aún no hay eventos registrados.'}
+        </div>
+      )}
+
+      {events.length > 0 && (
+        <div className={loading ? 'audit-results audit-results--loading' : 'audit-results'}>
+          <AuditTable
+            events={events}
+            timeZone={settings.timezone}
+            onSelect={event => setSelectedId(event.id)}
+          />
+        </div>
+      )}
+
+      <nav className="audit-pagination" aria-label="Paginación">
+        <button
+          type="button"
+          className="btn btn-ghost"
+          disabled={loading || filter.page <= 1}
+          onClick={() => goToPage(filter.page - 1)}
+        >
+          ← Anterior
+        </button>
+        <span>Página {filter.page} de {totalPages}</span>
+        <button
+          type="button"
+          className="btn btn-ghost"
+          disabled={loading || !result || filter.page >= totalPages}
+          onClick={() => goToPage(filter.page + 1)}
+        >
+          Siguiente →
+        </button>
+      </nav>
+
+      {selectedId !== null && (
+        <AuditDetail eventId={selectedId} timeZone={settings.timezone} onClose={closeDetail} />
+      )}
+    </div>
+  );
+};.audit-page {
+  flex: 1;
+  min-width: 0;
+  overflow-y: auto;
+  padding: 24px 28px;
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  font-family: var(--font-sans);
+  color: var(--text-primary);
+}
+
+.audit-header { display: flex; flex-direction: column; gap: 3px; }
+.audit-title { font-size: 22px; font-weight: 600; }
+.audit-subtitle { color: var(--text-secondary); font-size: 13px; }
+
+.audit-filters {
+  background: var(--bg-surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 14px;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+.audit-filters-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(min(180px, 100%), 1fr));
+  gap: 12px;
+}
+.audit-field { display: flex; min-width: 0; flex-direction: column; gap: 4px; }
+.audit-field label { font-size: 12px; font-weight: 500; color: var(--text-secondary); }
+.audit-input {
+  width: 100%;
+  min-width: 0;
+  height: 34px;
+  padding: 0 10px;
+  background: var(--bg-surface);
+  color: var(--text-primary);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  font: inherit;
+}
+.audit-input:focus-visible,
+.audit-link:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 1px;
+}
+.audit-input[aria-invalid='true'] { border-color: var(--danger); }
+.audit-filters-actions { display: flex; gap: 8px; flex-wrap: wrap; }
+.audit-error-text { color: var(--danger); font-size: 13px; }
+
+.audit-status { font-size: 13px; color: var(--text-secondary); min-height: 20px; }
+
+.audit-error-block {
+  background: var(--danger-dim);
+  border: 1px solid var(--danger);
+  border-radius: var(--radius);
+  padding: 12px 14px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+.audit-empty {
+  padding: 40px 16px;
+  text-align: center;
+  color: var(--text-muted);
+  border: 1px dashed var(--border);
+  border-radius: var(--radius);
+}
+
+.audit-results { transition: opacity var(--transition); }
+.audit-results--loading { opacity: 0.55; }
+.audit-table-wrap {
+  overflow-x: auto;
+  background: var(--bg-surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+}
+.audit-table { width: 100%; border-collapse: collapse; font-size: 13px; }
+.audit-table th,
+.audit-table td {
+  padding: 8px 12px;
+  text-align: left;
+  border-bottom: 1px solid var(--border-subtle);
+  vertical-align: top;
+}
+.audit-table th {
+  font-weight: 600;
+  color: var(--text-secondary);
+  background: var(--bg-hover);
+  position: sticky;
+  top: 0;
+}
+.audit-row--failure td { background: var(--danger-dim); }
+.audit-nowrap { white-space: nowrap; }
+.audit-summary { min-width: 220px; }
+.audit-link {
+  background: none;
+  border: none;
+  padding: 0;
+  color: var(--accent);
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+  text-decoration: underline;
+}
+
+.audit-badge {
+  display: inline-block;
+  padding: 1px 8px;
+  border-radius: 999px;
+  font-size: 12px;
+  font-weight: 500;
+  white-space: nowrap;
+}
+.audit-badge--success { background: var(--success-dim); color: var(--success); }
+.audit-badge--failure { background: var(--danger-dim); color: var(--danger); }
+
+.audit-pagination {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 12px;
+  font-size: 13px;
+  color: var(--text-secondary);
+}
+
+.audit-sr-only {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip: rect(0 0 0 0);
+  white-space: nowrap;
+}
+
+@media (max-width: 640px) {
+  .audit-page { padding: 18px 14px; }
+  .audit-filters-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .audit-filters-grid .audit-field:first-child { grid-column: 1 / -1; }
+  .audit-pagination { justify-content: space-between; gap: 6px; }
+}
+
+.audit-detail { display: flex; flex-direction: column; gap: 14px; outline: none; }
+.audit-detail-section { display: flex; flex-direction: column; gap: 8px; margin-top: 14px; }
+.audit-detail-section h3 { font-size: 14px; font-weight: 600; }
+.audit-detail-section > summary { cursor: pointer; font-size: 13px; font-weight: 500; }
+.audit-muted { color: var(--text-muted); font-size: 12px; }
+
+.audit-dl {
+  display: grid;
+  grid-template-columns: max-content minmax(0, 1fr);
+  gap: 6px 16px;
+  font-size: 13px;
+}
+.audit-dl dt { color: var(--text-secondary); font-weight: 500; }
+.audit-dl dd { min-width: 0; overflow-wrap: anywhere; }
+.audit-corr-id { display: inline-flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+.audit-corr-id code { font-family: var(--font-mono); font-size: 12px; }
+
+.audit-detail-error {
+  background: var(--danger-dim);
+  border: 1px solid var(--danger);
+  border-radius: var(--radius);
+  padding: 10px 12px;
+  margin-bottom: 12px;
+  color: var(--text-primary);
+}
+.audit-detail-error strong { color: var(--danger); font-size: 13px; }
+.audit-detail-error p { margin-top: 4px; font-size: 13px; overflow-wrap: anywhere; }
+
+.audit-table th[scope='row'] {
+  position: static;
+  background: transparent;
+  font-weight: 500;
+  white-space: nowrap;
+}
+
+.audit-json {
+  background: var(--bg-hover);
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-sm);
+  padding: 10px;
+  font-family: var(--font-mono);
+  font-size: 12px;
+  max-height: 260px;
+  overflow: auto;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+
+.audit-corr-list { list-style: none; display: flex; flex-direction: column; gap: 4px; }
+.audit-corr-item {
+  width: 100%;
+  display: grid;
+  grid-template-columns: 170px minmax(0, 1fr) auto;
+  gap: 4px 10px;
+  align-items: center;
+  text-align: left;
+  padding: 8px 10px;
+  background: var(--bg-surface);
+  color: var(--text-primary);
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-sm);
+  font: inherit;
+  font-size: 13px;
+  cursor: pointer;
+}
+.audit-corr-item:hover { background: var(--bg-hover); }
+.audit-corr-item:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; }
+.audit-corr-item--current { border-color: var(--accent); background: var(--accent-dim); }
+.audit-corr-summary { grid-column: 1 / -1; color: var(--text-secondary); }
+
+@media (max-width: 640px) {
+  .audit-dl { grid-template-columns: 1fr; gap: 3px; }
+  .audit-dl dd { margin-bottom: 7px; }
+  .audit-corr-item { grid-template-columns: minmax(0, 1fr) auto; }
+  .audit-corr-item > :first-child { grid-column: 1 / -1; }
+}import React, { useEffect, useRef, useState } from 'react';
+import { useDebounce } from '../../hooks/useDebounce';
+import {
+  AUDIT_CATEGORIES,
+  AUDIT_MODULES,
+  AUDIT_OUTCOMES,
+  CATEGORY_LABELS,
+  MODULE_LABELS,
+  OUTCOME_LABELS,
+  type AuditFilterState,
+} from '../../utils/audit';
+
+interface DebouncedTextProps {
+  id: string;
+  label: string;
+  value: string;
+  placeholder?: string;
+  onCommit: (value: string) => void;
+}
+
+/** Input de texto que confirma el valor tras 400 ms sin teclear. */
+const DebouncedText: React.FC<DebouncedTextProps> = ({ id, label, value, placeholder, onCommit }) => {
+  const [local, setLocal] = useState(value);
+  const lastCommitted = useRef(value);
+  const debounced = useDebounce(local, 400);
+
+  useEffect(() => {
+    if (value !== lastCommitted.current) {
+      lastCommitted.current = value;
+      setLocal(value);
+    }
+  }, [value]);
+
+  useEffect(() => {
+    const next = debounced.trim();
+    if (next !== lastCommitted.current) {
+      lastCommitted.current = next;
+      onCommit(next);
+    }
+  }, [debounced, onCommit]);
+
+  return (
+    <div className="audit-field">
+      <label htmlFor={id}>{label}</label>
+      <input
+        id={id}
+        className="audit-input"
+        type="text"
+        value={local}
+        placeholder={placeholder}
+        onChange={event => setLocal(event.target.value)}
+      />
+    </div>
+  );
+};
+
+interface AuditFiltersProps {
+  filter: AuditFilterState;
+  dateError: string | null;
+  hasFilters: boolean;
+  onChange: (patch: Partial<AuditFilterState>, replace?: boolean) => void;
+  onReset: () => void;
+}
+
+export const AuditFilters: React.FC<AuditFiltersProps> = ({
+  filter,
+  dateError,
+  hasFilters,
+  onChange,
+  onReset,
+}) => (
+  <section className="audit-filters" aria-label="Filtros de auditoría">
+    <div className="audit-filters-grid">
+      <DebouncedText
+        id="audit-search"
+        label="Buscar"
+        value={filter.search}
+        placeholder="Resumen, acción, id o error…"
+        onCommit={search => onChange({ search })}
+      />
+
+      <div className="audit-field">
+        <label htmlFor="audit-module">Módulo</label>
+        <select
+          id="audit-module"
+          className="audit-input"
+          value={filter.module}
+          onChange={event => onChange({ module: event.target.value })}
+        >
+          <option value="">Todos</option>
+          {AUDIT_MODULES.map(module => (
+            <option key={module} value={module}>{MODULE_LABELS[module]}</option>
+          ))}
+        </select>
+      </div>
+
+      <div className="audit-field">
+        <label htmlFor="audit-category">Categoría</label>
+        <select
+          id="audit-category"
+          className="audit-input"
+          value={filter.category}
+          onChange={event => onChange({ category: event.target.value })}
+        >
+          <option value="">Todas</option>
+          {AUDIT_CATEGORIES.map(category => (
+            <option key={category} value={category}>{CATEGORY_LABELS[category]}</option>
+          ))}
+        </select>
+      </div>
+
+      <div className="audit-field">
+        <label htmlFor="audit-outcome">Resultado</label>
+        <select
+          id="audit-outcome"
+          className="audit-input"
+          value={filter.outcome}
+          onChange={event => onChange({ outcome: event.target.value })}
+        >
+          <option value="">Todos</option>
+          {AUDIT_OUTCOMES.map(outcome => (
+            <option key={outcome} value={outcome}>{OUTCOME_LABELS[outcome]}</option>
+          ))}
+        </select>
+      </div>
+
+      <DebouncedText
+        id="audit-action"
+        label="Acción"
+        value={filter.action}
+        placeholder="Ej: open, stock_adjust"
+        onCommit={action => onChange({ action })}
+      />
+
+      <DebouncedText
+        id="audit-entity-type"
+        label="Tipo de entidad"
+        value={filter.entityType}
+        placeholder="Ej: variant, sale"
+        onCommit={entityType => onChange({ entityType })}
+      />
+
+      <DebouncedText
+        id="audit-entity-id"
+        label="Id de entidad"
+        value={filter.entityId}
+        placeholder="Ej: 12"
+        onCommit={entityId => onChange({ entityId })}
+      />
+
+      <div className="audit-field">
+        <label htmlFor="audit-date-from">Desde</label>
+        <input
+          id="audit-date-from"
+          className="audit-input"
+          type="date"
+          value={filter.dateFrom}
+          aria-invalid={dateError ? true : undefined}
+          onChange={event => onChange({ dateFrom: event.target.value })}
+        />
+      </div>
+
+      <div className="audit-field">
+        <label htmlFor="audit-date-to">Hasta</label>
+        <input
+          id="audit-date-to"
+          className="audit-input"
+          type="date"
+          value={filter.dateTo}
+          aria-invalid={dateError ? true : undefined}
+          onChange={event => onChange({ dateTo: event.target.value })}
+        />
+      </div>
+
+      <div className="audit-field">
+        <label htmlFor="audit-sort">Orden</label>
+        <select
+          id="audit-sort"
+          className="audit-input"
+          value={filter.sortDir}
+          onChange={event =>
+            onChange({ sortDir: event.target.value === 'asc' ? 'asc' : 'desc' })
+          }
+        >
+          <option value="desc">Más recientes primero</option>
+          <option value="asc">Más antiguos primero</option>
+        </select>
+      </div>
+    </div>
+
+    {dateError && <p className="audit-error-text" role="alert">{dateError}</p>}
+
+    <div className="audit-filters-actions">
+      <button
+        type="button"
+        className={`btn ${filter.outcome === 'failure' ? 'btn-primary' : 'btn-ghost'}`}
+        aria-pressed={filter.outcome === 'failure'}
+        onClick={() => onChange({ outcome: filter.outcome === 'failure' ? '' : 'failure' })}
+      >
+        Solo errores
+      </button>
+      <button type="button" className="btn btn-ghost" onClick={onReset} disabled={!hasFilters}>
+        Limpiar filtros
+      </button>
+    </div>
+  </section>
+);import React from 'react';
+import type { AuditEvent } from '../../types';
+import {
+  actionLabel,
+  formatActor,
+  formatAuditDate,
+  formatEntity,
+  moduleLabel,
+  OUTCOME_LABELS,
+} from '../../utils/audit';
+
+interface AuditTableProps {
+  events: AuditEvent[];
+  timeZone: string;
+  /** Si se pasa, cada resumen es seleccionable. */
+  onSelect?: (event: AuditEvent) => void;
+}
+
+export const AuditTable: React.FC<AuditTableProps> = ({ events, timeZone, onSelect }) => (
+  <div className="audit-table-wrap">
+    <table className="audit-table">
+      <caption className="audit-sr-only">Eventos de auditoría</caption>
+      <thead>
+        <tr>
+          <th scope="col">Fecha</th>
+          <th scope="col">Módulo</th>
+          <th scope="col">Acción</th>
+          <th scope="col">Entidad</th>
+          <th scope="col">Resumen</th>
+          <th scope="col">Actor</th>
+          <th scope="col">Resultado</th>
+        </tr>
+      </thead>
+      <tbody>
+        {events.map(event => (
+          <tr
+            key={event.id}
+            className={event.outcome === 'failure' ? 'audit-row--failure' : undefined}
+          >
+            <td className="audit-nowrap">{formatAuditDate(event.created_at, timeZone)}</td>
+            <td>{moduleLabel(event.module)}</td>
+            <td>{actionLabel(event.module, event.action)}</td>
+            <td>{formatEntity(event)}</td>
+            <td className="audit-summary">
+              {onSelect ? (
+                <button type="button" className="audit-link" onClick={() => onSelect(event)}>
+                  {event.summary}
+                </button>
+              ) : (
+                event.summary
+              )}
+            </td>
+            <td>{formatActor(event.actor)}</td>
+            <td>
+              <span className={`audit-badge audit-badge--${event.outcome}`}>
+                {OUTCOME_LABELS[event.outcome]}
+              </span>
+            </td>
+          </tr>
+        ))}
+      </tbody>
+    </table>
+  </div>
+);import React, { useCallback, useEffect, useRef, useState } from 'react';
+import { Modal } from '../ui/Modal';
+import {
+  getAuditEvent,
+  listAuditEventsByCorrelation,
+} from '../../services/audit.service';
+import type { AuditEvent } from '../../types';
+import {
+  actionLabel,
+  buildChangeRows,
+  buildMetadataRows,
+  CATEGORY_LABELS,
+  errorMessage,
+  formatActor,
+  formatAuditDate,
+  formatEntity,
+  moduleLabel,
+  OUTCOME_LABELS,
+} from '../../utils/audit';
+import { formatMoney } from '../../utils/format';
+
+const money = (minor: number): string => formatMoney(minor);
+
+const MAX_CORRELATION = 1000;
+
+interface AuditDetailProps {
+  eventId: number;
+  timeZone: string;
+  onClose: () => void;
+}
+
+const FieldRow: React.FC<{ label: string; children: React.ReactNode }> = ({ label, children }) => (
+  <>
+    <dt>{label}</dt>
+    <dd>{children}</dd>
+  </>
+);
+
+export const AuditDetail: React.FC<AuditDetailProps> = ({ eventId, timeZone, onClose }) => {
+  const [currentId, setCurrentId] = useState(eventId);
+  const [event, setEvent] = useState<AuditEvent | null>(null);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+  const [reloadToken, setReloadToken] = useState(0);
+  const eventRequest = useRef(0);
+
+  const [corrOpen, setCorrOpen] = useState(false);
+  const [corr, setCorr] = useState<{ id: string; events: AuditEvent[] } | null>(null);
+  const [corrLoading, setCorrLoading] = useState(false);
+  const [corrError, setCorrError] = useState<string | null>(null);
+  const corrRequest = useRef(0);
+
+  const [copyState, setCopyState] = useState<'idle' | 'ok' | 'fail'>('idle');
+  const copyTimer = useRef<number | undefined>(undefined);
+
+  const rootRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    const previous = document.activeElement as HTMLElement | null;
+    rootRef.current?.focus();
+    return () => {
+      if (previous && previous.isConnected) previous.focus();
+    };
+  }, []);
+
+  useEffect(
+    () => () => {
+      eventRequest.current += 1;
+      corrRequest.current += 1;
+      window.clearTimeout(copyTimer.current);
+    },
+    [],
+  );
+
+  useEffect(() => {
+    const requestId = ++eventRequest.current;
+    setLoading(true);
+    setError(null);
+    getAuditEvent(currentId)
+      .then(response => {
+        if (requestId !== eventRequest.current) return;
+        setEvent(response);
+        setLoading(false);
+      })
+      .catch(cause => {
+        if (requestId !== eventRequest.current) return;
+        setEvent(null);
+        setError(errorMessage(cause));
+        setLoading(false);
+      });
+    return () => {
+      eventRequest.current += 1;
+    };
+  }, [currentId, reloadToken]);
+
+  useEffect(() => {
+    if (event && corr && corr.id !== event.correlation_id) {
+      setCorr(null);
+      setCorrOpen(false);
+    }
+  }, [event, corr]);
+
+  const loadCorrelation = useCallback((correlationId: string) => {
+    const requestId = ++corrRequest.current;
+    setCorrLoading(true);
+    setCorrError(null);
+    listAuditEventsByCorrelation(correlationId)
+      .then(events => {
+        if (requestId !== corrRequest.current) return;
+        setCorr({ id: correlationId, events });
+        setCorrLoading(false);
+      })
+      .catch(cause => {
+        if (requestId !== corrRequest.current) return;
+        setCorrError(errorMessage(cause));
+        setCorrLoading(false);
+      });
+  }, []);
+
+  const toggleCorrelation = () => {
+    if (corrOpen) {
+      setCorrOpen(false);
+      return;
+    }
+    const correlationId = event?.correlation_id;
+    if (!correlationId) return;
+    setCorrOpen(true);
+    if (corr?.id !== correlationId) loadCorrelation(correlationId);
+  };
+
+  const copyCorrelation = async (value: string) => {
+    window.clearTimeout(copyTimer.current);
+    try {
+      await navigator.clipboard.writeText(value);
+      setCopyState('ok');
+    } catch {
+      setCopyState('fail');
+    }
+    copyTimer.current = window.setTimeout(() => setCopyState('idle'), 2500);
+  };
+
+  const changeRows = event ? buildChangeRows(event, money) : [];
+  const metadataRows = event ? buildMetadataRows(event, money) : [];
+
+  const corrEvents = corr?.events ?? [];
+  const corrIndex = corrEvents.findIndex(item => item.id === currentId);
+  const previousInOperation = corrIndex > 0 ? corrEvents[corrIndex - 1] : null;
+  const nextInOperation =
+    corrIndex >= 0 && corrIndex < corrEvents.length - 1 ? corrEvents[corrIndex + 1] : null;
+
+  return (
+    <Modal title={`Evento #${currentId}`} onClose={onClose} width={760}>
+      <div className="audit-detail" ref={rootRef} tabIndex={-1}>
+        {loading && <p className="audit-status" role="status">Cargando…</p>}
+
+        {error && (
+          <div className="audit-error-block" role="alert">
+            <p>{error}</p>
+            <button
+              type="button"
+              className="btn btn-primary"
+              onClick={() => setReloadToken(token => token + 1)}
+            >
+              Reintentar
+            </button>
+          </div>
+        )}
+
+        {event?.id === currentId && (
+          <div className={loading ? 'audit-results--loading' : undefined}>
+            {event.error_message && (
+              <div className="audit-detail-error" role="alert">
+                <strong>Mensaje de error</strong>
+                <p>{event.error_message}</p>
+              </div>
+            )}
+
+            <dl className="audit-dl">
+              <FieldRow label="Fecha">
+                {formatAuditDate(event.created_at, timeZone)}
+                <span className="audit-muted"> · UTC: {event.created_at}</span>
+              </FieldRow>
+              <FieldRow label="Módulo">{moduleLabel(event.module)}</FieldRow>
+              <FieldRow label="Categoría">
+                {CATEGORY_LABELS[event.category] ?? event.category}
+              </FieldRow>
+              <FieldRow label="Acción">
+                {actionLabel(event.module, event.action)}
+                <span className="audit-muted"> · {event.action}</span>
+              </FieldRow>
+              <FieldRow label="Resultado">
+                <span className={`audit-badge audit-badge--${event.outcome}`}>
+                  {OUTCOME_LABELS[event.outcome] ?? event.outcome}
+                </span>
+              </FieldRow>
+              <FieldRow label="Actor">{formatActor(event.actor)}</FieldRow>
+              <FieldRow label="Entidad">
+                {formatEntity(event)}
+                {event.entity_type && (
+                  <span className="audit-muted"> · {event.entity_type}</span>
+                )}
+              </FieldRow>
+              <FieldRow label="Resumen">{event.summary}</FieldRow>
+              <FieldRow label="Operación">
+                {event.correlation_id ? (
+                  <span className="audit-corr-id">
+                    <code>{event.correlation_id}</code>
+                    <button
+                      type="button"
+                      className="btn btn-ghost"
+                      onClick={() => void copyCorrelation(event.correlation_id as string)}
+                    >
+                      Copiar
+                    </button>
+                    <span className="audit-muted" role="status" aria-live="polite">
+                      {copyState === 'ok' && 'Copiado'}
+                      {copyState === 'fail' && 'No se pudo copiar; selecciona el texto'}
+                    </span>
+                  </span>
+                ) : (
+                  '—'
+                )}
+              </FieldRow>
+            </dl>
+
+            {changeRows.length > 0 && (
+              <section className="audit-detail-section">
+                <h3>Cambios</h3>
+                <div className="audit-table-wrap">
+                  <table className="audit-table">
+                    <thead>
+                      <tr>
+                        <th scope="col">Campo</th>
+                        <th scope="col">Antes</th>
+                        <th scope="col">Después</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {changeRows.map(row => (
+                        <tr key={row.key}>
+                          <th scope="row">{row.label}</th>
+                          <td>{row.from}</td>
+                          <td>{row.to}</td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              </section>
+            )}
+
+            {metadataRows.length > 0 && (
+              <section className="audit-detail-section">
+                <h3>Detalles</h3>
+                <div className="audit-table-wrap">
+                  <table className="audit-table">
+                    <tbody>
+                      {metadataRows.map(row => (
+                        <tr key={row.key}>
+                          <th scope="row">{row.label}</th>
+                          <td>{row.value}</td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              </section>
+            )}
+
+            <details className="audit-detail-section">
+              <summary>Ver JSON completo</summary>
+              <pre className="audit-json">{JSON.stringify(event, null, 2)}</pre>
+            </details>
+
+            {event.correlation_id && (
+              <div className="audit-filters-actions">
+                <button
+                  type="button"
+                  className="btn btn-primary"
+                  aria-expanded={corrOpen}
+                  onClick={toggleCorrelation}
+                >
+                  {corrOpen ? 'Ocultar operación completa' : 'Ver operación completa'}
+                </button>
+              </div>
+            )}
+          </div>
+        )}
+
+        {corrOpen && (
+          <section className="audit-detail-section" aria-label="Operación completa">
+            <h3>Operación completa</h3>
+
+            {corrLoading && <p className="audit-status" role="status">Cargando operación…</p>}
+
+            {corrError && (
+              <div className="audit-error-block" role="alert">
+                <p>{corrError}</p>
+                {event?.correlation_id && (
+                  <button
+                    type="button"
+                    className="btn btn-primary"
+                    onClick={() => loadCorrelation(event.correlation_id as string)}
+                  >
+                    Reintentar
+                  </button>
+                )}
+              </div>
+            )}
+
+            {corr && !corrLoading && (
+              <>
+                <p className="audit-status">
+                  {corrEvents.length} evento{corrEvents.length !== 1 ? 's' : ''}, del más antiguo al más reciente
+                  {corrEvents.length >= MAX_CORRELATION && ` (se muestran como máximo ${MAX_CORRELATION})`}
+                </p>
+                <div className="audit-filters-actions">
+                  <button
+                    type="button"
+                    className="btn btn-ghost"
+                    disabled={!previousInOperation}
+                    onClick={() => previousInOperation && setCurrentId(previousInOperation.id)}
+                  >
+                    ← Evento anterior
+                  </button>
+                  <button
+                    type="button"
+                    className="btn btn-ghost"
+                    disabled={!nextInOperation}
+                    onClick={() => nextInOperation && setCurrentId(nextInOperation.id)}
+                  >
+                    Evento siguiente →
+                  </button>
+                </div>
+                <ol className="audit-corr-list">
+                  {corrEvents.map(item => (
+                    <li key={item.id}>
+                      <button
+                        type="button"
+                        className={`audit-corr-item ${item.id === currentId ? 'audit-corr-item--current' : ''}`}
+                        aria-current={item.id === currentId ? 'true' : undefined}
+                        onClick={() => setCurrentId(item.id)}
+                      >
+                        <span className="audit-nowrap">
+                          {formatAuditDate(item.created_at, timeZone)}
+                        </span>
+                        <span>{moduleLabel(item.module)} · {actionLabel(item.module, item.action)}</span>
+                        <span className={`audit-badge audit-badge--${item.outcome}`}>
+                          {OUTCOME_LABELS[item.outcome] ?? item.outcome}
+                        </span>
+                        <span className="audit-corr-summary">{item.summary}</span>
+                      </button>
+                    </li>
+                  ))}
+                </ol>
+              </>
+            )}
+          </section>
+        )}
+      </div>
+    </Modal>
+  );
+};==== TARJETAS DE RESUMEN ====
+import React from 'react';
+import type { InventoryValueDto } from '../../types';
+import { formatMoney } from '../../utils/format';
+import './StockSummaryCards.css';
+
+interface StockSummaryCardsProps {
+  value: InventoryValueDto | null;
+  lowCount: number;
+  outCount: number;
+}
+
+export const StockSummaryCards: React.FC<StockSummaryCardsProps> = ({
+  value,
+  lowCount,
+  outCount,
+}) => {
+  const dash = '—';
+
+  return (
+    <div className="stock-summary">
+      <div className="stock-card stock-card--primary">
+        <span className="stock-card-label">Valor del inventario</span>
+        <span className="stock-card-value">
+          {value ? formatMoney(value.value_at_cost) : dash}
+        </span>
+        <span className="stock-card-sub">a costo</span>
+        {value && value.variants_without_cost > 0 && (
+          <span className="stock-card-warn">
+            ⚠ {value.variants_without_cost} variante
+            {value.variants_without_cost !== 1 ? 's' : ''} sin costo (no incluida
+            {value.variants_without_cost !== 1 ? 's' : ''})
+          </span>
+        )}
+      </div>
+
+      <div className="stock-card">
+        <span className="stock-card-label">Valor potencial de venta</span>
+        <span className="stock-card-value">
+          {value ? formatMoney(value.potential_sale_value) : dash}
+        </span>
+        <span className="stock-card-sub">
+          {value ? `${value.variants_valued} variantes valoradas` : ' '}
+        </span>
+        {value && value.negative_stock_variants > 0 && (
+          <span className="stock-card-warn">
+            {value.negative_stock_variants} con stock negativo (aportan $0)
+          </span>
+        )}
+      </div>
+
+      <div className="stock-card">
+        <span className="stock-card-label">Stock bajo</span>
+        <span className="stock-card-value">{lowCount}</span>
+        <span className="stock-card-sub">variantes</span>
+      </div>
+
+      <div className="stock-card">
+        <span className="stock-card-label">Agotadas</span>
+        <span className="stock-card-value">{outCount}</span>
+        <span className="stock-card-sub">variantes</span>
+      </div>
+    </div>
+  );
+};
+.stock-summary {
+  display: grid;
+  grid-template-columns: 1.4fr 1.4fr 1fr 1fr;
+  gap: 12px;
+  margin-bottom: 16px;
+}
+
+.stock-card {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  padding: 14px 16px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  background: var(--bg-surface);
+}
+
+.stock-card--primary {
+  border-color: var(--accent);
+}
+
+.stock-card-label {
+  font-size: 12px;
+  color: var(--text-muted);
+}
+
+.stock-card-value {
+  font-size: 22px;
+  font-weight: 700;
+  color: var(--text-primary);
+}
+
+.stock-card-sub {
+  font-size: 12px;
+  color: var(--text-muted);
+}
+
+.stock-card-warn {
+  margin-top: 4px;
+  font-size: 12px;
+  color: var(--warning);
+}
+
+@media (max-width: 900px) {
+  .stock-summary {
+    grid-template-columns: 1fr 1fr;
+  }
+}
+==== OPERADOR Y LAYOUT ====
+const OPERATOR_KEY = 'cashflow.operator';
+
+export function getOperator(): string {
+  return localStorage.getItem(OPERATOR_KEY)?.trim() || 'system';
+}
+
+export function setOperator(operator: string): void {
+  localStorage.setItem(OPERATOR_KEY, operator.trim());
+}
+
+/** Operador guardado, o null si no hay ninguno. Nunca lanza: el actor no debe romper una operación. */
+export function getOperatorOrNull(): string | null {
+  try {
+    const value = localStorage.getItem(OPERATOR_KEY)?.trim();
+    return value ? value : null;
+  } catch {
+    return null;
+  }
+}
+
+/** Fragmento opcional para dto o argumentos de invoke. */
+export function actorField<K extends string>(key: K): { [P in K]?: string } {
+  const actor = getOperatorOrNull();
+  return actor ? ({ [key]: actor } as { [P in K]?: string }) : {};
+}
+import React from 'react';
+import { Sidebar } from './Sidebar';
+import './AppLayout.css';
+
+interface AppLayoutProps { children: React.ReactNode; }
+
+export const AppLayout: React.FC<AppLayoutProps> = ({ children }) => (
+  <div className="app-layout">
+    <Sidebar />
+    <main className="app-main">{children}</main>
+  </div>
+);import { describe, expect, it } from 'vitest';
+import type { AuditEvent } from '../types';
+import {
+  actionLabel,
+  buildAuditFilter,
+  buildChangeRows,
+  buildMetadataRows,
+  EMPTY_FILTER,
+  filterToSearchParams,
+  formatActor,
+  formatAuditDate,
+  formatAuditValue,
+  formatEntity,
+  hasActiveFilters,
+  isMoneyField,
+  searchParamsToFilter,
+  validateDateRange,
+  type AuditFilterState,
+} from './audit';
+
+const money = (minor: number) => `$${minor / 100}`;
+const state = (patch: Partial<AuditFilterState> = {}): AuditFilterState => ({
+  ...EMPTY_FILTER,
+  ...patch,
+});
+
+describe('buildAuditFilter', () => {
+  it('con estado vacío solo envía orden y paginación', () => {
+    expect(buildAuditFilter(EMPTY_FILTER)).toStrictEqual({
+      sort_dir: 'desc',
+      page: 1,
+      page_size: 50,
+    });
+  });
+
+  it('usa snake_case, recorta espacios y omite vacíos', () => {
+    const filter = buildAuditFilter(
+      state({
+        module: 'cash',
+        outcome: 'failure',
+        action: '  open ',
+        entityType: 'cash_session',
+        entityId: ' 7 ',
+        dateFrom: '2026-06-01',
+        dateTo: '2026-06-30',
+        search: '  caja ',
+        sortDir: 'asc',
+        page: 3,
+      }),
+    );
+    expect(filter).toStrictEqual({
+      sort_dir: 'asc',
+      page: 3,
+      page_size: 50,
+      module: 'cash',
+      outcome: 'failure',
+      action: 'open',
+      entity_type: 'cash_session',
+      entity_id: '7',
+      date_from: '2026-06-01',
+      date_to: '2026-06-30',
+      search: 'caja',
+    });
+  });
+
+  it('descarta módulo/categoría/resultado fuera del catálogo', () => {
+    const filter = buildAuditFilter(state({ module: 'hack', category: 'x', outcome: 'y' }));
+    expect(filter).not.toHaveProperty('module');
+    expect(filter).not.toHaveProperty('category');
+    expect(filter).not.toHaveProperty('outcome');
+  });
+
+  it('normaliza página inválida y limita page_size a 200', () => {
+    expect(buildAuditFilter(state({ page: 0 })).page).toBe(1);
+    expect(buildAuditFilter(state({ page: NaN })).page).toBe(1);
+    expect(buildAuditFilter(state({ page: 2.7 })).page).toBe(2);
+    expect(buildAuditFilter(EMPTY_FILTER, 999).page_size).toBe(200);
+    expect(buildAuditFilter(EMPTY_FILTER, 0).page_size).toBe(50);
+  });
+});
+
+describe('hasActiveFilters', () => {
+  it('ignora orden y página', () => {
+    expect(hasActiveFilters(state({ sortDir: 'asc', page: 4 }))).toBe(false);
+    expect(hasActiveFilters(state({ search: ' ' }))).toBe(false);
+    expect(hasActiveFilters(state({ outcome: 'failure' }))).toBe(true);
+  });
+});
+
+describe('validateDateRange', () => {
+  it('acepta rangos válidos y vacíos', () => {
+    expect(validateDateRange('', '')).toBeNull();
+    expect(validateDateRange('2026-06-01', '')).toBeNull();
+    expect(validateDateRange('2026-06-01', '2026-06-01')).toBeNull();
+  });
+
+  it('rechaza inicio posterior al fin con el texto del backend', () => {
+    expect(validateDateRange('2026-06-10', '2026-06-01')).toBe(
+      'La fecha inicial no puede ser posterior a la final',
+    );
+  });
+
+  it('rechaza fechas inexistentes o con mal formato', () => {
+    expect(validateDateRange('2026-02-30', '')).toBe('La fecha inicial no es válida');
+    expect(validateDateRange('', '12/06/2026')).toBe('La fecha final no es válida');
+  });
+});
+
+describe('URL <-> filtro', () => {
+  it('ida y vuelta conserva el estado', () => {
+    const original = state({
+      module: 'inventory',
+      category: 'business',
+      outcome: 'success',
+      action: 'stock_adjust',
+      entityType: 'variant',
+      entityId: '12',
+      dateFrom: '2026-06-01',
+      dateTo: '2026-06-30',
+      search: 'camisa roja',
+      sortDir: 'asc',
+      page: 2,
+    });
+    const params = filterToSearchParams(original);
+    expect(searchParamsToFilter(new URLSearchParams(params.toString()))).toStrictEqual(original);
+  });
+
+  it('omite valores por defecto en la URL', () => {
+    expect(filterToSearchParams(EMPTY_FILTER).toString()).toBe('');
+  });
+
+  it('ignora parámetros inválidos', () => {
+    const parsed = searchParamsToFilter(
+      new URLSearchParams('module=nope&from=2026-13-40&page=-2&sort=up'),
+    );
+    expect(parsed).toStrictEqual(EMPTY_FILTER);
+  });
+});
+
+describe('etiquetas del catálogo', () => {
+  it('traduce acciones conocidas y humaniza las desconocidas', () => {
+    expect(actionLabel('cash', 'open')).toBe('Apertura de caja');
+    expect(actionLabel('inventory', 'stock_adjust')).toBe('Ajuste de stock');
+    expect(actionLabel('reports', 'export_all')).toBe('Export all');
+  });
+
+  it('formatActor y formatEntity', () => {
+    expect(formatActor(null)).toBe('—');
+    expect(formatActor('  ')).toBe('—');
+    expect(formatActor('Ana')).toBe('Ana');
+    expect(formatEntity({ entity_type: null, entity_id: null })).toBe('—');
+    expect(formatEntity({ entity_type: 'variant', entity_id: '12' })).toBe('Variante #12');
+    expect(formatEntity({ entity_type: 'raro', entity_id: null })).toBe('Raro');
+  });
+});
+
+describe('formatAuditDate', () => {
+  it('convierte UTC a la zona indicada', () => {
+    // 01:30 UTC del 12 jun = 20:30 del 11 jun en Bogotá (UTC-5)
+    const text = formatAuditDate('2026-06-12T01:30:00Z', 'America/Bogota');
+    expect(text).toMatch(/11/);
+    expect(text).toMatch(/2026/);
+    expect(text).toMatch(/8:30/);
+  });
+
+  it('devuelve el original si la fecha o la zona son inválidas', () => {
+    expect(formatAuditDate('no-es-fecha', 'America/Bogota')).toBe('no-es-fecha');
+    expect(formatAuditDate('2026-06-12T01:30:00Z', 'Zona/Falsa')).toBe('2026-06-12T01:30:00Z');
+  });
+});
+
+describe('isMoneyField', () => {
+  it('depende del módulo', () => {
+    expect(isMoneyField('cash', 'difference')).toBe(true);
+    expect(isMoneyField('inventory', 'difference')).toBe(false);
+    expect(isMoneyField('inventory', 'price')).toBe(true);
+    expect(isMoneyField('settings', 'tax_rate_bps')).toBe(false);
+    expect(isMoneyField('system', 'amount')).toBe(false);
+  });
+});
+
+describe('formatAuditValue', () => {
+  it('formatea tipos básicos', () => {
+    expect(formatAuditValue('inventory', 'x', null, money)).toBe('—');
+    expect(formatAuditValue('inventory', 'allow_negative', true, money)).toBe('Sí');
+    expect(formatAuditValue('inventory', 'stock', 5, money)).toBe('5');
+    expect(formatAuditValue('inventory', 'price', 280000, money)).toBe('$2800');
+    expect(formatAuditValue('inventory', 'notes', '', money)).toBe('(vacío)');
+  });
+
+  it('traduce estados y deja pasar textos largos', () => {
+    expect(formatAuditValue('cash', 'status', 'closed', money)).toBe('Cerrado');
+    expect(formatAuditValue('settings', 'ticket_footer', '[texto de 120 caracteres]', money)).toBe(
+      '[texto de 120 caracteres]',
+    );
+  });
+
+  it('formatea pagos de ventas con dinero', () => {
+    const payments = [
+      { method: 'cash', amount: 10000 },
+      { method: 'card', amount: 5000 },
+    ];
+    expect(formatAuditValue('sales', 'payments', payments, money)).toBe(
+      'Efectivo: $100 · Tarjeta: $50',
+    );
+  });
+
+  it('cae a JSON para objetos desconocidos', () => {
+    expect(formatAuditValue('system', 'raro', { a: 1 }, money)).toBe('{"a":1}');
+  });
+});
+
+const baseEvent: AuditEvent = {
+  id: 1,
+  created_at: '2026-06-12T01:30:00Z',
+  correlation_id: null,
+  category: 'business',
+  module: 'inventory',
+  action: 'update',
+  outcome: 'success',
+  actor: null,
+  entity_type: 'variant',
+  entity_id: '12',
+  summary: 'x',
+  changes: null,
+  metadata: null,
+  error_message: null,
+};
+
+describe('buildChangeRows', () => {
+  it('devuelve [] sin changes', () => {
+    expect(buildChangeRows(baseEvent, money)).toStrictEqual([]);
+  });
+
+  it('formatea antes/después con dinero en price y no en stock', () => {
+    const rows = buildChangeRows(
+      {
+        ...baseEvent,
+        changes: {
+          price: { from: 100000, to: 120000 },
+          stock: { from: 3, to: 8 },
+        },
+      },
+      money,
+    );
+    expect(rows).toStrictEqual([
+      { key: 'price', label: 'Precio', from: '$1000', to: '$1200' },
+      { key: 'stock', label: 'Stock', from: '3', to: '8' },
+    ]);
+  });
+
+  it('tolera entradas sin forma {from,to}', () => {
+    const rows = buildChangeRows(
+      { ...baseEvent, changes: { rareza: 'x' } as never },
+      money,
+    );
+    expect(rows[0]).toStrictEqual({ key: 'rareza', label: 'Rareza', from: '—', to: 'x' });
+  });
+});
+
+describe('buildMetadataRows', () => {
+  it('etiqueta claves conocidas y cae a genérico en las demás', () => {
+    const rows = buildMetadataRows(
+      {
+        module: 'inventory',
+        metadata: { movement_type: 'manual_out', unit_cost: 5000, difference: -2, campo_nuevo: 'ok' },
+      },
+      money,
+    );
+    expect(rows).toStrictEqual([
+      { key: 'movement_type', label: 'Tipo de movimiento', value: 'Egreso manual' },
+      { key: 'unit_cost', label: 'Costo unitario', value: '$50' },
+      { key: 'difference', label: 'Diferencia', value: '-2' },
+      { key: 'campo_nuevo', label: 'Campo nuevo', value: 'ok' },
+    ]);
+  });
+
+  it('devuelve [] sin metadata', () => {
+    expect(buildMetadataRows(baseEvent, money)).toStrictEqual([]);
+  });
+});
