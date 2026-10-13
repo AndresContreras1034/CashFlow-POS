@@ -12,6 +12,7 @@ use db::init_db;
 use modules::audit::router::*;
 use modules::billing::router::*;
 use modules::cash::router::*;
+use modules::customers::router::*;
 use modules::debts::router::*;
 use modules::developer::router::*;
 use modules::inventory::router::*;
@@ -78,53 +79,55 @@ pub fn run() {
         .setup(move |app| {
             let handle = app.handle().clone();
 
-            if let Some(window) = handle.get_webview_window("main") {
-                window.show().ok();
-            }
-
             if let Err(error) = load_runtime_environment(&handle) {
                 tracing::error!("{error}");
                 handle.exit(1);
                 return Ok(());
             }
 
-            tauri::async_runtime::spawn(async move {
-                match init_db().await {
-                    Ok(pool) => {
-                        let health_pool = pool.clone();
-                        handle.manage(pool);
-
-                        tracing::info!(ok = true, "Base de datos lista");
-                        let startup = started.elapsed();
-
-                        let db = probe_health(&health_pool)
-                            .await
-                            .map_err(|error| error.to_string());
-                        logging::print_startup_panel(&logging::StartupInfo {
-                            app_version: env!("CARGO_PKG_VERSION"),
-                            profile: if cfg!(debug_assertions) {
-                                "debug"
-                            } else {
-                                "release"
-                            },
-                            log_filter: logging::effective_filter(
-                                std::env::var("RUST_LOG").ok().as_deref(),
-                            ),
-                            db,
-                            pool_size: health_pool.size(),
-                            pool_idle: health_pool.num_idle(),
-                            pool_max: health_pool.options().get_max_connections(),
-                            startup,
-                        });
-                    }
-                    Err(error) => {
-                        tracing::error!(
-                            error = %error,
-                            "No se pudo inicializar la base de datos"
-                        );
-                        handle.exit(1);
-                    }
+            let pool = match tauri::async_runtime::block_on(init_db()) {
+                Ok(pool) => pool,
+                Err(error) => {
+                    tracing::error!(
+                        error = %error,
+                        "No se pudo inicializar la base de datos"
+                    );
+                    handle.exit(1);
+                    return Ok(());
                 }
+            };
+            let health_pool = pool.clone();
+            if !handle.manage(pool) {
+                tracing::error!("No se pudo registrar el pool de base de datos");
+                handle.exit(1);
+                return Ok(());
+            }
+
+            if let Some(window) = handle.get_webview_window("main") {
+                window.show().ok();
+            }
+
+            tauri::async_runtime::spawn(async move {
+                tracing::info!(ok = true, "Base de datos lista");
+                let db = probe_health(&health_pool)
+                    .await
+                    .map_err(|error| error.to_string());
+                logging::print_startup_panel(&logging::StartupInfo {
+                    app_version: env!("CARGO_PKG_VERSION"),
+                    profile: if cfg!(debug_assertions) {
+                        "debug"
+                    } else {
+                        "release"
+                    },
+                    log_filter: logging::effective_filter(
+                        std::env::var("RUST_LOG").ok().as_deref(),
+                    ),
+                    db,
+                    pool_size: health_pool.size(),
+                    pool_idle: health_pool.num_idle(),
+                    pool_max: health_pool.options().get_max_connections(),
+                    startup: started.elapsed(),
+                });
             });
 
             Ok(())
@@ -219,6 +222,7 @@ pub fn run() {
             get_sale,
             list_sales,
             void_sale,
+            assign_sale_customer,
             // =================================================
             // Billing / Printer
             // =================================================
@@ -262,6 +266,15 @@ pub fn run() {
             void_debt,
             register_debt_payment,
             void_debt_payment,
+            // =================================================
+            // Customers
+            // =================================================
+            list_customers,
+            get_customer,
+            get_customer_names,
+            create_customer,
+            update_customer,
+            set_customer_active,
             // Developer Mode
             set_developer_mode,
             get_developer_status,

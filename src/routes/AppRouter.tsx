@@ -4,6 +4,8 @@ import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
 import { AppLayout } from '../components/layout/AppLayout';
 import { LicenseGate } from '../components/licensing/LicenseGate';
 import { Audit } from '../pages/Audit/Audit';
+import Customers from '../pages/Customers/Customers';
+import { Debts } from '../pages/Debts/Debts';
 import { Developer } from '../pages/Developer/Developer';
 import { Inventory } from '../pages/Inventory/Inventory';
 import { ProductDetail } from '../pages/ProductDetail/ProductDetail';
@@ -54,16 +56,10 @@ export const AppRouter: React.FC = () => (
         <Route path="/cash" element={<Cash />} />
 
         {/* Clientes */}
-        <Route
-          path="/customers"
-          element={<Placeholder name="Clientes" />}
-        />
+        <Route path="/customers" element={<Customers />} />
 
         {/* Deudas */}
-        <Route
-          path="/debts"
-          element={<Placeholder name="Deudas" />}
-        />
+        <Route path="/debts" element={<Debts />} />
 
         {/* Proveedores */}
         <Route

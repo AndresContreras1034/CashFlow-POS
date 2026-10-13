@@ -1,0 +1,77 @@
+.customer-detail { display: flex; flex-direction: column; gap: 16px; }
+.customer-detail-head { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
+.customer-detail-head h3 { font-size: 18px; font-weight: 700; }
+.customer-detail-muted { color: var(--text-muted); font-size: 13px; }
+.customer-detail-error {
+  padding: 10px 14px;
+  background: var(--danger-dim);
+  border: 1px solid var(--danger);
+  border-radius: var(--radius-sm);
+  color: var(--danger);
+  font-size: 13px;
+}
+
+.customer-stats {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 12px;
+}
+.customer-stats > div {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  padding: 10px 14px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  background: var(--bg-elevated);
+}
+.customer-stats span { font-size: 12px; color: var(--text-secondary); }
+.customer-stats strong { font-size: 16px; }
+
+.customer-dl {
+  display: grid;
+  grid-template-columns: max-content minmax(0, 1fr);
+  gap: 6px 16px;
+  font-size: 13px;
+}
+.customer-dl dt { color: var(--text-secondary); font-weight: 500; }
+.customer-dl dd { min-width: 0; overflow-wrap: anywhere; }
+
+.customer-detail-actions { display: flex; gap: 8px; flex-wrap: wrap; align-items: center; }
+.customer-history h4 { font-size: 14px; font-weight: 600; margin-bottom: 8px; }
+.customer-history-wrap {
+  overflow-x: auto;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+}
+.customer-history-table { width: 100%; border-collapse: collapse; font-size: 13px; }
+.customer-history-table th {
+  padding: 9px 12px;
+  text-align: left;
+  font-size: 11px;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: var(--text-secondary);
+  background: var(--bg-elevated);
+  border-bottom: 1px solid var(--border);
+}
+.customer-history-table td {
+  padding: 9px 12px;
+  border-bottom: 1px solid var(--border-subtle);
+}
+.customer-history-table tbody tr:last-child td { border-bottom: none; }
+.customer-history-pager {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  margin-top: 10px;
+  font-size: 13px;
+  color: var(--text-secondary);
+}
+
+@media (max-width: 640px) {
+  .customer-stats { grid-template-columns: 1fr; }
+  .customer-dl { grid-template-columns: 1fr; gap: 3px; }
+  .customer-dl dd { margin-bottom: 7px; }
+}

@@ -542,6 +542,11 @@ export interface VoidSaleDto {
   performed_by?: string | null;
 }
 
+export interface AssignSaleCustomerDto {
+  customer_id: number | null;
+  performed_by?: string | null;
+}
+
 export interface SaleFilterDto {
   status?: string | null;
   customer_id?: number | null;
@@ -653,7 +658,9 @@ export type AuditModule =
   | 'import'
   | 'licensing'
   | 'billing'
-  | 'system';
+  | 'system'
+  | 'debts'
+  | 'customers';
 
 /** Un campo que cambió: solo aparecen los campos modificados. */
 export interface AuditChange {
