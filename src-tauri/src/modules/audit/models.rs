@@ -30,6 +30,7 @@ pub enum AuditModule {
     Billing,
     System,
     Debts,
+    Customers,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, sqlx::Type)]
