@@ -24,7 +24,7 @@ export const errorMessage = (error: unknown): string =>
 
 export const AUDIT_MODULES: readonly AuditModule[] = [
   'sales', 'inventory', 'cash', 'stocktake', 'settings',
-  'import', 'licensing', 'billing', 'system',
+  'import', 'licensing', 'billing', 'system', 'debts', 'customers',
 ];
 export const AUDIT_CATEGORIES: readonly AuditCategory[] = ['business', 'error'];
 export const AUDIT_OUTCOMES: readonly AuditOutcome[] = ['success', 'failure'];
@@ -39,6 +39,8 @@ export const MODULE_LABELS: Record<AuditModule, string> = {
   licensing: 'Licencia',
   billing: 'Facturación',
   system: 'Sistema',
+  debts: 'Deudas',
+  customers: 'Clientes',
 };
 
 export const CATEGORY_LABELS: Record<AuditCategory, string> = {
@@ -56,6 +58,9 @@ const ACTION_LABELS: Record<string, string> = {
   'cash.close': 'Cierre de caja',
   'cash.create': 'Movimiento de caja',
   'sales.create': 'Venta registrada',
+  'sales.assign_customer': 'Cliente asignado a venta',
+  'sales.cancel': 'Venta anulada',
+  'sales.refund': 'Venta devuelta',
   'inventory.create': 'Creación',
   'inventory.update': 'Actualización',
   'inventory.stock_in': 'Entrada de stock',
@@ -67,6 +72,13 @@ const ACTION_LABELS: Record<string, string> = {
   'settings.update': 'Ajustes actualizados',
   'licensing.activate': 'Licencia activada',
   'import.execute': 'Importación ejecutada',
+  'debts.create': 'Registro',
+  'debts.update': 'Edición',
+  'debts.void': 'Anulación',
+  'customers.create': 'Registro',
+  'customers.update': 'Edición',
+  'customers.activate': 'Reactivación',
+  'customers.deactivate': 'Desactivación',
 };
 
 const ENTITY_TYPE_LABELS: Record<string, string> = {
@@ -80,6 +92,9 @@ const ENTITY_TYPE_LABELS: Record<string, string> = {
   app_settings: 'Ajustes',
   license: 'Licencia',
   inventory_import: 'Importación de inventario',
+  debt: 'Deuda',
+  debt_payment: 'Pago de deuda',
+  customer: 'Cliente',
 };
 
 const FIELD_LABELS: Record<string, string> = {
@@ -120,6 +135,14 @@ const FIELD_LABELS: Record<string, string> = {
   file_name: 'Archivo', total_rows: 'Filas', new_categories: 'Categorías nuevas',
   new_products: 'Productos nuevos', new_variants: 'Variantes nuevas',
   skipped: 'Omitidas', errors: 'Errores',
+  // deudas
+  creditor_name: 'Acreedor', category: 'Categoría', subcategory: 'Subcategoría',
+  nature: 'Naturaleza', concept: 'Concepto', original_amount: 'Importe original',
+  issued_on: 'Emisión', due_on: 'Vencimiento', document_ref: 'Referencia',
+  debt_id: 'Deuda', paid_on: 'Fecha de pago', method: 'Método de pago',
+  reference: 'Referencia de pago', balance_after: 'Saldo posterior',
+  document_type: 'Tipo de documento', document_number: 'Número de documento',
+  from_name: 'Cliente anterior', to_name: 'Cliente nuevo',
   // error
   error_kind: 'Tipo de error',
 };
@@ -128,6 +151,7 @@ const VALUE_LABELS: Record<string, Record<string, string>> = {
   status: {
     open: 'Abierto', closed: 'Cerrado', counting: 'En conteo',
     applied: 'Aplicada', cancelled: 'Cancelada',
+    active: 'Vigente', voided: 'Anulada',
   },
   movement_type: {
     manual_in: 'Ingreso manual', manual_out: 'Egreso manual',
@@ -135,7 +159,18 @@ const VALUE_LABELS: Record<string, Record<string, string>> = {
     purchase: 'Compra', sale: 'Venta', sale_return: 'Devolución',
     adjustment: 'Ajuste', initial_stock: 'Stock inicial',
   },
-  method: { cash: 'Efectivo', card: 'Tarjeta', transfer: 'Transferencia' },
+  method: {
+    cash: 'Efectivo', card: 'Tarjeta', transfer: 'Transferencia',
+    check: 'Cheque', other: 'Otro',
+  },
+  category: {
+    maintenance: 'Mantenimiento', business_operation: 'Operación del negocio',
+    fixed_services: 'Servicios y gastos fijos', other_obligations: 'Otras obligaciones',
+  },
+  nature: {
+    operating: 'Operativa', financial_loan: 'Préstamo financiero',
+    tax: 'Impuestos', other: 'Otra',
+  },
   reason: { ...REASON_LABELS },
   kind: { purchase: 'Compra perpetua', rental: 'Alquiler' },
   error_kind: { database: 'Base de datos', internal: 'Interno' },
@@ -347,6 +382,7 @@ const MONEY_FIELDS: Record<string, readonly string[]> = {
   cash: ['opening_amount', 'expected_amount', 'counted_amount', 'difference', 'amount'],
   sales: ['subtotal', 'discount', 'tax', 'total', 'amount'],
   inventory: ['price', 'cost', 'unit_cost'],
+  debts: ['original_amount', 'amount', 'balance_after'],
 };
 
 /** Si el campo es un importe en centavos según el módulo. */

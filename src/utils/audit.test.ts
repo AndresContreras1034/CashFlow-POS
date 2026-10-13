@@ -11,6 +11,7 @@ import {
   formatAuditDate,
   formatAuditValue,
   formatEntity,
+  fieldLabel,
   hasActiveFilters,
   isMoneyField,
   searchParamsToFilter,
@@ -141,6 +142,11 @@ describe('etiquetas del catálogo', () => {
   it('traduce acciones conocidas y humaniza las desconocidas', () => {
     expect(actionLabel('cash', 'open')).toBe('Apertura de caja');
     expect(actionLabel('inventory', 'stock_adjust')).toBe('Ajuste de stock');
+    expect(actionLabel('sales', 'assign_customer')).toBe('Cliente asignado a venta');
+    expect(actionLabel('sales', 'cancel')).toBe('Venta anulada');
+    expect(actionLabel('sales', 'refund')).toBe('Venta devuelta');
+    expect(fieldLabel('from_name')).toBe('Cliente anterior');
+    expect(fieldLabel('to_name')).toBe('Cliente nuevo');
     expect(actionLabel('reports', 'export_all')).toBe('Export all');
   });
 
