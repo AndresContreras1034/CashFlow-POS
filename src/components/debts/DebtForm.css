@@ -1,0 +1,18 @@
+.debts-form { display: flex; flex-direction: column; gap: 14px; }
+.debts-form-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 12px 16px;
+}
+.debts-wide { grid-column: 1 / -1; }
+.debts-textarea { resize: vertical; min-height: 64px; font: inherit; }
+.debts-hint { font-size: 12px; color: var(--text-muted); }
+.debts-field-error { font-size: 12px; color: var(--danger); }
+.debts-form-actions { display: flex; justify-content: flex-end; gap: 8px; }
+.debts-form input[aria-invalid='true'],
+.debts-form select[aria-invalid='true'],
+.debts-form textarea[aria-invalid='true'] { border-color: var(--danger); }
+
+@media (max-width: 640px) {
+  .debts-form-grid { grid-template-columns: 1fr; }
+}

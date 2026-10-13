@@ -1,0 +1,21 @@
+.debts-table td,
+.debts-table th {
+  padding: 8px 12px;
+  text-align: left;
+  border-bottom: 1px solid var(--border-subtle);
+  vertical-align: top;
+}
+.debts-table th {
+  font-weight: 600;
+  color: var(--text-secondary);
+  background: var(--bg-hover);
+  position: sticky;
+  top: 0;
+}
+.debts-table th[scope='row'] { position: static; background: transparent; font-weight: 500; }
+.debts-main { min-width: 200px; }
+.debts-sub { display: block; font-size: 12px; color: var(--text-muted); overflow-wrap: anywhere; }
+.debts-nowrap { white-space: nowrap; display: block; margin-bottom: 2px; }
+.debts-actions { white-space: nowrap; text-align: right; }
+.debts-row--voided td { color: var(--text-muted); }
+.debts-row--voided .debts-link { color: var(--text-muted); }

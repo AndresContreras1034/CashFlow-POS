@@ -1,0 +1,59 @@
+.debts-detail { display: flex; flex-direction: column; gap: 16px; outline: none; }
+.debts-detail-head { display: flex; gap: 8px; flex-wrap: wrap; align-items: center; }
+
+.debts-amounts {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 12px;
+}
+.debts-amounts > div {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  padding: 10px 14px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  background: var(--bg-surface);
+}
+.debts-amounts strong { font-size: 18px; }
+
+.debts-dl {
+  display: grid;
+  grid-template-columns: max-content minmax(0, 1fr);
+  gap: 6px 16px;
+  font-size: 13px;
+}
+.debts-dl dt { color: var(--text-secondary); font-weight: 500; }
+.debts-dl dd { min-width: 0; overflow-wrap: anywhere; }
+
+.debts-detail-actions { display: flex; gap: 8px; flex-wrap: wrap; align-items: center; }
+.debts-panel {
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 14px;
+  background: var(--bg-surface);
+}
+.debts-panel h3,
+.debts-reason h3 { font-size: 14px; font-weight: 600; margin-bottom: 10px; }
+.debts-reason { display: flex; flex-direction: column; gap: 10px; }
+
+.debts-detail-section { display: flex; flex-direction: column; gap: 8px; }
+.debts-detail-section h3 { font-size: 14px; font-weight: 600; }
+.debts-detail-section > summary { cursor: pointer; font-size: 13px; font-weight: 500; }
+
+.debts-history { list-style: none; display: flex; flex-direction: column; gap: 10px; margin-top: 10px; }
+.debts-history > li {
+  padding: 8px 10px;
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-sm);
+  font-size: 13px;
+}
+.debts-history-head { display: flex; justify-content: space-between; gap: 8px; flex-wrap: wrap; }
+.debts-changes { list-style: none; margin-top: 4px; font-size: 12px; color: var(--text-secondary); }
+.debts-changes span { font-weight: 500; }
+
+@media (max-width: 640px) {
+  .debts-amounts { grid-template-columns: 1fr; }
+  .debts-dl { grid-template-columns: 1fr; gap: 3px; }
+  .debts-dl dd { margin-bottom: 7px; }
+}

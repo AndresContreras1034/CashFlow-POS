@@ -1,0 +1,38 @@
+.debts-filters {
+  background: var(--bg-surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 14px;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+.debts-filters-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(min(180px, 100%), 1fr));
+  gap: 12px;
+}
+.debts-field { display: flex; min-width: 0; flex-direction: column; gap: 4px; }
+.debts-field label { font-size: 12px; font-weight: 500; color: var(--text-secondary); }
+.debts-input {
+  width: 100%;
+  min-width: 0;
+  height: 34px;
+  padding: 0 10px;
+  background: var(--bg-surface);
+  color: var(--text-primary);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  font: inherit;
+}
+.debts-input:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; }
+.debts-input[aria-invalid='true'] { border-color: var(--danger); }
+
+.debts-dates > summary { cursor: pointer; font-size: 13px; font-weight: 500; margin-bottom: 10px; }
+.debts-error-text { color: var(--danger); font-size: 13px; }
+.debts-filters-actions { display: flex; gap: 8px; flex-wrap: wrap; }
+
+@media (max-width: 640px) {
+  .debts-filters-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .debts-filters-grid .debts-field:first-child { grid-column: 1 / -1; }
+}

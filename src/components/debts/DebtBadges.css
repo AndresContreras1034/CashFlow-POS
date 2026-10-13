@@ -1,0 +1,41 @@
+.debts-due,
+.debts-status,
+.debts-chip {
+  display: inline-block;
+  padding: 1px 8px;
+  border-radius: 999px;
+  font-size: 12px;
+  font-weight: 500;
+  white-space: nowrap;
+}
+
+/* Vencimiento. El texto siempre dice lo mismo que el color: no se depende solo del color. */
+.debts-due--ok { background: var(--success-dim); color: var(--success); }
+.debts-due--alert { background: var(--danger-dim); color: var(--danger); }
+.debts-due--today {
+  background: var(--danger);
+  color: var(--bg-surface);
+  font-weight: 700;
+}
+.debts-due--overdue {
+  background: color-mix(in srgb, var(--danger) 24%, transparent);
+  color: var(--danger);
+  border: 1px solid var(--danger);
+  font-weight: 700;
+}
+.debts-due--paid { background: var(--success-dim); color: var(--success); }
+.debts-due--voided,
+.debts-due--none { background: var(--bg-hover); color: var(--text-muted); }
+
+/* Estado financiero (independiente del vencimiento). */
+.debts-status--pending { background: var(--bg-hover); color: var(--text-secondary); }
+.debts-status--partially_paid { background: var(--accent-dim); color: var(--accent); }
+.debts-status--overdue { background: var(--danger-dim); color: var(--danger); }
+.debts-status--paid { background: var(--success-dim); color: var(--success); }
+.debts-status--voided {
+  background: var(--bg-hover);
+  color: var(--text-muted);
+  text-decoration: line-through;
+}
+
+.debts-chip { background: var(--warning-dim); color: var(--warning); }
