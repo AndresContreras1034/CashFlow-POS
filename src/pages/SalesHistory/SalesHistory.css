@@ -536,11 +536,11 @@
   }
 
   .sales-history-table {
-    min-width: 650px;
+    min-width: 760px;
   }
 
   .sales-history-pagination {
-    min-width: 650px;
+    min-width: 760px;
   }
 
   .sales-history-modal-backdrop {
@@ -560,6 +560,31 @@
   .sales-history-modal-actions {
     flex-shrink: 0;
   }
+}
+
+.sales-history-customer {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  margin-bottom: 16px;
+  padding: 12px 14px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  background: var(--bg-elevated);
+}
+
+.sales-history-customer-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  font-size: 14px;
+}
+
+.sales-history-customer-edit {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
 }
 
 @media (max-width: 480px) {

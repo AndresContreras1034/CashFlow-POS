@@ -17,7 +17,7 @@ use crate::modules::inventory::{
     dto::StockOutDto, models::MovementType, repository as inventory_repo,
 };
 use crate::modules::sales::{
-    dto::{CreateSaleDto, SaleFilterDto, VoidSaleDto},
+    dto::{AssignSaleCustomerDto, CreateSaleDto, SaleFilterDto, VoidSaleDto},
     models::{PaymentMethod, Sale, SaleDetail, SaleItem, SalePayment, SaleStatus},
 };
 use crate::types::money::tax_included_in;
@@ -27,6 +27,8 @@ use crate::types::money::tax_included_in;
 pub enum CreateSaleError {
     Db(sqlx::Error),
     NoOpenCashSession,
+    CustomerNotFound,
+    CustomerInactive,
     CourtesyReasonRequired,
     CourtesyReasonTooLong,
     CourtesyZeroGross,
@@ -52,6 +54,19 @@ pub enum VoidSaleError {
     NotFound,
     NotCompleted(SaleStatus),
     CashSessionRequired,
+}
+
+pub enum AssignCustomerError {
+    Db(sqlx::Error),
+    SaleNotFound,
+    CustomerNotFound,
+    CustomerInactive,
+}
+
+impl From<sqlx::Error> for AssignCustomerError {
+    fn from(error: sqlx::Error) -> Self {
+        Self::Db(error)
+    }
 }
 
 impl From<sqlx::Error> for VoidSaleError {
@@ -122,6 +137,19 @@ pub async fn create_sale(pool: &PgPool, dto: CreateSaleDto) -> Result<SaleDetail
             .fetch_optional(&mut *tx)
             .await?
             .ok_or(CreateSaleError::NoOpenCashSession)?;
+
+    if let Some(customer_id) = dto.customer_id {
+        let active: Option<bool> =
+            sqlx::query_scalar("SELECT is_active FROM customers WHERE id = $1 FOR SHARE")
+                .bind(customer_id)
+                .fetch_optional(&mut *tx)
+                .await?;
+        match active {
+            None => return Err(CreateSaleError::CustomerNotFound),
+            Some(false) => return Err(CreateSaleError::CustomerInactive),
+            Some(true) => {}
+        }
+    }
 
     let created_by = dto
         .created_by
@@ -693,6 +721,94 @@ pub async fn void_sale(
     get_sale_by_id(pool, id)
         .await?
         .ok_or(VoidSaleError::NotFound)
+}
+
+/// Cambia solo `sales.customer_id`; no modifica importes, stock ni caja.
+/// Si la asignación ya coincide, no genera una escritura ni un evento de auditoría.
+pub async fn assign_customer(
+    pool: &PgPool,
+    id: i32,
+    dto: AssignSaleCustomerDto,
+) -> Result<SaleDetail, AssignCustomerError> {
+    let actor = declared_actor(&dto.performed_by);
+    let mut tx = pool.begin().await?;
+
+    let previous: Option<i32> =
+        sqlx::query_scalar::<_, Option<i32>>("SELECT customer_id FROM sales WHERE id = $1 FOR UPDATE")
+            .bind(id)
+            .fetch_optional(&mut *tx)
+            .await?
+            .ok_or(AssignCustomerError::SaleNotFound)?;
+
+    let mut new_name: Option<String> = None;
+    if let Some(customer_id) = dto.customer_id {
+        let row: Option<(String, bool)> =
+            sqlx::query_as("SELECT name, is_active FROM customers WHERE id = $1 FOR SHARE")
+                .bind(customer_id)
+                .fetch_optional(&mut *tx)
+                .await?;
+        match row {
+            None => return Err(AssignCustomerError::CustomerNotFound),
+            Some((_, false)) => return Err(AssignCustomerError::CustomerInactive),
+            Some((name, true)) => new_name = Some(name),
+        }
+    }
+
+    if previous == dto.customer_id {
+        tx.rollback().await?;
+        return get_sale_by_id(pool, id)
+            .await?
+            .ok_or(AssignCustomerError::SaleNotFound);
+    }
+
+    let previous_name: Option<String> = match previous {
+        Some(previous_id) => {
+            sqlx::query_scalar("SELECT name FROM customers WHERE id = $1")
+                .bind(previous_id)
+                .fetch_optional(&mut *tx)
+                .await?
+        }
+        None => None,
+    };
+
+    sqlx::query("UPDATE sales SET customer_id = $2 WHERE id = $1")
+        .bind(id)
+        .bind(dto.customer_id)
+        .execute(&mut *tx)
+        .await?;
+
+    let summary = match &new_name {
+        Some(name) => format!("Venta #{id} asignada al cliente {name}"),
+        None => format!("Venta #{id} quedó sin cliente"),
+    };
+    audit_repo::insert_event(
+        &mut *tx,
+        NewAuditEvent {
+            correlation_id: Some(Uuid::new_v4()),
+            category: AuditCategory::Business,
+            module: AuditModule::Sales,
+            action: "assign_customer".to_string(),
+            outcome: AuditOutcome::Success,
+            actor,
+            entity_type: Some("sale".to_string()),
+            entity_id: Some(id.to_string()),
+            summary,
+            changes: Some(json!({
+                "customer_id": { "from": previous, "to": dto.customer_id }
+            })),
+            metadata: Some(json!({
+                "from_name": previous_name,
+                "to_name": new_name,
+            })),
+            error_message: None,
+        },
+    )
+    .await?;
+
+    tx.commit().await?;
+    get_sale_by_id(pool, id)
+        .await?
+        .ok_or(AssignCustomerError::SaleNotFound)
 }
 
 pub async fn list_sales(

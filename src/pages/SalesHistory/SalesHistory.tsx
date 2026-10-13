@@ -1,6 +1,8 @@
 import { useEffect, useState, useCallback, useRef } from 'react';
 import type { Sale, SaleDetail, SaleFilterDto, SaleStatus, VoidSaleDto } from '../../types';
-import { listSales, getSale, voidSale } from '../../services/sales.service';
+import { listSales, getSale, voidSale, assignSaleCustomer } from '../../services/sales.service';
+import { CustomerPicker, type CustomerRef } from '../../components/customers/CustomerPicker';
+import { getCustomerNames } from '../../services/customers.service';
 import { printSaleTicket } from '../../services/billing.service';
 import { formatMoney } from '../../utils/format';
 import { actorField } from '../../utils/preferences';
@@ -32,11 +34,14 @@ export default function SalesHistory() {
   const [saleNumber, setSaleNumber] = useState('');
   const [paymentMethod, setPaymentMethod] = useState('');
   const [cashSessionId, setCashSessionId] = useState('');
+  const [filterCustomer, setFilterCustomer] = useState<CustomerRef | null>(null);
   const [applied, setApplied] = useState({
     status: '', dateFrom: '', dateTo: '', saleId: null as number | null,
     paymentMethod: '', cashSessionId: null as number | null,
+    customerId: null as number | null,
   });
   const reqRef = useRef(0);
+  const [customerNames, setCustomerNames] = useState<Record<number, string>>({});
 
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -51,6 +56,24 @@ export default function SalesHistory() {
   const [voidTarget, setVoidTarget] = useState<VoidSaleDto['target_status']>('cancelled');
   const [voidReason, setVoidReason] = useState('');
   const [voiding, setVoiding] = useState(false);
+  const [assignOpen, setAssignOpen] = useState(false);
+  const [assignValue, setAssignValue] = useState<CustomerRef | null>(null);
+  const [assigning, setAssigning] = useState(false);
+
+  const ensureNames = useCallback(async (ids: (number | null)[]) => {
+    const missing = [...new Set(ids.filter((id): id is number => id !== null))];
+    if (missing.length === 0) return;
+    try {
+      const rows = await getCustomerNames(missing);
+      setCustomerNames(current => {
+        const next = { ...current };
+        for (const row of rows) next[row.id] = row.name;
+        return next;
+      });
+    } catch {
+      // Customer names are informational; the table falls back to the customer ID.
+    }
+  }, []);
 
   const load = useCallback(async () => {
     const id = ++reqRef.current;
@@ -64,6 +87,7 @@ export default function SalesHistory() {
         sale_id: applied.saleId,
         payment_method: applied.paymentMethod || null,
         cash_session_id: applied.cashSessionId,
+        customer_id: applied.customerId,
         page,
         page_size: pageSize,
       };
@@ -72,13 +96,14 @@ export default function SalesHistory() {
       setSales(res.data);
       setTotal(res.total);
       setTotalAmount(res.total_amount);
+      void ensureNames(res.data.map(sale => sale.customer_id));
     } catch (e) {
       if (id !== reqRef.current) return;
       setError(String(e));
     } finally {
       if (id === reqRef.current) setLoading(false);
     }
-  }, [applied, page]);
+  }, [applied, page, ensureNames]);
 
   useEffect(() => {
     load();
@@ -103,7 +128,15 @@ export default function SalesHistory() {
       return;
     }
     setError(null);
-    setApplied({ status, dateFrom, dateTo, saleId, paymentMethod, cashSessionId: sessionId });
+    setApplied({
+      status,
+      dateFrom,
+      dateTo,
+      saleId,
+      paymentMethod,
+      cashSessionId: sessionId,
+      customerId: filterCustomer?.id ?? null,
+    });
     setPage(1);
   }
 
@@ -114,7 +147,16 @@ export default function SalesHistory() {
     setSaleNumber('');
     setPaymentMethod('');
     setCashSessionId('');
-    setApplied({ status: '', dateFrom: '', dateTo: '', saleId: null, paymentMethod: '', cashSessionId: null });
+    setFilterCustomer(null);
+    setApplied({
+      status: '',
+      dateFrom: '',
+      dateTo: '',
+      saleId: null,
+      paymentMethod: '',
+      cashSessionId: null,
+      customerId: null,
+    });
     setPage(1);
   }
 
@@ -134,6 +176,8 @@ export default function SalesHistory() {
     try {
       const detail = await getSale(id);
       setSelected(detail);
+      setAssignOpen(false);
+      void ensureNames([detail.customer_id]);
     } catch (e) {
       setError(String(e));
     } finally {
@@ -143,6 +187,7 @@ export default function SalesHistory() {
 
   function closeDetail() {
     setSelected(null);
+    setAssignOpen(false);
     setPrintError(null);
     setPrintSuccess(false);
   }
@@ -182,6 +227,29 @@ export default function SalesHistory() {
       setVoiding(false);
     }
   }
+
+  async function handleAssign() {
+    if (!selected || assigning) return;
+    setAssigning(true);
+    setError(null);
+    try {
+      const updated = await assignSaleCustomer(selected.id, {
+        customer_id: assignValue?.id ?? null,
+        ...actorField('performed_by'),
+      });
+      setSelected(updated);
+      void ensureNames([updated.customer_id]);
+      setAssignOpen(false);
+      await load();
+    } catch (e) {
+      setError(String(e));
+    } finally {
+      setAssigning(false);
+    }
+  }
+
+  const customerLabel = (id: number | null) =>
+    id === null ? 'Consumidor final' : customerNames[id] ?? `Cliente #${id}`;
 
   const cashToReturn = selected?.payments
     .filter((payment) => payment.method === 'cash')
@@ -244,6 +312,10 @@ export default function SalesHistory() {
           <label>Turno #</label>
           <input className="form-input" type="number" min={1} value={cashSessionId} onChange={(e) => setCashSessionId(e.target.value)} />
         </div>
+        <div className="form-field">
+          <label>Cliente</label>
+          <CustomerPicker value={filterCustomer} onChange={setFilterCustomer} />
+        </div>
         <div className="sales-history-filter-actions">
           <button type="submit" className="btn btn-primary">Filtrar</button>
           <button type="button" className="btn" onClick={clearFilters}>Limpiar</button>
@@ -267,6 +339,7 @@ export default function SalesHistory() {
                   <th>Fecha</th>
                   <th>Estado</th>
                   <th>Total</th>
+                  <th>Cliente</th>
                   <th>Vendedor</th>
                 </tr>
               </thead>
@@ -286,6 +359,7 @@ export default function SalesHistory() {
                         <span className="sales-history-courtesy">Cortesía</span>
                       )}
                     </td>
+                    <td>{customerLabel(s.customer_id)}</td>
                     <td>{s.created_by}</td>
                   </tr>
                 ))}
@@ -343,6 +417,64 @@ export default function SalesHistory() {
                   {new Date(selected.created_at).toLocaleString('es-CO')} — {statusLabel[selected.status]}
                   {' · '}Vendedor: {selected.created_by}
                 </p>
+                <div className="sales-history-customer">
+                  <div className="sales-history-customer-row">
+                    <span>
+                      <strong>Cliente:</strong> {customerLabel(selected.customer_id)}
+                    </span>
+                    {!assignOpen && (
+                      <button
+                        className="btn"
+                        type="button"
+                        onClick={() => {
+                          setAssignValue(null);
+                          setAssignOpen(true);
+                        }}
+                      >
+                        {selected.customer_id === null ? 'Asignar a cliente' : 'Cambiar cliente'}
+                      </button>
+                    )}
+                  </div>
+                  {assignOpen && (
+                    <div className="sales-history-customer-edit">
+                      <CustomerPicker
+                        value={assignValue}
+                        onChange={setAssignValue}
+                        disabled={assigning}
+                      />
+                      <p className="sales-history-meta">
+                        Solo cambia el cliente de la venta; no afecta importes, stock ni caja.
+                        {selected.customer_id !== null &&
+                          ' Sin elegir cliente, la venta quedará como consumidor final.'}
+                      </p>
+                      <div className="sales-history-modal-actions">
+                        <button
+                          className="btn btn-primary"
+                          type="button"
+                          onClick={() => void handleAssign()}
+                          disabled={
+                            assigning ||
+                            (assignValue === null && selected.customer_id === null)
+                          }
+                        >
+                          {assigning
+                            ? 'Guardando…'
+                            : assignValue
+                              ? 'Guardar cliente'
+                              : 'Dejar sin cliente'}
+                        </button>
+                        <button
+                          className="btn"
+                          type="button"
+                          onClick={() => setAssignOpen(false)}
+                          disabled={assigning}
+                        >
+                          Cancelar
+                        </button>
+                      </div>
+                    </div>
+                  )}
+                </div>
                 {selected.status === 'completed' ? (
                   <div className="sales-history-void-actions">
                     {!voidFormOpen ? (

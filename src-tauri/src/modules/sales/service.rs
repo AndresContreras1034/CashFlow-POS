@@ -2,9 +2,9 @@ use sqlx::PgPool;
 
 use crate::errors::app_error::AppError;
 use crate::modules::sales::{
-    dto::{CreateSaleDto, SaleFilterDto, SaleListResponse, VoidSaleDto},
+    dto::{AssignSaleCustomerDto, CreateSaleDto, SaleFilterDto, SaleListResponse, VoidSaleDto},
     models::{SaleDetail, SaleStatus},
-    repository::{self, CreateSaleError, VoidSaleError},
+    repository::{self, AssignCustomerError, CreateSaleError, VoidSaleError},
 };
 
 pub async fn create_sale(pool: &PgPool, dto: CreateSaleDto) -> Result<SaleDetail, AppError> {
@@ -29,6 +29,12 @@ pub async fn create_sale(pool: &PgPool, dto: CreateSaleDto) -> Result<SaleDetail
             CreateSaleError::NoOpenCashSession => AppError::validation(
                 "No hay un turno de caja abierto. Abre la caja para registrar ventas.",
             ),
+            CreateSaleError::CustomerNotFound => {
+                AppError::validation("El cliente seleccionado no existe")
+            }
+            CreateSaleError::CustomerInactive => {
+                AppError::validation("El cliente seleccionado está desactivado")
+            }
             CreateSaleError::CourtesyReasonRequired => {
                 AppError::validation("La venta de cortesía requiere un motivo")
             }
@@ -84,6 +90,25 @@ pub async fn get_sale(pool: &PgPool, id: i32) -> Result<SaleDetail, AppError> {
         .await
         .map_err(AppError::from)?
         .ok_or_else(|| AppError::not_found("Venta no encontrada"))
+}
+
+pub async fn assign_customer(
+    pool: &PgPool,
+    id: i32,
+    dto: AssignSaleCustomerDto,
+) -> Result<SaleDetail, AppError> {
+    repository::assign_customer(pool, id, dto)
+        .await
+        .map_err(|error| match error {
+            AssignCustomerError::Db(db_error) => AppError::from(db_error),
+            AssignCustomerError::SaleNotFound => AppError::not_found("La venta no existe"),
+            AssignCustomerError::CustomerNotFound => {
+                AppError::validation("El cliente seleccionado no existe")
+            }
+            AssignCustomerError::CustomerInactive => {
+                AppError::validation("El cliente seleccionado está desactivado")
+            }
+        })
 }
 
 pub async fn void_sale(

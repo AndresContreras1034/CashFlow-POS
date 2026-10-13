@@ -4,6 +4,8 @@ import { findByBarcode, searchVariants, getVariant } from '../../services/invent
 import { createSale } from '../../services/sales.service';
 import { printSaleTicket } from '../../services/billing.service';
 import { getCurrentCashSession } from '../../services/cash.service';
+import { getCustomer } from '../../services/customers.service';
+import { CustomerPicker, type CustomerRef } from '../../components/customers/CustomerPicker';
 import { formatMoney, parseMoneyInput, minorToInput, moneyStep } from '../../utils/format';
 import { actorField } from '../../utils/preferences';
 import {
@@ -36,6 +38,7 @@ export default function Sales() {
   const [cashOpen, setCashOpen] = useState<boolean | null>(null);
   const [cashSessionId, setCashSessionId] = useState<number | null>(null);
   const [heldSales, setHeldSales] = useState<HeldSale[]>([]);
+  const [customer, setCustomer] = useState<CustomerRef | null>(null);
   const [heldReviewPending, setHeldReviewPending] = useState(false);
   const [heldReviewAcknowledged, setHeldReviewAcknowledged] = useState(false);
   const [heldReviewChanges, setHeldReviewChanges] = useState<string[]>([]);
@@ -221,6 +224,7 @@ export default function Sales() {
   const clearCurrentCart = useCallback(() => {
     attemptRef.current = null;
     setCart([]);
+    setCustomer(null);
     setPayments([{ method: 'cash', amount: 0 }]);
     setCashReceivedInput('');
     setIsCourtesy(false);
@@ -241,6 +245,7 @@ export default function Sales() {
         session_id: cashSessionId,
         is_courtesy: isCourtesy,
         courtesy_reason: courtesyReason,
+        customer,
         lines: cart,
       });
       if (!result.ok || !result.list) {
@@ -282,6 +287,29 @@ export default function Sales() {
       const refreshedLines: CartLine[] = [];
       const changes: string[] = [];
       const issues: Record<number, string> = {};
+      let refreshedCustomer: CustomerRef | null = entry.customer ?? null;
+      if (entry.customer) {
+        try {
+          const activeCustomer = await getCustomer(entry.customer.id);
+          if (!activeCustomer.is_active) {
+            throw new Error('El cliente guardado está desactivado');
+          }
+          refreshedCustomer = {
+            id: activeCustomer.id,
+            name: activeCustomer.name,
+            document:
+              activeCustomer.document_type && activeCustomer.document_number
+                ? `${activeCustomer.document_type} ${activeCustomer.document_number}`
+                : null,
+          };
+          if (refreshedCustomer.name !== entry.customer.name) {
+            changes.push(`Cliente: ${entry.customer.name} → ${refreshedCustomer.name}`);
+          }
+        } catch (customerError) {
+          refreshedCustomer = null;
+          changes.push(`Cliente sin asignar: no se pudo revalidar (${String(customerError)}).`);
+        }
+      }
       for (const line of entry.lines) {
         try {
           const fresh = await getVariant(line.variant_id);
@@ -311,6 +339,7 @@ export default function Sales() {
       }
 
       setCart(refreshedLines);
+      setCustomer(refreshedCustomer);
       setPayments([{ method: 'cash', amount: 0 }]);
       setCashReceivedInput('');
       setIsCourtesy(entry.is_courtesy);
@@ -486,6 +515,7 @@ export default function Sales() {
         payments: courtesyMode ? [] : payments.filter((p) => p.amount > 0),
         ...(cashReceived === null || courtesyMode ? {} : { cash_received: cashReceived }),
         courtesy_reason: courtesyMode ? trimmedCourtesyReason : null,
+        customer_id: customer?.id ?? null,
         ...actorField('created_by'),
       };
       const fingerprint = retryFingerprint(payload);
@@ -660,6 +690,10 @@ export default function Sales() {
               </button>
             </div>
           )}
+        </div>
+        <div className="form-field">
+          <label>Cliente (opcional)</label>
+          <CustomerPicker value={customer} onChange={setCustomer} disabled={confirming} />
         </div>
         {cart.length === 0 ? (
           <p className="sales-meta">Sin productos todavía.</p>

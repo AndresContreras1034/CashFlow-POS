@@ -40,6 +40,13 @@ pub struct VoidSaleDto {
     pub performed_by: Option<String>,
 }
 
+#[derive(Debug, Deserialize)]
+pub struct AssignSaleCustomerDto {
+    /// `None` deja la venta sin cliente (consumidor final).
+    pub customer_id: Option<i32>,
+    pub performed_by: Option<String>,
+}
+
 #[derive(Debug, Deserialize, Default)]
 pub struct SaleFilterDto {
     pub status: Option<String>,

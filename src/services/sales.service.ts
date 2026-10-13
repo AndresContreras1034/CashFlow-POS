@@ -5,6 +5,7 @@ import type {
   SaleFilterDto,
   SaleListResponse,
   VoidSaleDto,
+  AssignSaleCustomerDto,
 } from '../types';
 
 export async function createSale(dto: CreateSaleDto): Promise<SaleDetail> {
@@ -23,4 +24,11 @@ export async function listSales(
 
 export async function voidSale(id: number, dto: VoidSaleDto): Promise<SaleDetail> {
   return invoke('void_sale', { id, dto });
+}
+
+export async function assignSaleCustomer(
+  id: number,
+  dto: AssignSaleCustomerDto
+): Promise<SaleDetail> {
+  return invoke('assign_sale_customer', { id, dto });
 }

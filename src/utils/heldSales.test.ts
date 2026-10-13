@@ -156,3 +156,42 @@ describe('held sales storage', () => {
     expect(loadHeld(storage)).toEqual([]);
   });
 });
+
+describe('held sales with customer', () => {
+  it('round-trips the selected customer', () => {
+    const result = addHeld(storage, {
+      ...entry(),
+      customer: { id: 7, name: 'Ana' },
+    });
+
+    expect(result.ok).toBe(true);
+    expect(loadHeld(storage)).toEqual([result.entry]);
+    expect(loadHeld(storage)[0].customer).toEqual({ id: 7, name: 'Ana' });
+  });
+
+  it('still loads entries saved before customers existed', () => {
+    const legacy = held();
+    expect(legacy.customer).toBeUndefined();
+    saveHeld(storage, [legacy]);
+    expect(loadHeld(storage)).toEqual([legacy]);
+  });
+
+  it('accepts an explicit null customer', () => {
+    const consumer = held({ customer: null });
+    saveHeld(storage, [consumer]);
+    expect(loadHeld(storage)).toEqual([consumer]);
+  });
+
+  it('discards entries whose customer is malformed', () => {
+    const valid = held({ customer: { id: 3, name: 'Beto' } });
+    const badId = { ...held(), customer: { id: 'x', name: 'Beto' } };
+    const badName = { ...held(), customer: { id: 3, name: 42 } };
+    const notAnObject = { ...held(), customer: 'Beto' };
+    storage.setItem(
+      HELD_SALES_KEY,
+      JSON.stringify([badId, badName, notAnObject, valid])
+    );
+
+    expect(loadHeld(storage)).toEqual([valid]);
+  });
+});

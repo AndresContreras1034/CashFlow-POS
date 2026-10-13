@@ -8,7 +8,7 @@ use crate::modules::audit::{
     models::AuditModule,
 };
 use crate::modules::sales::{
-    dto::{CreateSaleDto, SaleFilterDto, SaleListResponse, VoidSaleDto},
+    dto::{AssignSaleCustomerDto, CreateSaleDto, SaleFilterDto, SaleListResponse, VoidSaleDto},
     models::SaleDetail,
     service,
 };
@@ -33,6 +33,22 @@ pub async fn get_sale(pool: State<'_, DbPool>, id: i32) -> Result<SaleDetail, St
     service::get_sale(&pool, id)
         .await
         .map_err(|e: AppError| e.to_string())
+}
+
+#[tauri::command]
+pub async fn assign_sale_customer(
+    pool: State<'_, DbPool>,
+    id: i32,
+    dto: AssignSaleCustomerDto,
+) -> Result<SaleDetail, String> {
+    let ctx = FailureContext {
+        module: AuditModule::Sales,
+        action: "assign_customer",
+        entity_type: Some("sale"),
+        entity_id: Some(id.to_string()),
+        actor: declared_actor(&dto.performed_by),
+    };
+    finish(&pool, ctx, service::assign_customer(&pool, id, dto).await).await
 }
 
 #[tauri::command]

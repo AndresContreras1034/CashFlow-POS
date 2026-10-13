@@ -13,6 +13,7 @@ export interface HeldSale {
   is_courtesy: boolean;
   courtesy_reason: string;
   lines: CartLine[];
+  customer?: { id: number; name: string } | null;
 }
 
 export interface HeldResult {
@@ -62,6 +63,12 @@ function isHeldSale(value: unknown): value is HeldSale {
     Number.isFinite(Date.parse(savedAt)) &&
     typeof value.is_courtesy === 'boolean' &&
     typeof value.courtesy_reason === 'string' &&
+    (value.customer === undefined ||
+      value.customer === null ||
+      (isRecord(value.customer) &&
+        isInteger(value.customer.id) &&
+        value.customer.id > 0 &&
+        typeof value.customer.name === 'string')) &&
     Array.isArray(value.lines) &&
     value.lines.length > 0 &&
     value.lines.every(isCartLine)
