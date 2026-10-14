@@ -475,7 +475,7 @@ export default function Suppliers() {
         <Modal
           title={`Proveedor #${dialog.id}`}
           onClose={closeDialog}
-          width={720}
+          width={960}
         >
           <SupplierDetail
             key={dialog.id}
