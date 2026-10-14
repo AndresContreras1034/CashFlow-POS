@@ -18,6 +18,7 @@ use crate::modules::settings::repository as settings_repo;
 #[derive(sqlx::FromRow)]
 struct SaleRow {
     id: i32,
+    customer_id: Option<i32>,
     subtotal: i64,
     tax: i64,
     discount: i64,
@@ -53,6 +54,7 @@ async fn fetch_ticket_data(pool: &PgPool, sale_id: i32) -> Result<TicketData, St
     let sale = sqlx::query_as::<_, SaleRow>(
         r#"SELECT
                id,
+               customer_id,
                subtotal,
                tax,
                discount,
@@ -106,6 +108,31 @@ async fn fetch_ticket_data(pool: &PgPool, sale_id: i32) -> Result<TicketData, St
     .fetch_all(pool)
     .await
     .map_err(|e| format!("Error consultando los pagos de la venta: {e}"))?;
+
+    let customer_name = if let Some(customer_id) = sale.customer_id {
+        sqlx::query_scalar::<_, String>(
+            r#"SELECT name FROM customers WHERE id = $1 AND is_active"#,
+        )
+        .bind(customer_id)
+        .fetch_optional(pool)
+        .await
+        .map_err(|e| format!("Error consultando el cliente del ticket: {e}"))?
+    } else {
+        None
+    };
+
+    let customer_document = if let Some(customer_id) = sale.customer_id {
+        sqlx::query_scalar::<_, Option<String>>(
+            r#"SELECT document_number FROM customers WHERE id = $1 AND is_active"#,
+        )
+        .bind(customer_id)
+        .fetch_optional(pool)
+        .await
+        .map_err(|e| format!("Error consultando el documento del cliente: {e}"))?
+        .flatten()
+    } else {
+        None
+    };
 
     let settings = settings_repo::get_settings(pool)
         .await
@@ -161,6 +188,8 @@ async fn fetch_ticket_data(pool: &PgPool, sale_id: i32) -> Result<TicketData, St
         created_by: sale.created_by,
         status: sale.status,
         courtesy_reason: sale.courtesy_reason,
+        customer_name,
+        customer_document,
 
         lines,
         payments,

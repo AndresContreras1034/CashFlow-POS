@@ -54,6 +54,8 @@ pub struct TicketData {
     pub created_by: String,
     pub status: SaleStatus,
     pub courtesy_reason: Option<String>,
+    pub customer_name: Option<String>,
+    pub customer_document: Option<String>,
 
     pub lines: Vec<TicketLine>,
     pub payments: Vec<TicketPayment>,
