@@ -17,6 +17,19 @@
   text-align: left;
 }
 
+.suppliers-card--action {
+  appearance: none;
+  font: inherit;
+  cursor: pointer;
+  transition: border-color var(--transition), background var(--transition);
+}
+
+.suppliers-card--action:hover { border-color: var(--accent); }
+.suppliers-card--action:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
+
 .suppliers-card--primary {
   border-color: var(--accent);
 }

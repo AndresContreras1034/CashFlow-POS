@@ -100,9 +100,9 @@ export const formatDateShort = (iso: string): string => {
 };
 
 /** Atributos JSON → "Talla: M · Color: Rojo" */
-export const formatAttributes = (attrs: Record<string, string>): string => {
+export const formatAttributes = (attrs: Record<string, unknown>): string => {
   return Object.entries(attrs)
-    .map(([k, v]) => `${capitalize(k)}: ${v}`)
+    .map(([k, v]) => `${capitalize(k)}: ${String(v)}`)
     .join(' · ');
 };
 

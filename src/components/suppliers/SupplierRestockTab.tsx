@@ -1,7 +1,13 @@
 import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { getSupplierRestock } from '../../services/suppliers.service';
-import type { RestockGroup } from '../../types/suppliers';
+import type { RestockGroup, SupplierContact } from '../../types/suppliers';
 import { errorMessage } from '../../utils/audit';
+import {
+  buildRestockOrderMessage,
+  callNumber,
+  contactActions,
+  type ContactAction,
+} from '../../utils/callPanel';
 import { formatAttributes, formatMoney } from '../../utils/format';
 import { RESTOCK_URGENCY_LABELS } from '../../utils/suppliers';
 import { formatCover, restockUrgencyBadgeClass } from '../../utils/supplierTabs';
@@ -12,11 +18,19 @@ import './SupplierRestockTab.css';
 interface SupplierRestockTabProps {
   supplierId: number;
   isActive: boolean;
+  supplier: SupplierContact;
+  businessName: string;
+  onAction: (action: ContactAction) => void;
+  onCopy: (text: string, what: string) => void;
 }
 
 export const SupplierRestockTab: React.FC<SupplierRestockTabProps> = ({
   supplierId,
   isActive,
+  supplier,
+  businessName,
+  onAction,
+  onCopy,
 }) => {
   const [windowDays, setWindowDays] = useState(30);
   const [coverDays, setCoverDays] = useState(14);
@@ -76,9 +90,48 @@ export const SupplierRestockTab: React.FC<SupplierRestockTabProps> = ({
   const suggestedUnits = group?.suggested_units ?? 0;
   const estimatedCost = group?.estimated_cost ?? 0;
   const itemsWithoutCost = group?.items_without_cost ?? 0;
+  const orderMessage = buildRestockOrderMessage(supplier.name, items, businessName);
+  const contactButtons = contactActions(supplier, orderMessage, businessName);
+  const number = callNumber(supplier);
 
   return (
     <div className="supplier-restock-tab">
+      {group && (
+        <div className="supplier-contact-actions" aria-label="Acciones de contacto y pedido">
+          {contactButtons.map(action => (
+            <button
+              key={action.channel}
+              type="button"
+              className="suppliers-btn"
+              disabled={action.url === null}
+              title={action.disabledReason ?? undefined}
+              aria-label={`${action.label} a ${supplier.name}`}
+              onClick={() => onAction(action)}
+            >
+              {action.label}
+            </button>
+          ))}
+          <button
+            type="button"
+            className="suppliers-btn"
+            aria-label={`Copiar pedido para ${supplier.name}`}
+            onClick={() => onCopy(orderMessage, 'Pedido')}
+          >
+            Copiar pedido
+          </button>
+          {number && (
+            <button
+              type="button"
+              className="suppliers-btn"
+              aria-label={`Copiar número de ${supplier.name}`}
+              onClick={() => onCopy(number, 'Número')}
+            >
+              Copiar número
+            </button>
+          )}
+        </div>
+      )}
+
       <div className="supplier-restock-controls">
         <label className="supplier-restock-param">
           <span>Ventas de los últimos:</span>

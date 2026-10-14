@@ -4,6 +4,11 @@ import type { SupplierOverview } from '../../types/suppliers';
 import { errorMessage } from '../../utils/audit';
 import { formatDate } from '../../utils/format';
 import { actorField } from '../../utils/preferences';
+import {
+  callNumber,
+  contactActions,
+  type ContactAction,
+} from '../../utils/callPanel';
 import { priorityBadgeClass, priorityLabel } from '../../utils/suppliers';
 import { SupplierCategoriesTab } from './SupplierCategoriesTab';
 import { SupplierProductsTab } from './SupplierProductsTab';
@@ -23,24 +28,34 @@ type TabKey = typeof TABS[number]['key'];
 interface SupplierDetailProps {
   supplierId: number;
   reloadKey?: number;
+  initialTab?: 'data' | 'categories' | 'products' | 'restock';
+  businessName: string;
   onEdit: (supplier: SupplierOverview) => void;
   onChanged: () => void;
   onNotify: (message: string, type?: 'success' | 'error') => void;
+  onAction: (action: ContactAction) => void;
+  onCopy: (text: string, what: string) => void;
 }
 
 export const SupplierDetail: React.FC<SupplierDetailProps> = ({
   supplierId,
   reloadKey = 0,
+  initialTab = 'data',
+  businessName,
   onEdit,
   onChanged,
   onNotify,
+  onAction,
+  onCopy,
 }) => {
   const [supplier, setSupplier] = useState<SupplierOverview | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [confirmingToggle, setConfirmingToggle] = useState(false);
   const [toggling, setToggling] = useState(false);
-  const [activeTab, setActiveTab] = useState<TabKey>('info');
+  const [activeTab, setActiveTab] = useState<TabKey>(
+    initialTab === 'data' ? 'info' : initialTab,
+  );
   const requestRef = useRef(0);
   const tabListRef = useRef<HTMLDivElement>(null);
 
@@ -129,6 +144,8 @@ export const SupplierDetail: React.FC<SupplierDetailProps> = ({
 
   const leadText =
     supplier.lead_time_days !== null ? `${supplier.lead_time_days} días` : '—';
+  const quickActions = contactActions(supplier, '', businessName);
+  const number = callNumber(supplier);
 
   return (
     <div className="supplier-detail">
@@ -227,6 +244,32 @@ export const SupplierDetail: React.FC<SupplierDetailProps> = ({
               Registrado el {formatDate(supplier.created_at)} por {supplier.created_by}
             </dd>
           </dl>
+
+          <div className="supplier-contact-actions" aria-label="Acciones de contacto">
+            {quickActions.map(action => (
+              <button
+                key={action.channel}
+                type="button"
+                className="suppliers-btn"
+                disabled={action.url === null}
+                title={action.disabledReason ?? undefined}
+                aria-label={`${action.label} a ${supplier.name}`}
+                onClick={() => onAction(action)}
+              >
+                {action.label}
+              </button>
+            ))}
+            {number && (
+              <button
+                type="button"
+                className="suppliers-btn"
+                aria-label={`Copiar número de ${supplier.name}`}
+                onClick={() => onCopy(number, 'Número')}
+              >
+                Copiar número
+              </button>
+            )}
+          </div>
 
           <div className="supplier-detail-actions">
             <button
@@ -339,6 +382,10 @@ export const SupplierDetail: React.FC<SupplierDetailProps> = ({
           <SupplierRestockTab
             supplierId={supplier.id}
             isActive={supplier.is_active}
+            supplier={supplier}
+            businessName={businessName}
+            onAction={onAction}
+            onCopy={onCopy}
           />
         </div>
       )}

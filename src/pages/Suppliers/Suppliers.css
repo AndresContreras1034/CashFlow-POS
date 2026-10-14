@@ -190,6 +190,37 @@
   font-size: 13.5px;
 }
 
+.suppliers-view-tabs {
+  display: inline-flex;
+  align-self: flex-start;
+  padding: 3px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  background: var(--bg-surface);
+}
+
+.suppliers-view-tab {
+  border: 0;
+  border-radius: var(--radius-sm);
+  padding: 7px 14px;
+  background: transparent;
+  color: var(--text-secondary);
+  font: inherit;
+  font-size: 13px;
+  cursor: pointer;
+}
+
+.suppliers-view-tab[aria-selected='true'] {
+  background: var(--bg-elevated);
+  color: var(--text-primary);
+  font-weight: 600;
+}
+
+.suppliers-view-tab:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
+
 @media (max-width: 768px) {
   .suppliers-page {
     padding: 16px;

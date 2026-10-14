@@ -7,14 +7,22 @@ export const telUrl = (value: string): string => {
   return trimmed ? `tel:${trimmed}` : '';
 };
 
-export const whatsappUrl = (value: string): string => {
-  const digits = normalizeWhatsappNumber(value);
-  return digits ? `https://wa.me/${digits}` : '';
+export const whatsappUrl = (value: string, message?: string): string => {
+  const normalized = normalizeWhatsappNumber(value);
+  const digits = /^3\d{9}$/.test(normalized) ? `57${normalized}` : normalized;
+  if (!digits) return '';
+  const base = `https://wa.me/${digits}`;
+  return message ? `${base}?text=${encodeURIComponent(message)}` : base;
 };
 
-export const mailtoUrl = (value: string): string => {
+export const mailtoUrl = (value: string, subject?: string, body?: string): string => {
   const trimmed = value.trim();
-  return trimmed ? `mailto:${trimmed}` : '';
+  if (!trimmed || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(trimmed)) return '';
+  const params: string[] = [];
+  if (subject !== undefined) params.push(`subject=${encodeURIComponent(subject)}`);
+  if (body !== undefined) params.push(`body=${encodeURIComponent(body)}`);
+  const query = params.join('&');
+  return `mailto:${trimmed}${query ? `?${query}` : ''}`;
 };
 
 export const RESTOCK_URGENCY_LABELS = {

@@ -14,6 +14,7 @@ interface SuppliersSummaryCardsProps {
   restockSummary: RestockSummaryData | null;
   restockError: string | null;
   onRetryRestock: () => void;
+  onOpenCallPanel: (onlyUrgent: boolean) => void;
 }
 
 export const SuppliersSummaryCards: React.FC<SuppliersSummaryCardsProps> = ({
@@ -23,6 +24,7 @@ export const SuppliersSummaryCards: React.FC<SuppliersSummaryCardsProps> = ({
   restockSummary,
   restockError,
   onRetryRestock,
+  onOpenCallPanel,
 }) => {
   const dash = '—';
 
@@ -36,7 +38,11 @@ export const SuppliersSummaryCards: React.FC<SuppliersSummaryCardsProps> = ({
         <span className="suppliers-card-sub">en el catálogo</span>
       </div>
 
-      <div className="suppliers-card">
+      <button
+        type="button"
+        className="suppliers-card suppliers-card--action"
+        onClick={() => onOpenCallPanel(false)}
+      >
         <span className="suppliers-card-label">Por contactar</span>
         <span className="suppliers-card-value">
           {restockSummary !== null
@@ -44,14 +50,16 @@ export const SuppliersSummaryCards: React.FC<SuppliersSummaryCardsProps> = ({
             : dash}
         </span>
         <span className="suppliers-card-sub">con productos por reponer</span>
-      </div>
+      </button>
 
-      <div
+      <button
+        type="button"
         className={`suppliers-card ${
           restockSummary && restockSummary.urgentCount > 0
-            ? 'suppliers-card--urgent'
-            : ''
+            ? 'suppliers-card--urgent suppliers-card--action'
+            : 'suppliers-card--action'
         }`}
+        onClick={() => onOpenCallPanel(true)}
       >
         <span className="suppliers-card-label">Urgentes</span>
         <span className="suppliers-card-value">
@@ -60,14 +68,16 @@ export const SuppliersSummaryCards: React.FC<SuppliersSummaryCardsProps> = ({
             : dash}
         </span>
         <span className="suppliers-card-sub">agotados + críticos</span>
-      </div>
+      </button>
 
-      <div
+      <button
+        type="button"
         className={`suppliers-card ${
           restockSummary && restockSummary.unassignedCount > 0
-            ? 'suppliers-card--warning'
-            : ''
+            ? 'suppliers-card--warning suppliers-card--action'
+            : 'suppliers-card--action'
         }`}
+        onClick={() => onOpenCallPanel(false)}
       >
         <span className="suppliers-card-label">Sin proveedor</span>
         <span className="suppliers-card-value">
@@ -76,7 +86,7 @@ export const SuppliersSummaryCards: React.FC<SuppliersSummaryCardsProps> = ({
             : dash}
         </span>
         <span className="suppliers-card-sub">productos sin a quién pedirle</span>
-      </div>
+      </button>
 
       {activeError && (
         <div className="suppliers-summary-error" role="alert">
