@@ -3,6 +3,9 @@ import type { PaginatedResponse } from '../types';
 import type {
   CreateSupplierDto,
   LinkSupplierVariantDto,
+  RestockFilterDto,
+  RestockGroup,
+  RestockOverview,
   SetSupplierCategoriesDto,
   SetSupplierActiveDto,
   Supplier,
@@ -71,3 +74,14 @@ export const listSupplierVariants = (
 
 export const listVariantSuppliers = (variantId: number): Promise<VariantSupplier[]> =>
   invoke('list_variant_suppliers', { variantId });
+
+export const getRestockOverview = (
+  filter: RestockFilterDto = {},
+): Promise<RestockOverview> => invoke('get_restock_overview', { filter });
+
+export const getSupplierRestock = (
+  supplierId: number,
+  windowDays?: number | null,
+  coverDays?: number | null,
+): Promise<RestockGroup> =>
+  invoke('get_supplier_restock', { supplierId, windowDays, coverDays });

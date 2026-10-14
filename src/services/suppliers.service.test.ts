@@ -58,6 +58,13 @@ describe('contrato con los comandos de Tauri', () => {
       { supplierId: 4, filter: {} },
     ],
     ['listVariantSuppliers', () => service.listVariantSuppliers(9), 'list_variant_suppliers', { variantId: 9 }],
+    ['getRestockOverview', () => service.getRestockOverview({ supplier_id: 4 }), 'get_restock_overview', { filter: { supplier_id: 4 } }],
+    [
+      'getSupplierRestock',
+      () => service.getSupplierRestock(4, 30, 14),
+      'get_supplier_restock',
+      { supplierId: 4, windowDays: 30, coverDays: 14 },
+    ],
   ];
 
   it.each(cases)('%s', async (_name, call, command, args) => {

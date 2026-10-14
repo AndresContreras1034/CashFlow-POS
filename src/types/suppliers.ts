@@ -158,3 +158,78 @@ export interface SupplierVariantFilterDto {
   page?: number;
   page_size?: number;
 }
+
+export type RestockUrgency = 'out_of_stock' | 'critical' | 'low';
+
+export interface SupplierContact {
+  id: number;
+  name: string;
+  contact_name: string | null;
+  phone: string | null;
+  whatsapp: string | null;
+  email: string | null;
+  priority: SupplierPriority;
+  lead_time_days: number | null;
+  payment_terms_days: number | null;
+  visit_days: string | null;
+}
+
+export interface RestockItem {
+  variant_id: number;
+  product_id: number;
+  product_name: string;
+  brand: string | null;
+  attributes: Record<string, unknown>;
+  sku: string | null;
+  barcode: string | null;
+  category_name: string;
+  stock: number;
+  stock_min: number;
+  stock_status: 'low' | 'out_of_stock';
+  units_sold_window: number;
+  days_of_cover: number | null;
+  urgency: RestockUrgency;
+  suggested_qty: number;
+  unit_cost: number | null;
+  line_cost: number | null;
+  supplier_sku: string | null;
+  alternative_suppliers: number;
+}
+
+export interface RestockGroup {
+  supplier: SupplierContact | null;
+  items: RestockItem[];
+  item_count: number;
+  out_count: number;
+  critical_count: number;
+  suggested_units: number;
+  estimated_cost: number;
+  items_without_cost: number;
+  top_urgency: RestockUrgency | null;
+}
+
+export interface RestockSummary {
+  suppliers_to_contact: number;
+  items_needing_restock: number;
+  out_of_stock_count: number;
+  critical_count: number;
+  unassigned_count: number;
+  suggested_units: number;
+  estimated_cost: number;
+  items_without_cost: number;
+}
+
+export interface RestockOverview {
+  summary: RestockSummary;
+  groups: RestockGroup[];
+}
+
+export interface RestockFilterDto {
+  supplier_id?: number;
+  include_unassigned?: boolean;
+  only_urgent?: boolean;
+  category_id?: number;
+  search?: string;
+  window_days?: number;
+  cover_days?: number;
+}
