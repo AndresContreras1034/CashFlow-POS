@@ -3,5 +3,6 @@ pub mod handlers;
 pub mod links;
 pub mod models;
 pub mod repository;
+pub mod restock;
 pub mod router;
 pub mod service;

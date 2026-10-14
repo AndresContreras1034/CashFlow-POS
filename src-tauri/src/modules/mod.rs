@@ -1,4 +1,5 @@
 pub mod audit;
+pub mod backup;
 pub mod billing;
 pub mod cash;
 pub mod customers;

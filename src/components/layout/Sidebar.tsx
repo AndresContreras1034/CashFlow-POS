@@ -7,6 +7,7 @@ import {
   onNavigationShortcutsChanged,
   readNavigationShortcuts,
 } from '../../utils/shortcuts';
+import { BackupStatusBadge } from '../backup/BackupStatusBadge';
 import './Sidebar.css';
 
 export const Sidebar: React.FC = () => {
@@ -120,6 +121,8 @@ export const Sidebar: React.FC = () => {
           </NavLink>
         ))}
       </nav>
+
+      <BackupStatusBadge />
 
       <footer className="sidebar-footer">
         <span className="sidebar-footer-credit">Desarrollado por <strong>AFCM</strong></span>
