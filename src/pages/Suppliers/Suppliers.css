@@ -199,6 +199,12 @@
   background: var(--bg-surface);
 }
 
+.suppliers-export-row {
+  display: flex;
+  justify-content: flex-end;
+  margin: 0 0 12px;
+}
+
 .suppliers-view-tab {
   border: 0;
   border-radius: var(--radius-sm);

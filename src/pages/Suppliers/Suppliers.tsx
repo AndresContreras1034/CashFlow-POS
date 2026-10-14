@@ -3,6 +3,7 @@ import { useSearchParams } from 'react-router-dom';
 import { SupplierDetail } from '../../components/suppliers/SupplierDetail';
 import { SupplierForm } from '../../components/suppliers/SupplierForm';
 import { SupplierCallPanel } from '../../components/suppliers/SupplierCallPanel';
+import { SupplierCsvButton } from '../../components/suppliers/SupplierCsvButton';
 import {
   SuppliersSummaryCards,
   type RestockSummaryData,
@@ -21,6 +22,9 @@ import type {
   SupplierPriority,
 } from '../../types/suppliers';
 import type { ContactAction } from '../../utils/callPanel';
+import { buildSuppliersCsv, supplierExportFileName } from '../../utils/supplierExport';
+import type { SupplierCsvReport } from '../../components/suppliers/SupplierCsvButton';
+import { todayInTimeZone } from '../../utils/debts';
 import { openExternal } from '../../utils/openExternal';
 import { errorMessage } from '../../utils/audit';
 import {
@@ -40,7 +44,7 @@ type Dialog =
   | {
       kind: 'detail';
       id: number;
-      initialTab?: 'data' | 'categories' | 'products' | 'restock';
+      initialTab?: 'data' | 'categories' | 'products' | 'restock' | 'payables';
       fromCallPanel?: boolean;
     }
   | { kind: 'edit'; supplier: SupplierOverview };
@@ -70,6 +74,7 @@ export default function Suppliers() {
   const [toasts, setToasts] = useState<ToastData[]>([]);
   const [initialOnlyUrgent, setInitialOnlyUrgent] = useState(false);
   const [callPanelReload, setCallPanelReload] = useState(0);
+  const [callPanelOpenToken, setCallPanelOpenToken] = useState(0);
 
   const refresh = useCallback(() => setReloadToken(token => token + 1), []);
   const closeDialog = useCallback(() => {
@@ -90,6 +95,7 @@ export default function Suppliers() {
 
   const openCallPanel = useCallback((onlyUrgent: boolean) => {
     setInitialOnlyUrgent(onlyUrgent);
+    setCallPanelOpenToken(token => token + 1);
     changeView('call');
   }, [changeView]);
 
@@ -133,6 +139,40 @@ export default function Suppliers() {
       notify('No se pudo copiar', 'error');
     }
   }, [notify]);
+
+  const buildDirectoryExport = useCallback(async (): Promise<SupplierCsvReport> => {
+    const filter = {
+      search: searchInput.trim() || undefined,
+      is_active: activeFilter === 'all' ? undefined : activeFilter === 'active',
+      priority: priorityFilter || undefined,
+    };
+    const firstPage = await listSuppliers({ ...filter, page: 1, page_size: 100 });
+    const suppliers = [...firstPage.data];
+    const maxRows = 5000;
+    const pagesToLoad = Math.min(firstPage.total_pages, Math.ceil(maxRows / 100));
+
+    for (let currentPage = 2; currentPage <= pagesToLoad && suppliers.length < maxRows; currentPage += 1) {
+      const pageResult = await listSuppliers({
+        ...filter,
+        page: currentPage,
+        page_size: 100,
+      });
+      suppliers.push(...pageResult.data.slice(0, maxRows - suppliers.length));
+    }
+
+    const exceededLimit = firstPage.total > maxRows;
+    return {
+      table: buildSuppliersCsv(suppliers),
+      ...(exceededLimit
+        ? { notice: `CSV exportado con los primeros ${maxRows.toLocaleString('es-CO')} de ${firstPage.total.toLocaleString('es-CO')} proveedores (límite de seguridad).` }
+        : {}),
+    };
+  }, [activeFilter, priorityFilter, searchInput]);
+
+  const directoryExportFilename = supplierExportFileName(
+    'directorio',
+    todayInTimeZone(settings.timezone),
+  );
 
   const loadActiveCount = useCallback(async () => {
     setActiveError(null);
@@ -299,9 +339,12 @@ export default function Suppliers() {
           aria-labelledby="suppliers-view-call"
         >
           <SupplierCallPanel
+            key={callPanelOpenToken}
             initialOnlyUrgent={initialOnlyUrgent}
             reloadToken={callPanelReload}
             businessName={settings.business_name}
+            timezone={settings.timezone}
+            currencyDecimals={settings.currency_decimals}
             onAction={handleAction}
             onCopy={handleCopy}
             onOpenSupplier={id => setDialog({
@@ -310,10 +353,22 @@ export default function Suppliers() {
               initialTab: 'restock',
               fromCallPanel: true,
             })}
+            onNotify={(message, type = 'success') => notify(message, type)}
           />
         </div>
       ) : (
       <div id="suppliers-view-panel" role="tabpanel" aria-labelledby="suppliers-view-directory">
+      <div className="suppliers-export-row">
+        <SupplierCsvButton
+          disabled={loading || error !== null || result === null || result.total === 0}
+          filename={directoryExportFilename}
+          buildReport={buildDirectoryExport}
+          onSuccess={notice =>
+            notify(notice ?? 'CSV del directorio exportado', notice ? 'warning' : 'success')
+          }
+          onError={(message) => notify(message, 'error')}
+        />
+      </div>
       <section className="suppliers-filters" aria-label="Filtros de proveedores">
         <div className="suppliers-field suppliers-field-grow">
           <label htmlFor="suppliers-search">Buscar</label>

@@ -20,6 +20,7 @@ use crate::modules::suppliers::{
     },
     service,
 };
+use crate::modules::suppliers::payables::{self, SupplierPayables};
 
 #[tauri::command]
 pub async fn list_suppliers(
@@ -228,6 +229,16 @@ pub async fn get_supplier_restock(
     cover_days: Option<i32>,
 ) -> Result<RestockGroup, String> {
     service::get_supplier_restock(&pool, supplier_id, window_days, cover_days)
+        .await
+        .map_err(|error: AppError| error.to_string())
+}
+
+#[tauri::command]
+pub async fn get_supplier_payables(
+    pool: State<'_, DbPool>,
+    supplier_id: i32,
+) -> Result<SupplierPayables, String> {
+    payables::get_supplier_payables(&pool, supplier_id)
         .await
         .map_err(|error: AppError| error.to_string())
 }

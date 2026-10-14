@@ -33,6 +33,8 @@
   font-size: 13px;
 }
 
+.supplier-call-export { display: flex; justify-content: flex-end; }
+
 .supplier-call-groups {
   display: flex;
   flex-direction: column;

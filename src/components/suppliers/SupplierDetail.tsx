@@ -13,6 +13,7 @@ import { priorityBadgeClass, priorityLabel } from '../../utils/suppliers';
 import { SupplierCategoriesTab } from './SupplierCategoriesTab';
 import { SupplierProductsTab } from './SupplierProductsTab';
 import { SupplierRestockTab } from './SupplierRestockTab';
+import { SupplierPayablesTab } from './SupplierPayablesTab';
 import './SuppliersBase.css';
 import './SupplierDetail.css';
 
@@ -21,14 +22,16 @@ const TABS = [
   { key: 'categories', label: 'Categorías' },
   { key: 'products', label: 'Productos' },
   { key: 'restock', label: 'Reposición' },
+  { key: 'payables', label: 'Deudas' },
 ] as const;
 
 type TabKey = typeof TABS[number]['key'];
+type InitialTab = 'data' | 'categories' | 'products' | 'restock' | 'payables';
 
 interface SupplierDetailProps {
   supplierId: number;
   reloadKey?: number;
-  initialTab?: 'data' | 'categories' | 'products' | 'restock';
+  initialTab?: InitialTab;
   businessName: string;
   onEdit: (supplier: SupplierOverview) => void;
   onChanged: () => void;
@@ -387,6 +390,17 @@ export const SupplierDetail: React.FC<SupplierDetailProps> = ({
             onAction={onAction}
             onCopy={onCopy}
           />
+        </div>
+      )}
+
+      {activeTab === 'payables' && (
+        <div
+          id="supplier-tabpanel-payables"
+          role="tabpanel"
+          aria-labelledby="supplier-tab-payables"
+          className="supplier-tab-panel"
+        >
+          <SupplierPayablesTab supplierId={supplier.id} />
         </div>
       )}
     </div>

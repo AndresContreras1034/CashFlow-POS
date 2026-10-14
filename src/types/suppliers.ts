@@ -1,3 +1,5 @@
+import type { DebtOverview } from './debts';
+
 export type SupplierPriority = 'normal' | 'preferred' | 'urgent';
 
 export const SUPPLIER_PRIORITIES: { value: SupplierPriority; label: string }[] = [
@@ -222,6 +224,22 @@ export interface RestockSummary {
 export interface RestockOverview {
   summary: RestockSummary;
   groups: RestockGroup[];
+}
+
+export interface SupplierPayablesSummary {
+  pending_total: number;
+  overdue_total: number;
+  due_soon_total: number;
+  active_count: number;
+  overdue_count: number;
+  next_due_on: string | null;
+}
+
+export interface SupplierPayables {
+  matched_name: string;
+  summary: SupplierPayablesSummary;
+  debts: DebtOverview[];
+  debts_truncated: boolean;
 }
 
 export interface RestockFilterDto {

@@ -12,6 +12,7 @@ import type {
   SupplierCategory,
   SupplierFilterDto,
   SupplierOverview,
+  SupplierPayables,
   SupplierVariantFilterDto,
   SupplierVariantLink,
   SupplierVariantView,
@@ -85,3 +86,6 @@ export const getSupplierRestock = (
   coverDays?: number | null,
 ): Promise<RestockGroup> =>
   invoke('get_supplier_restock', { supplierId, windowDays, coverDays });
+
+export const getSupplierPayables = (supplierId: number): Promise<SupplierPayables> =>
+  invoke('get_supplier_payables', { supplierId });

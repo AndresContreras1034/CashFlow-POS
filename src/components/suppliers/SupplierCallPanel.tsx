@@ -6,7 +6,10 @@ import type { RestockGroup, RestockOverview } from '../../types/suppliers';
 import { errorMessage } from '../../utils/audit';
 import { formatMoney } from '../../utils/format';
 import { useDebounce } from '../../hooks/useDebounce';
+import { buildRestockCsv, supplierExportFileName } from '../../utils/supplierExport';
+import { todayInTimeZone } from '../../utils/debts';
 import { SupplierCallCard } from './SupplierCallCard';
+import { SupplierCsvButton } from './SupplierCsvButton';
 import type { ContactAction } from '../../utils/callPanel';
 import './SuppliersBase.css';
 import './SupplierCallPanel.css';
@@ -15,18 +18,24 @@ interface SupplierCallPanelProps {
   initialOnlyUrgent: boolean;
   reloadToken: number;
   businessName: string;
+  timezone: string;
+  currencyDecimals: number;
   onAction: (action: ContactAction, group: RestockGroup) => void;
   onCopy: (text: string, what: string) => void;
   onOpenSupplier: (supplierId: number) => void;
+  onNotify: (message: string, type?: 'success' | 'error' | 'warning') => void;
 }
 
 export const SupplierCallPanel: React.FC<SupplierCallPanelProps> = ({
   initialOnlyUrgent,
   reloadToken,
   businessName,
+  timezone,
+  currencyDecimals,
   onAction,
   onCopy,
   onOpenSupplier,
+  onNotify,
 }) => {
   const [searchInput, setSearchInput] = useState('');
   const search = useDebounce(searchInput.trim(), 400);
@@ -97,6 +106,8 @@ export const SupplierCallPanel: React.FC<SupplierCallPanelProps> = ({
     coverDays !== 14;
   const summary = overview?.summary;
   const groups = overview?.groups ?? [];
+  const restockRows = groups.reduce((count, group) => count + group.items.length, 0);
+  const filename = supplierExportFileName('reposicion', todayInTimeZone(timezone));
 
   return (
     <section className="supplier-call-panel" aria-label="Proveedores por contactar">
@@ -179,6 +190,20 @@ export const SupplierCallPanel: React.FC<SupplierCallPanelProps> = ({
           </button>
         </div>
       )}
+
+      <div className="supplier-call-export">
+        <SupplierCsvButton
+          disabled={loading || restockRows === 0}
+          filename={filename}
+          buildReport={() => ({
+            table: buildRestockCsv(groups, currencyDecimals),
+          })}
+          onSuccess={notice =>
+            onNotify(notice ?? 'CSV de reposición exportado', notice ? 'warning' : 'success')
+          }
+          onError={message => onNotify(message, 'error')}
+        />
+      </div>
 
       {loading ? (
         <p className="supplier-call-status" role="status">Cargando necesidades de reposición…</p>

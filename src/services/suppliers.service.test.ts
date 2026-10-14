@@ -17,6 +17,12 @@ describe('contrato con los comandos de Tauri', () => {
     ['listSuppliers', () => service.listSuppliers({ page: 2 }), 'list_suppliers', { filter: { page: 2 } }],
     ['listSuppliers sin filtro', () => service.listSuppliers(), 'list_suppliers', { filter: {} }],
     ['getSupplier', () => service.getSupplier(7), 'get_supplier', { id: 7 }],
+    [
+      'getSupplierPayables',
+      () => service.getSupplierPayables(7),
+      'get_supplier_payables',
+      { supplierId: 7 },
+    ],
     ['createSupplier', () => service.createSupplier({} as never), 'create_supplier', { dto: {} }],
     ['updateSupplier', () => service.updateSupplier(3, {} as never), 'update_supplier', { id: 3, dto: {} }],
     ['setSupplierActive', () => service.setSupplierActive(3, { is_active: false }), 'set_supplier_active', { id: 3, dto: { is_active: false } }],

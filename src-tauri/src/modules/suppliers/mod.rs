@@ -2,6 +2,7 @@ pub mod dto;
 pub mod handlers;
 pub mod links;
 pub mod models;
+pub mod payables;
 pub mod repository;
 pub mod restock;
 pub mod router;
