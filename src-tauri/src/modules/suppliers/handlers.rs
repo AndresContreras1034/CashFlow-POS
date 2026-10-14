@@ -9,13 +9,14 @@ use crate::modules::audit::{
 };
 use crate::modules::suppliers::{
     dto::{
-        CreateSupplierDto, LinkSupplierVariantDto, PaginatedResponse, SetSupplierActiveDto,
-        SetSupplierCategoriesDto, SupplierFilterDto, SupplierVariantFilterDto,
-        UnlinkSupplierVariantDto, UpdateSupplierDto, UpdateSupplierVariantDto,
+        CreateSupplierDto, LinkSupplierVariantDto, PaginatedResponse, RestockFilterDto,
+        SetSupplierActiveDto, SetSupplierCategoriesDto, SupplierFilterDto,
+        SupplierVariantFilterDto, UnlinkSupplierVariantDto, UpdateSupplierDto,
+        UpdateSupplierVariantDto,
     },
     models::{
-        Supplier, SupplierCategory, SupplierOverview, SupplierVariantLink, SupplierVariantView,
-        VariantSupplier,
+        RestockGroup, RestockOverview, Supplier, SupplierCategory, SupplierOverview,
+        SupplierVariantLink, SupplierVariantView, VariantSupplier,
     },
     service,
 };
@@ -207,4 +208,26 @@ pub async fn set_supplier_active(
         service::set_supplier_active(&pool, id, dto).await,
     )
     .await
+}
+
+#[tauri::command]
+pub async fn get_restock_overview(
+    pool: State<'_, DbPool>,
+    filter: RestockFilterDto,
+) -> Result<RestockOverview, String> {
+    service::get_restock_overview(&pool, filter)
+        .await
+        .map_err(|error: AppError| error.to_string())
+}
+
+#[tauri::command]
+pub async fn get_supplier_restock(
+    pool: State<'_, DbPool>,
+    supplier_id: i32,
+    window_days: Option<i32>,
+    cover_days: Option<i32>,
+) -> Result<RestockGroup, String> {
+    service::get_supplier_restock(&pool, supplier_id, window_days, cover_days)
+        .await
+        .map_err(|error: AppError| error.to_string())
 }

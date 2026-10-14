@@ -334,6 +334,8 @@ pub fn run() {
             unlink_supplier_variant,
             list_supplier_variants,
             list_variant_suppliers,
+            get_restock_overview,
+            get_supplier_restock,
             // =================================================
             // Backup
             // =================================================

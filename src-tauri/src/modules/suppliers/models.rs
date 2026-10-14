@@ -114,3 +114,7 @@ pub struct VariantSupplier {
     pub last_purchase_at: Option<DateTime<Utc>>,
     pub is_preferred: bool,
 }
+
+pub use super::restock::{
+    RestockGroup, RestockItem, RestockOverview, RestockSummary, RestockUrgency, SupplierContact,
+};

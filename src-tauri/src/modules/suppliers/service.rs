@@ -501,3 +501,5 @@ mod tests {
         assert!(validate_last_cost(Some(1201), 1).is_ok());
     }
 }
+
+pub use super::restock::{get_restock_overview, get_supplier_restock};

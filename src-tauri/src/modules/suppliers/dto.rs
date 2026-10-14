@@ -116,3 +116,5 @@ impl<T> PaginatedResponse<T> {
         }
     }
 }
+
+pub use super::restock::RestockFilterDto;
