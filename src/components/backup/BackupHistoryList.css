@@ -1,0 +1,40 @@
+.backup-history {
+  overflow-x: auto;
+}
+
+.backup-history-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 0.85rem;
+}
+
+.backup-history-table th,
+.backup-history-table td {
+  padding: 6px 10px;
+  text-align: left;
+  border-bottom: 1px solid var(--color-border, rgba(128, 128, 128, 0.25));
+  white-space: nowrap;
+}
+
+.backup-history-file {
+  max-width: 320px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.backup-badge {
+  padding: 2px 8px;
+  border-radius: 999px;
+  font-size: 0.75rem;
+  font-weight: 600;
+}
+
+.backup-badge--ok {
+  background: rgba(34, 160, 90, 0.15);
+  color: #1f8a4f;
+}
+
+.backup-badge--fail {
+  background: rgba(214, 69, 65, 0.15);
+  color: #c0392b;
+}

@@ -65,6 +65,8 @@ sha2 = { version = "0.10", features = ["oid"] }
 # ==========================================
 
 dotenvy = "0.15"
+url = "2"
+percent-encoding = "2"
 
 # ==========================================
 # Logging
@@ -99,6 +101,15 @@ image = {
 rust_xlsxwriter = "0.99.1"
 
 # ==========================================
+# Backup: Cifrado, credenciales y SMTP
+# ==========================================
+aes-gcm = { version = "0.10", features = ["stream"] }
+argon2 = "0.5"
+zeroize = "1"
+keyring = { version = "3", features = ["windows-native"] }
+lettre = { version = "0.11", features = ["tokio1", "tokio1-native-tls"] }
+
+# ==========================================
 # Impresión térmica ESC/POS
 # Windows Spooler
 # ==========================================
@@ -116,7 +127,8 @@ features = [
     "consoleapi",
     "processenv",
     "winbase",
-    "wincon"
+    "wincon",
+    "winuser"
 ]
 }
 

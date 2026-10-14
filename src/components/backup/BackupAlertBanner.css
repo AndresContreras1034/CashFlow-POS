@@ -1,0 +1,22 @@
+.backup-banner {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 10px 16px;
+  font-size: 0.9rem;
+}
+
+.backup-banner--warning {
+  background: rgba(230, 126, 34, 0.15);
+  border-bottom: 1px solid #e67e22;
+}
+
+.backup-banner--critical {
+  background: rgba(214, 69, 65, 0.15);
+  border-bottom: 1px solid #d64541;
+}
+
+.backup-banner-detail {
+  opacity: 0.85;
+}

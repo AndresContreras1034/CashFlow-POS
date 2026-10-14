@@ -1,0 +1,28 @@
+.backup-recipients {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.backup-recipient-row {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  padding: 6px 0;
+  border-bottom: 1px solid var(--color-border, rgba(128, 128, 128, 0.25));
+}
+
+.backup-recipient-info {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.backup-recipient-check {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  font-size: 0.85rem;
+  white-space: nowrap;
+}

@@ -1,0 +1,34 @@
+.backup-badge-btn {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  width: 100%;
+  padding: 6px 10px;
+  border: 1px solid rgba(128, 128, 128, 0.3);
+  border-radius: 8px;
+  background: transparent;
+  color: inherit;
+  font-size: 0.75rem;
+  cursor: pointer;
+  text-align: left;
+}
+
+.backup-badge-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: #22a05a;
+  flex-shrink: 0;
+}
+
+.backup-badge-btn--notice .backup-badge-dot { background: #e0a800; }
+.backup-badge-btn--warning .backup-badge-dot { background: #e67e22; }
+.backup-badge-btn--critical .backup-badge-dot { background: #d64541; }
+.backup-badge-btn--running .backup-badge-dot {
+  background: #3b82f6;
+  animation: backup-pulse 1.2s ease-in-out infinite;
+}
+
+@keyframes backup-pulse {
+  50% { opacity: 0.3; }
+}
