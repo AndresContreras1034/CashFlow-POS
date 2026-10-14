@@ -68,7 +68,8 @@ fn encrypt_blocking(src: &Path, dst: &Path, password: &str) -> Result<(), String
         .map_err(|e| format!("Clave de cifrado inválida: {e}"))?;
     let mut encryptor = EncryptorBE32::from_aead(cipher, GenericArray::from_slice(&prefix));
 
-    let mut input = BufReader::new(File::open(src).map_err(|e| io_err("No se pudo abrir el backup", e))?);
+    let mut input =
+        BufReader::new(File::open(src).map_err(|e| io_err("No se pudo abrir el backup", e))?);
     let mut output = BufWriter::new(
         File::create(dst).map_err(|e| io_err("No se pudo crear el archivo cifrado", e))?,
     );
@@ -79,42 +80,55 @@ fn encrypt_blocking(src: &Path, dst: &Path, password: &str) -> Result<(), String
     header.extend_from_slice(&salt);
     header.extend_from_slice(&prefix);
     header.extend_from_slice(&CHUNK.to_le_bytes());
-    output.write_all(&header).map_err(|e| io_err("No se pudo escribir el cifrado", e))?;
+    output
+        .write_all(&header)
+        .map_err(|e| io_err("No se pudo escribir el cifrado", e))?;
 
     let mut buf = vec![0u8; CHUNK as usize];
     loop {
-        let n = read_full(&mut input, &mut buf).map_err(|e| io_err("No se pudo leer el backup", e))?;
+        let n =
+            read_full(&mut input, &mut buf).map_err(|e| io_err("No se pudo leer el backup", e))?;
         if n < buf.len() {
             let block = encryptor
                 .encrypt_last(&buf[..n])
                 .map_err(|_| "Falló el cifrado del backup".to_string())?;
-            output.write_all(&block).map_err(|e| io_err("No se pudo escribir el cifrado", e))?;
+            output
+                .write_all(&block)
+                .map_err(|e| io_err("No se pudo escribir el cifrado", e))?;
             break;
         }
         let block = encryptor
             .encrypt_next(&buf[..n])
             .map_err(|_| "Falló el cifrado del backup".to_string())?;
-        output.write_all(&block).map_err(|e| io_err("No se pudo escribir el cifrado", e))?;
+        output
+            .write_all(&block)
+            .map_err(|e| io_err("No se pudo escribir el cifrado", e))?;
     }
 
     let file = output
         .into_inner()
         .map_err(|e| io_err("No se pudo finalizar el archivo cifrado", e.into_error()))?;
-    file.sync_all().map_err(|e| io_err("No se pudo finalizar el archivo cifrado", e))?;
+    file.sync_all()
+        .map_err(|e| io_err("No se pudo finalizar el archivo cifrado", e))?;
     Ok(())
 }
 
 /// Descifra `src`. Con `dst = None` solo comprueba que se puede descifrar entero.
 fn decrypt_blocking(src: &Path, dst: Option<&Path>, password: &str) -> Result<(), String> {
-    let mut input = BufReader::new(File::open(src).map_err(|e| io_err("No se pudo abrir el archivo", e))?);
+    let mut input =
+        BufReader::new(File::open(src).map_err(|e| io_err("No se pudo abrir el archivo", e))?);
 
     let mut header = [0u8; HEADER_LEN];
-    input.read_exact(&mut header).map_err(|_| NOT_ENCRYPTED.to_string())?;
+    input
+        .read_exact(&mut header)
+        .map_err(|_| NOT_ENCRYPTED.to_string())?;
     if &header[..8] != MAGIC {
         return Err(NOT_ENCRYPTED.to_string());
     }
     if header[8] != VERSION {
-        return Err("Este backup usa una versión de cifrado no compatible con esta aplicación".to_string());
+        return Err(
+            "Este backup usa una versión de cifrado no compatible con esta aplicación".to_string(),
+        );
     }
     let salt = &header[9..9 + SALT_LEN];
     let prefix = &header[9 + SALT_LEN..9 + SALT_LEN + PREFIX_LEN];
@@ -129,9 +143,11 @@ fn decrypt_blocking(src: &Path, dst: Option<&Path>, password: &str) -> Result<()
     let mut decryptor = DecryptorBE32::from_aead(cipher, GenericArray::from_slice(prefix));
 
     let mut output = match dst {
-        Some(path) => Some(BufWriter::new(
-            File::create(path).map_err(|e| io_err("No se pudo crear el archivo descifrado", e))?,
-        )),
+        Some(path) => {
+            Some(BufWriter::new(File::create(path).map_err(|e| {
+                io_err("No se pudo crear el archivo descifrado", e)
+            })?))
+        }
         None => None,
     };
 
@@ -146,8 +162,7 @@ fn decrypt_blocking(src: &Path, dst: Option<&Path>, password: &str) -> Result<()
             out.write_all(&plain)
                 .map_err(|e| io_err("No se pudo escribir el archivo descifrado", e))?;
         }
-        n = read_full(&mut input, &mut buf)
-            .map_err(|e| io_err("No se pudo leer el archivo", e))?;
+        n = read_full(&mut input, &mut buf).map_err(|e| io_err("No se pudo leer el archivo", e))?;
     }
 
     let plain = decryptor
@@ -162,7 +177,8 @@ fn decrypt_blocking(src: &Path, dst: Option<&Path>, password: &str) -> Result<()
         let file = out
             .into_inner()
             .map_err(|e| io_err("No se pudo finalizar el archivo", e.into_error()))?;
-        file.sync_all().map_err(|e| io_err("No se pudo finalizar el archivo", e))?;
+        file.sync_all()
+            .map_err(|e| io_err("No se pudo finalizar el archivo", e))?;
     }
     Ok(())
 }
@@ -196,6 +212,18 @@ pub async fn verify_file(src: PathBuf, password: String) -> Result<(), String> {
     blocking(move || decrypt_blocking(&src, None, &password))
         .await
         .map_err(|e| format!("El backup cifrado no pasó la verificación: {e}"))
+}
+
+/// Comprueba la marca del formato cifrado sin intentar descifrar el archivo.
+pub async fn is_encrypted(path: PathBuf) -> Result<bool, String> {
+    blocking(move || {
+        let mut file = File::open(&path).map_err(|e| io_err("No se pudo abrir el archivo", e))?;
+        let mut magic = [0u8; 8];
+        let n = read_full(&mut file, &mut magic)
+            .map_err(|e| io_err("No se pudo leer el archivo", e))?;
+        Ok(n == 8 && &magic == MAGIC)
+    })
+    .await
 }
 
 #[cfg(test)]
@@ -237,7 +265,10 @@ mod tests {
         let (plain, enc) = (temp("plain"), temp("enc"));
         std::fs::write(&plain, sample(1000)).unwrap();
         encrypt_blocking(&plain, &enc, "correcta").unwrap();
-        assert_eq!(decrypt_blocking(&enc, None, "incorrecta").unwrap_err(), BAD_DATA);
+        assert_eq!(
+            decrypt_blocking(&enc, None, "incorrecta").unwrap_err(),
+            BAD_DATA
+        );
         let _ = std::fs::remove_file(plain);
         let _ = std::fs::remove_file(enc);
     }
@@ -267,7 +298,24 @@ mod tests {
     fn plain_dump_is_not_an_encrypted_backup() {
         let path = temp("plain");
         std::fs::write(&path, b"PGDMP-no-cifrado-........................").unwrap();
-        assert_eq!(decrypt_blocking(&path, None, "x").unwrap_err(), NOT_ENCRYPTED);
+        assert_eq!(
+            decrypt_blocking(&path, None, "x").unwrap_err(),
+            NOT_ENCRYPTED
+        );
         let _ = std::fs::remove_file(path);
+    }
+
+    #[test]
+    fn detects_encrypted_files() {
+        let (plain, enc) = (temp("plain"), temp("enc"));
+        std::fs::write(&plain, sample(100)).unwrap();
+        encrypt_blocking(&plain, &enc, "clave").unwrap();
+        let runtime = tokio::runtime::Builder::new_current_thread()
+            .build()
+            .unwrap();
+        assert!(runtime.block_on(is_encrypted(enc.clone())).unwrap());
+        assert!(!runtime.block_on(is_encrypted(plain.clone())).unwrap());
+        let _ = std::fs::remove_file(plain);
+        let _ = std::fs::remove_file(enc);
     }
 }
