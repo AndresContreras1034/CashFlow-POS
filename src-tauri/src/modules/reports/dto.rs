@@ -212,6 +212,26 @@ pub struct StockAlert {
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct TopCustomer {
+    pub customer_id: i32,
+    pub customer_name: String,
+    pub sales_count: i64,
+    pub gross_sales: i64,
+    pub revenue: i64,
+    pub avg_ticket: i64,
+    pub share_bps: i32,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct CustomerSalesSplit {
+    pub customer_id: i32,
+    pub customer_name: String,
+    pub sales_count: i64,
+    pub amount: i64,
+    pub share_bps: i32,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct PayablesSummary {
     pub pending_total: i64,
     pub overdue_total: i64,

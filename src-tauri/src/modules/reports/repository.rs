@@ -97,9 +97,9 @@ use crate::{
     modules::{
         inventory::repository::ACTIVE_INVENTORY_VARIANTS_CTE,
         reports::dto::{
-            CategorySales, CategoryValuation, DateRange, HeatmapCell, InventoryTurnover,
-            InventoryValuation, PaymentMethodStat, RankBy, SalesKpis, StaleProduct, StockAlert,
-            TimeSeriesPoint, TopProduct,
+            CategorySales, CategoryValuation, CustomerSalesSplit, DateRange, HeatmapCell,
+            InventoryTurnover, InventoryValuation, PaymentMethodStat, RankBy, SalesKpis,
+            StaleProduct, StockAlert, TimeSeriesPoint, TopCustomer, TopProduct,
         },
         sales::models::PaymentMethod,
     },
@@ -934,4 +934,134 @@ fn round_ratio_to_i32(numerator: i128, denominator: i128) -> i32 {
     let rounded = (magnitude + denominator / 2) / denominator;
     let signed = if numerator < 0 { -rounded } else { rounded };
     signed.clamp(i32::MIN as i128, i32::MAX as i128) as i32
+}
+
+#[derive(sqlx::FromRow)]
+struct TopCustomerRow {
+    customer_id: i32,
+    customer_name: String,
+    sales_count: i64,
+    gross_sales: i64,
+    revenue: i64,
+    avg_ticket: i64,
+    gross_total: i64,
+}
+
+pub async fn fetch_top_customers(
+    pool: &PgPool,
+    range: &DateRange,
+    timezone: &str,
+    limit: i64,
+) -> Result<Vec<TopCustomer>, sqlx::Error> {
+    let query = r#"
+        WITH customer_totals AS (
+            SELECT
+                c.id AS customer_id,
+                c.name AS customer_name,
+                COUNT(s.id)::BIGINT AS sales_count,
+                COALESCE(
+                    SUM(CASE WHEN s.courtesy_reason IS NULL THEN s.total ELSE 0 END),
+                    0
+                )::BIGINT AS gross_sales,
+                COALESCE(
+                    SUM(CASE WHEN s.courtesy_reason IS NULL THEN s.total - s.tax ELSE 0 END),
+                    0
+                )::BIGINT AS revenue
+            FROM sales s
+            JOIN customers c ON c.id = s.customer_id
+            WHERE s.status = 'completed'
+              AND s.created_at >= ($1::DATE::TIMESTAMP AT TIME ZONE $3)
+              AND s.created_at < (($2::DATE + 1)::TIMESTAMP AT TIME ZONE $3)
+            GROUP BY c.id, c.name
+        )
+        SELECT
+            customer_totals.*,
+            CASE
+                WHEN sales_count > 0 THEN ROUND(gross_sales::NUMERIC / sales_count)::BIGINT
+                ELSE 0
+            END AS avg_ticket,
+            COALESCE(SUM(gross_sales) OVER ()::BIGINT, 0)::BIGINT AS gross_total
+        FROM customer_totals
+        ORDER BY gross_sales DESC, customer_id ASC
+        LIMIT $4"#;
+
+    let rows = sqlx::query_as::<_, TopCustomerRow>(query)
+        .bind(range.from)
+        .bind(range.to)
+        .bind(timezone)
+        .bind(limit)
+        .fetch_all(pool)
+        .await?;
+
+    Ok(rows
+        .into_iter()
+        .map(|row| TopCustomer {
+            customer_id: row.customer_id,
+            customer_name: row.customer_name,
+            sales_count: row.sales_count,
+            gross_sales: row.gross_sales,
+            revenue: row.revenue,
+            avg_ticket: row.avg_ticket,
+            share_bps: super::range::share_bps(row.gross_sales, row.gross_total),
+        })
+        .collect())
+}
+
+#[derive(sqlx::FromRow)]
+struct CustomerSalesSplitRow {
+    customer_id: i32,
+    customer_name: String,
+    sales_count: i64,
+    amount: i64,
+    amount_total: i64,
+}
+
+pub async fn fetch_customer_sales_split(
+    pool: &PgPool,
+    range: &DateRange,
+    timezone: &str,
+    limit: i64,
+) -> Result<Vec<CustomerSalesSplit>, sqlx::Error> {
+    let query = r#"
+        WITH customer_totals AS (
+            SELECT
+                c.id AS customer_id,
+                c.name AS customer_name,
+                COUNT(s.id)::BIGINT AS sales_count,
+                COALESCE(
+                    SUM(CASE WHEN s.courtesy_reason IS NULL THEN s.total ELSE 0 END),
+                    0
+                )::BIGINT AS amount
+            FROM sales s
+            JOIN customers c ON c.id = s.customer_id
+            WHERE s.status = 'completed'
+              AND s.created_at >= ($1::DATE::TIMESTAMP AT TIME ZONE $3)
+              AND s.created_at < (($2::DATE + 1)::TIMESTAMP AT TIME ZONE $3)
+            GROUP BY c.id, c.name
+        )
+        SELECT
+            customer_totals.*,
+            COALESCE(SUM(amount) OVER ()::BIGINT, 0)::BIGINT AS amount_total
+        FROM customer_totals
+        ORDER BY amount DESC, customer_id ASC
+        LIMIT $4"#;
+
+    let rows = sqlx::query_as::<_, CustomerSalesSplitRow>(query)
+        .bind(range.from)
+        .bind(range.to)
+        .bind(timezone)
+        .bind(limit)
+        .fetch_all(pool)
+        .await?;
+
+    Ok(rows
+        .into_iter()
+        .map(|row| CustomerSalesSplit {
+            customer_id: row.customer_id,
+            customer_name: row.customer_name,
+            sales_count: row.sales_count,
+            amount: row.amount,
+            share_bps: super::range::share_bps(row.amount, row.amount_total),
+        })
+        .collect())
 }

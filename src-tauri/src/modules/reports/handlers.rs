@@ -6,9 +6,10 @@ use crate::{
     errors::app_error::AppError,
     modules::reports::{
         dto::{
-            AgingBucket, CategorySales, DashboardKpis, HeatmapCell, InventoryTurnover,
-            InventoryValuation, PayablesSummary, PaymentMethodStat, ReportFilter, StaleProduct,
-            StockAlert, TimeSeriesPoint, TopCreditor, TopProduct, UpcomingDue,
+            AgingBucket, CategorySales, CustomerSalesSplit, DashboardKpis, HeatmapCell,
+            InventoryTurnover, InventoryValuation, PayablesSummary, PaymentMethodStat, ReportFilter,
+            StaleProduct, StockAlert, TimeSeriesPoint, TopCreditor, TopCustomer, TopProduct,
+            UpcomingDue,
         },
         service,
     },
@@ -70,6 +71,26 @@ pub async fn get_sales_by_category(
     filter: ReportFilter,
 ) -> Result<Vec<CategorySales>, String> {
     service::get_sales_by_category(&pool, filter)
+        .await
+        .map_err(|error: AppError| error.to_string())
+}
+
+#[tauri::command]
+pub async fn get_top_customers(
+    pool: State<'_, DbPool>,
+    filter: ReportFilter,
+) -> Result<Vec<TopCustomer>, String> {
+    service::get_top_customers(&pool, filter)
+        .await
+        .map_err(|error: AppError| error.to_string())
+}
+
+#[tauri::command]
+pub async fn get_customer_sales_split(
+    pool: State<'_, DbPool>,
+    filter: ReportFilter,
+) -> Result<Vec<CustomerSalesSplit>, String> {
+    service::get_customer_sales_split(&pool, filter)
         .await
         .map_err(|error: AppError| error.to_string())
 }

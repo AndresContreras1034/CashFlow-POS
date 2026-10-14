@@ -6,10 +6,10 @@ use crate::{
         reports::{
             debt_report,
             dto::{
-                AgingBucket, CategorySales, DashboardKpis, DateRange, Delta, Granularity,
-                HeatmapCell, InventoryTurnover, InventoryValuation, PayablesSummary,
+                AgingBucket, CategorySales, CustomerSalesSplit, DashboardKpis, DateRange, Delta,
+                Granularity, HeatmapCell, InventoryTurnover, InventoryValuation, PayablesSummary,
                 PaymentMethodStat, RankBy, ReportFilter, StaleProduct, StockAlert, TimeSeriesPoint,
-                TopCreditor, TopProduct, UpcomingDue,
+                TopCreditor, TopCustomer, TopProduct, UpcomingDue,
             },
             range::{change_bps, fill_buckets, previous_range},
             repository,
@@ -165,6 +165,44 @@ pub async fn get_sales_by_category(
             to: filter.date_to,
         },
         &timezone,
+    )
+    .await
+    .map_err(AppError::from)
+}
+
+pub async fn get_top_customers(
+    pool: &PgPool,
+    filter: ReportFilter,
+) -> Result<Vec<TopCustomer>, AppError> {
+    filter.validate()?;
+    let (timezone, _) = resolve_timezone_and_decimals(pool).await?;
+    repository::fetch_top_customers(
+        pool,
+        &DateRange {
+            from: filter.date_from,
+            to: filter.date_to,
+        },
+        &timezone,
+        filter.limit.unwrap_or(10).clamp(1, 100),
+    )
+    .await
+    .map_err(AppError::from)
+}
+
+pub async fn get_customer_sales_split(
+    pool: &PgPool,
+    filter: ReportFilter,
+) -> Result<Vec<CustomerSalesSplit>, AppError> {
+    filter.validate()?;
+    let (timezone, _) = resolve_timezone_and_decimals(pool).await?;
+    repository::fetch_customer_sales_split(
+        pool,
+        &DateRange {
+            from: filter.date_from,
+            to: filter.date_to,
+        },
+        &timezone,
+        filter.limit.unwrap_or(10).clamp(1, 100),
     )
     .await
     .map_err(AppError::from)
