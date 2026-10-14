@@ -276,7 +276,11 @@ pub fn sort_items(items: &mut [RestockItem]) {
                 (None, Some(_)) => Ordering::Greater,
                 (None, None) => Ordering::Equal,
             })
-            .then_with(|| a.product_name.to_lowercase().cmp(&b.product_name.to_lowercase()))
+            .then_with(|| {
+                a.product_name
+                    .to_lowercase()
+                    .cmp(&b.product_name.to_lowercase())
+            })
     });
 }
 
@@ -430,10 +434,7 @@ pub async fn get_restock_overview(
             .push(")");
     }
 
-    let rows = qb
-        .build_query_as::<RawRestockRow>()
-        .fetch_all(pool)
-        .await?;
+    let rows = qb.build_query_as::<RawRestockRow>().fetch_all(pool).await?;
 
     let only_urgent = filter.only_urgent.unwrap_or(false);
 
@@ -442,8 +443,7 @@ pub async fn get_restock_overview(
         BTreeMap::new();
 
     for row in rows {
-        let days_of_cover =
-            calc_days_of_cover(row.stock, window_days, row.units_sold_window);
+        let days_of_cover = calc_days_of_cover(row.stock, window_days, row.units_sold_window);
         let urgency = calc_restock_urgency(
             row.stock,
             row.units_sold_window,
@@ -611,9 +611,11 @@ pub async fn get_supplier_restock(
 
     let overview = get_restock_overview(pool, filter).await?;
 
-    if let Some(group) = overview.groups.into_iter().find(|g| {
-        g.supplier.as_ref().map(|s| s.id) == Some(supplier_id)
-    }) {
+    if let Some(group) = overview
+        .groups
+        .into_iter()
+        .find(|g| g.supplier.as_ref().map(|s| s.id) == Some(supplier_id))
+    {
         return Ok(group);
     }
 
@@ -892,8 +894,8 @@ mod tests {
 
     #[test]
     fn test_sort_groups() {
-        let make_group = |name: &str, priority: &str, out: i64, crit: i64, unassigned: bool| {
-            RestockGroup {
+        let make_group =
+            |name: &str, priority: &str, out: i64, crit: i64, unassigned: bool| RestockGroup {
                 supplier: if unassigned {
                     None
                 } else {
@@ -918,14 +920,13 @@ mod tests {
                 estimated_cost: 0,
                 items_without_cost: 0,
                 top_urgency: None,
-            }
-        };
+            };
 
         let mut groups = vec![
             make_group("Sin Proveedor", "normal", 10, 10, true), // Debe quedar al final
             make_group("Prov B", "normal", 1, 0, false),         // urgente = 1
             make_group("Prov A", "urgent", 2, 1, false),         // urgente = 3
-            make_group("Prov C", "preferred", 1, 0, false),      // urgente = 1, prioridad preferida > normal
+            make_group("Prov C", "preferred", 1, 0, false), // urgente = 1, prioridad preferida > normal
         ];
 
         sort_groups(&mut groups);
