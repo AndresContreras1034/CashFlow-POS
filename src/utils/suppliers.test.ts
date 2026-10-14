@@ -1,8 +1,10 @@
 import { describe, expect, it } from 'vitest';
 import {
   buildRestockMessage,
+  formatSupplierConditions,
   mailtoUrl,
   normalizeWhatsappNumber,
+  priorityBadgeClass,
   priorityLabel,
   RESTOCK_URGENCY_LABELS,
   telUrl,
@@ -33,5 +35,18 @@ describe('suppliers helpers', () => {
   it('expone etiquetas y prioridad', () => {
     expect(RESTOCK_URGENCY_LABELS.critical).toBe('Crítico');
     expect(priorityLabel('preferred')).toBe('Preferido');
+  });
+
+  it('determina la clase css del badge de prioridad', () => {
+    expect(priorityBadgeClass('normal')).toBe('suppliers-badge');
+    expect(priorityBadgeClass('preferred')).toBe('suppliers-badge suppliers-badge-preferred');
+    expect(priorityBadgeClass('urgent')).toBe('suppliers-badge suppliers-badge-urgent');
+  });
+
+  it('formatea las condiciones de entrega y pago', () => {
+    expect(formatSupplierConditions(3, 30)).toBe('Entrega 3 d · Pago 30 d');
+    expect(formatSupplierConditions(3, null)).toBe('Entrega 3 d');
+    expect(formatSupplierConditions(null, 0)).toBe('Pago 0 d');
+    expect(formatSupplierConditions(null, null)).toBe('—');
   });
 });

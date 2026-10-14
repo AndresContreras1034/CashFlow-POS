@@ -9,30 +9,13 @@ import { Debts } from '../pages/Debts/Debts';
 import { Developer } from '../pages/Developer/Developer';
 import { Inventory } from '../pages/Inventory/Inventory';
 import { ProductDetail } from '../pages/ProductDetail/ProductDetail';
+import Suppliers from '../pages/Suppliers/Suppliers';
 import { Settings } from '../pages/Settings/Settings';
 import Cash from '../pages/Cash/Cash';
 import Sales from '../pages/Sales/Sales';
 import SalesHistory from '../pages/SalesHistory/SalesHistory';
 import { StocktakePage } from '../pages/Stocktake/Stocktake';
 import Reports from '../pages/Reports/Reports';
-
-const Placeholder: React.FC<{ name: string }> = ({ name }) => (
-  <div
-    style={{
-      flex: 1,
-      display: 'flex',
-      alignItems: 'center',
-      justifyContent: 'center',
-      flexDirection: 'column',
-      gap: 12,
-      color: 'var(--text-muted)',
-      fontFamily: 'var(--font-sans)',
-    }}
-  >
-    <span style={{ fontSize: 36, opacity: 0.3 }}>🚧</span>
-    <p style={{ fontSize: 16 }}>{name} — próximamente</p>
-  </div>
-);
 
 export const AppRouter: React.FC = () => (
   <BrowserRouter>
@@ -62,10 +45,7 @@ export const AppRouter: React.FC = () => (
         <Route path="/debts" element={<Debts />} />
 
         {/* Proveedores */}
-        <Route
-          path="/suppliers"
-          element={<Placeholder name="Proveedores" />}
-        />
+        <Route path="/suppliers" element={<Suppliers />} />
 
         {/* Reportes */}
         <Route path="/reports" element={<Reports />} />

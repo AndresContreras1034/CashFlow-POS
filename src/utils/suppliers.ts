@@ -32,6 +32,32 @@ export const priorityLabel = (priority: SupplierPriority): string => {
   return labels[priority] ?? priority;
 };
 
+export const priorityBadgeClass = (priority: SupplierPriority): string => {
+  switch (priority) {
+    case 'preferred':
+      return 'suppliers-badge suppliers-badge-preferred';
+    case 'urgent':
+      return 'suppliers-badge suppliers-badge-urgent';
+    case 'normal':
+    default:
+      return 'suppliers-badge';
+  }
+};
+
+export const formatSupplierConditions = (
+  leadTimeDays: number | null | undefined,
+  paymentTermsDays: number | null | undefined,
+): string => {
+  const parts: string[] = [];
+  if (leadTimeDays !== null && leadTimeDays !== undefined) {
+    parts.push(`Entrega ${leadTimeDays} d`);
+  }
+  if (paymentTermsDays !== null && paymentTermsDays !== undefined) {
+    parts.push(`Pago ${paymentTermsDays} d`);
+  }
+  return parts.length > 0 ? parts.join(' · ') : '—';
+};
+
 export const buildRestockMessage = ({
   productName,
   variantName,

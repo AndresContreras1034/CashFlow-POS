@@ -1,0 +1,81 @@
+.suppliers-summary {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 12px;
+  margin-bottom: 16px;
+}
+
+.suppliers-card {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  padding: 14px 16px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  background: var(--bg-surface);
+  color: var(--text-primary);
+  text-align: left;
+}
+
+.suppliers-card--primary {
+  border-color: var(--accent);
+}
+
+.suppliers-card-label {
+  font-size: 12px;
+  font-weight: 500;
+  color: var(--text-muted);
+}
+
+.suppliers-card-value {
+  font-size: 24px;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+  line-height: 1.2;
+}
+
+.suppliers-card-sub {
+  font-size: 12px;
+  color: var(--text-muted);
+  min-height: 18px;
+}
+
+.suppliers-card--urgent .suppliers-card-value {
+  color: var(--danger);
+}
+
+.suppliers-card--warning .suppliers-card-value {
+  color: var(--stock-low);
+}
+
+.suppliers-summary-error {
+  grid-column: 1 / -1;
+  padding: 10px 14px;
+  background: var(--danger-dim);
+  border: 1px solid var(--danger);
+  border-radius: var(--radius-sm);
+  font-size: 13px;
+  color: var(--danger);
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.suppliers-summary-error button {
+  padding: 4px 12px;
+  font-size: 12px;
+  min-height: auto;
+}
+
+@media (max-width: 900px) {
+  .suppliers-summary {
+    grid-template-columns: repeat(2, 1fr);
+  }
+}
+
+@media (max-width: 480px) {
+  .suppliers-summary {
+    grid-template-columns: 1fr;
+  }
+}
