@@ -1,0 +1,72 @@
+.suppliers-input,
+.suppliers-select,
+.suppliers-textarea,
+.suppliers-btn,
+.suppliers-badge,
+.suppliers-number {
+  font: inherit;
+}
+
+.suppliers-input,
+.suppliers-select,
+.suppliers-textarea {
+  width: 100%;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  background: var(--bg-surface);
+  color: var(--text-primary);
+  padding: 0.7rem 0.8rem;
+  transition: border-color var(--transition), box-shadow var(--transition), background var(--transition);
+}
+
+.suppliers-input:focus,
+.suppliers-select:focus,
+.suppliers-textarea:focus {
+  outline: none;
+  border-color: var(--accent);
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--accent) 18%, transparent);
+}
+
+.suppliers-btn {
+  border: 1px solid var(--border);
+  background: var(--bg-surface);
+  color: var(--text-primary);
+  padding: 0.72rem 1rem;
+  border-radius: var(--radius);
+  cursor: pointer;
+  transition: background var(--transition), border-color var(--transition), transform var(--transition);
+}
+
+.suppliers-btn:hover:not(:disabled) {
+  background: var(--bg-hover);
+}
+
+.suppliers-btn:disabled {
+  opacity: 0.55;
+  cursor: not-allowed;
+}
+
+.suppliers-btn-primary {
+  background: var(--accent);
+  border-color: var(--accent);
+  color: #fff;
+}
+
+.suppliers-btn-primary:hover:not(:disabled) {
+  background: var(--accent-hover);
+}
+
+.suppliers-badge {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0.2rem 0.55rem;
+  border-radius: 999px;
+  font-size: 0.74rem;
+  font-weight: 600;
+  line-height: 1.3;
+}
+
+.suppliers-number {
+  font-variant-numeric: tabular-nums;
+}
