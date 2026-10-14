@@ -145,8 +145,20 @@ describe('etiquetas del catálogo', () => {
     expect(actionLabel('sales', 'assign_customer')).toBe('Cliente asignado a venta');
     expect(actionLabel('sales', 'cancel')).toBe('Venta anulada');
     expect(actionLabel('sales', 'refund')).toBe('Venta devuelta');
+    expect(actionLabel('suppliers', 'create')).toBe('Registro');
+    expect(actionLabel('suppliers', 'update')).toBe('Edición');
+    expect(actionLabel('suppliers', 'activate')).toBe('Reactivación');
+    expect(actionLabel('suppliers', 'deactivate')).toBe('Desactivación');
+    expect(actionLabel('suppliers', 'set_categories')).toBe('Categorías actualizadas');
+    expect(actionLabel('suppliers', 'link_variant')).toBe('Variante vinculada');
+    expect(actionLabel('suppliers', 'update_variant')).toBe('Vínculo de variante actualizado');
+    expect(actionLabel('suppliers', 'unlink_variant')).toBe('Variante desvinculada');
     expect(fieldLabel('from_name')).toBe('Cliente anterior');
     expect(fieldLabel('to_name')).toBe('Cliente nuevo');
+    expect(fieldLabel('contact_name')).toBe('Contacto');
+    expect(fieldLabel('whatsapp')).toBe('WhatsApp');
+    expect(fieldLabel('supplier_sku')).toBe('SKU del proveedor');
+    expect(formatAuditValue('suppliers', 'priority', 'preferred', money)).toBe('Preferido');
     expect(actionLabel('reports', 'export_all')).toBe('Export all');
   });
 
@@ -156,6 +168,10 @@ describe('etiquetas del catálogo', () => {
     expect(formatActor('Ana')).toBe('Ana');
     expect(formatEntity({ entity_type: null, entity_id: null })).toBe('—');
     expect(formatEntity({ entity_type: 'variant', entity_id: '12' })).toBe('Variante #12');
+    expect(formatEntity({ entity_type: 'supplier', entity_id: '4' })).toBe('Proveedor #4');
+    expect(formatEntity({ entity_type: 'supplier_variant', entity_id: '11' })).toBe(
+      'Variante del proveedor #11',
+    );
     expect(formatEntity({ entity_type: 'raro', entity_id: null })).toBe('Raro');
   });
 });
@@ -180,6 +196,7 @@ describe('isMoneyField', () => {
     expect(isMoneyField('cash', 'difference')).toBe(true);
     expect(isMoneyField('inventory', 'difference')).toBe(false);
     expect(isMoneyField('inventory', 'price')).toBe(true);
+    expect(isMoneyField('suppliers', 'last_cost')).toBe(true);
     expect(isMoneyField('settings', 'tax_rate_bps')).toBe(false);
     expect(isMoneyField('system', 'amount')).toBe(false);
   });

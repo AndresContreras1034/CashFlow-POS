@@ -24,7 +24,7 @@ export const errorMessage = (error: unknown): string =>
 
 export const AUDIT_MODULES: readonly AuditModule[] = [
   'sales', 'inventory', 'cash', 'stocktake', 'settings',
-  'import', 'licensing', 'billing', 'system', 'debts', 'customers',
+  'import', 'licensing', 'billing', 'system', 'debts', 'customers', 'suppliers', 'backup',
 ];
 export const AUDIT_CATEGORIES: readonly AuditCategory[] = ['business', 'error'];
 export const AUDIT_OUTCOMES: readonly AuditOutcome[] = ['success', 'failure'];
@@ -41,6 +41,8 @@ export const MODULE_LABELS: Record<AuditModule, string> = {
   system: 'Sistema',
   debts: 'Deudas',
   customers: 'Clientes',
+  suppliers: 'Proveedores',
+  backup: 'Backup',
 };
 
 export const CATEGORY_LABELS: Record<AuditCategory, string> = {
@@ -79,6 +81,16 @@ const ACTION_LABELS: Record<string, string> = {
   'customers.update': 'Edición',
   'customers.activate': 'Reactivación',
   'customers.deactivate': 'Desactivación',
+  'suppliers.create': 'Registro',
+  'suppliers.update': 'Edición',
+  'suppliers.activate': 'Reactivación',
+  'suppliers.deactivate': 'Desactivación',
+  'suppliers.set_categories': 'Categorías actualizadas',
+  'suppliers.link_variant': 'Variante vinculada',
+  'suppliers.update_variant': 'Vínculo de variante actualizado',
+  'suppliers.unlink_variant': 'Variante desvinculada',
+  'backup.create': 'Generación',
+  'backup.update': 'Configuración',
 };
 
 const ENTITY_TYPE_LABELS: Record<string, string> = {
@@ -95,6 +107,10 @@ const ENTITY_TYPE_LABELS: Record<string, string> = {
   debt: 'Deuda',
   debt_payment: 'Pago de deuda',
   customer: 'Cliente',
+  supplier: 'Proveedor',
+  supplier_variant: 'Variante del proveedor',
+  backup: 'Backup',
+  backup_settings: 'Ajustes de backup',
 };
 
 const FIELD_LABELS: Record<string, string> = {
@@ -143,6 +159,12 @@ const FIELD_LABELS: Record<string, string> = {
   reference: 'Referencia de pago', balance_after: 'Saldo posterior',
   document_type: 'Tipo de documento', document_number: 'Número de documento',
   from_name: 'Cliente anterior', to_name: 'Cliente nuevo',
+  // proveedores
+  contact_name: 'Contacto', whatsapp: 'WhatsApp', city: 'Ciudad',
+  payment_terms_days: 'Plazo de pago (días)', lead_time_days: 'Tiempo de entrega (días)',
+  visit_days: 'Días de visita', priority: 'Prioridad',
+  supplier_sku: 'SKU del proveedor', last_cost: 'Último costo',
+  is_preferred: 'Preferido', variant_id: 'Variante', categories: 'Categorías',
   // error
   error_kind: 'Tipo de error',
 };
@@ -173,6 +195,7 @@ const VALUE_LABELS: Record<string, Record<string, string>> = {
   },
   reason: { ...REASON_LABELS },
   kind: { purchase: 'Compra perpetua', rental: 'Alquiler' },
+  priority: { normal: 'Normal', preferred: 'Preferido', urgent: 'Urgente' },
   error_kind: { database: 'Base de datos', internal: 'Interno' },
 };
 
@@ -383,6 +406,7 @@ const MONEY_FIELDS: Record<string, readonly string[]> = {
   sales: ['subtotal', 'discount', 'tax', 'total', 'amount'],
   inventory: ['price', 'cost', 'unit_cost'],
   debts: ['original_amount', 'amount', 'balance_after'],
+  suppliers: ['last_cost'],
 };
 
 /** Si el campo es un importe en centavos según el módulo. */

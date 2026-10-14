@@ -31,6 +31,8 @@ pub enum AuditModule {
     System,
     Debts,
     Customers,
+    Suppliers,
+    Backup,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, sqlx::Type)]
@@ -74,6 +76,10 @@ mod tests {
         assert_eq!(
             serde_json::to_string(&AuditModule::Stocktake).unwrap(),
             "\"stocktake\""
+        );
+        assert_eq!(
+            serde_json::to_string(&AuditModule::Suppliers).unwrap(),
+            "\"suppliers\""
         );
         assert_eq!(
             serde_json::to_string(&AuditCategory::Business).unwrap(),

@@ -660,7 +660,9 @@ export type AuditModule =
   | 'billing'
   | 'system'
   | 'debts'
-  | 'customers';
+  | 'customers'
+  | 'suppliers'
+  | 'backup';
 
 /** Un campo que cambió: solo aparecen los campos modificados. */
 export interface AuditChange {
@@ -717,3 +719,5 @@ export interface StocktakeApplyResultDto {
 }
 
 export * from './reports';
+export * from './customers';
+export * from './suppliers';

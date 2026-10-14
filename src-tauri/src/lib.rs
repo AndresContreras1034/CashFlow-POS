@@ -10,6 +10,7 @@ pub mod types;
 use db::connection::probe_health;
 use db::init_db;
 use modules::audit::router::*;
+use modules::backup::router::*;
 use modules::billing::router::*;
 use modules::cash::router::*;
 use modules::customers::router::*;
@@ -21,7 +22,25 @@ use modules::reports::router::*;
 use modules::sales::router::*;
 use modules::settings::router::*;
 use modules::stocktake::router::*;
+use modules::suppliers::router::*;
 use tauri::Manager;
+
+#[cfg(windows)]
+fn show_fatal_dialog(title: &str, message: &str) {
+    use std::ptr::null_mut;
+    use winapi::um::winuser::{MessageBoxW, MB_ICONERROR, MB_OK};
+    let to_wide = |s: &str| -> Vec<u16> { s.encode_utf16().chain(std::iter::once(0)).collect() };
+    let text = to_wide(message);
+    let cap = to_wide(title);
+    unsafe {
+        MessageBoxW(null_mut(), text.as_ptr(), cap.as_ptr(), MB_OK | MB_ICONERROR);
+    }
+}
+
+#[cfg(not(windows))]
+fn show_fatal_dialog(title: &str, message: &str) {
+    eprintln!("{title}: {message}");
+}
 
 fn load_runtime_environment(app: &tauri::AppHandle) -> Result<(), String> {
     if std::env::var_os("DATABASE_URL").is_some() {
@@ -81,6 +100,14 @@ pub fn run() {
 
             if let Err(error) = load_runtime_environment(&handle) {
                 tracing::error!("{error}");
+                show_fatal_dialog(
+                    "Error de Configuración - CashFlow POS",
+                    &format!(
+                        "No se pudo cargar la configuración de la aplicación (DATABASE_URL).\n\n\
+                         Verifica que exista el archivo .env con la conexión a PostgreSQL o configura las variables de entorno del sistema.\n\n\
+                         Detalle: {error}"
+                    ),
+                );
                 handle.exit(1);
                 return Ok(());
             }
@@ -92,13 +119,26 @@ pub fn run() {
                         error = %error,
                         "No se pudo inicializar la base de datos"
                     );
+                    show_fatal_dialog(
+                        "Error de Base de Datos - CashFlow POS",
+                        &format!(
+                            "No se pudo conectar a la base de datos PostgreSQL.\n\n\
+                             Verifica que el servicio de PostgreSQL esté iniciado y accesible en este equipo, y que las credenciales en .env sean correctas.\n\n\
+                             Detalle: {error}"
+                        ),
+                    );
                     handle.exit(1);
                     return Ok(());
                 }
             };
             let health_pool = pool.clone();
+            let scheduler_pool = pool.clone();
             if !handle.manage(pool) {
                 tracing::error!("No se pudo registrar el pool de base de datos");
+                show_fatal_dialog(
+                    "Error de Inicio - CashFlow POS",
+                    "No se pudo registrar el pool de base de datos en la aplicación.",
+                );
                 handle.exit(1);
                 return Ok(());
             }
@@ -106,6 +146,8 @@ pub fn run() {
             if let Some(window) = handle.get_webview_window("main") {
                 window.show().ok();
             }
+
+            modules::backup::scheduler::spawn(handle.clone(), scheduler_pool);
 
             tauri::async_runtime::spawn(async move {
                 tracing::info!(ok = true, "Base de datos lista");
@@ -244,6 +286,8 @@ pub fn run() {
             get_payables_aging,
             get_top_creditors,
             get_upcoming_dues,
+            get_top_customers,
+            get_customer_sales_split,
             save_report_csv,
             // =================================================
             // Audit
@@ -275,6 +319,40 @@ pub fn run() {
             create_customer,
             update_customer,
             set_customer_active,
+            // =================================================
+            // Suppliers
+            // =================================================
+            list_suppliers,
+            get_supplier,
+            create_supplier,
+            update_supplier,
+            set_supplier_active,
+            set_supplier_categories,
+            list_supplier_categories,
+            link_supplier_variant,
+            update_supplier_variant,
+            unlink_supplier_variant,
+            list_supplier_variants,
+            list_variant_suppliers,
+            // =================================================
+            // Backup
+            // =================================================
+            get_backup_settings,
+            get_backup_status,
+            update_backup_settings,
+            check_backup_environment,
+            run_backup_now,
+            list_backup_history,
+            is_backup_running,
+            get_backup_secrets_status,
+            set_backup_encryption_password,
+            set_backup_smtp_password,
+            list_backup_recipients,
+            add_backup_recipient,
+            update_backup_recipient,
+            delete_backup_recipient,
+            send_backup_test_email,
+            list_backup_deliveries,
             // Developer Mode
             set_developer_mode,
             get_developer_status,
