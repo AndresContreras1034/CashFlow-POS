@@ -1,0 +1,609 @@
+BACKEND_FASE_1A - generado 13/10/2026 16:05:30,85
+
+===== Cargo.toml =====
+[package]
+name = "pos"
+version = "0.1.0"
+description = "A Tauri App"
+authors = ["you"]
+edition = "2021"
+
+[lib]
+name = "pos_lib"
+crate-type = ["staticlib", "cdylib", "rlib"]
+
+[build-dependencies]
+tauri-build = { version = "2", features = [] }
+
+[dependencies]
+tauri = { version = "2", features = [] }
+tauri-plugin-opener = "2"
+tauri-plugin-dialog = "2"
+
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+
+# ==========================================
+# Base de datos
+# ==========================================
+
+sqlx = {
+    version = "0.8",
+    features = [
+        "postgres",
+        "runtime-tokio",
+        "macros",
+        "migrate",
+        "chrono",
+        "uuid",
+        "json"
+    ]
+}
+
+tokio = { version = "1", features = ["full"] }
+
+# ==========================================
+# Utilidades
+# ==========================================
+
+chrono = { version = "0.4", features = ["serde"] }
+
+uuid = {
+    version = "1",
+    features = ["v4", "serde"]
+}
+
+thiserror = "1"
+anyhow = "1"
+
+rust_decimal = {
+    version = "1",
+    features = ["serde-with-str"]
+}
+rsa = { version = "0.9", features = ["sha2"] }
+sha2 = { version = "0.10", features = ["oid"] }
+
+# ==========================================
+# Configuración
+# ==========================================
+
+dotenvy = "0.15"
+
+# ==========================================
+# Logging
+# ==========================================
+
+tracing = "0.1"
+
+tracing-subscriber = {
+    version = "0.3",
+    features = ["env-filter"]
+}
+
+# ==========================================
+# Excel / Importación masiva
+# ==========================================
+
+calamine = "0.26"
+
+# ==========================================
+# Logo / imágenes para ESC/POS
+# ==========================================
+#
+# Se utiliza únicamente para leer el JPG del
+# logo y convertirlo a bitmap monocromático.
+#
+
+image = {
+    version = "0.25",
+    default-features = false,
+    features = ["jpeg"]
+}
+rust_xlsxwriter = "0.99.1"
+
+# ==========================================
+# Impresión térmica ESC/POS
+# Windows Spooler
+# ==========================================
+
+[target.'cfg(windows)'.dependencies]
+
+winapi = {
+    version = "0.3",
+features = [
+    "winspool",
+    "winnt",
+    "minwindef",
+    "handleapi",
+    "errhandlingapi",
+    "consoleapi",
+    "processenv",
+    "winbase",
+    "wincon",
+    "winuser"
+]
+}
+
+[profile.dev.package."*"]
+opt-level = 3
+
+===== lib.rs =====
+pub mod config;
+pub mod db;
+pub mod errors;
+pub mod logging;
+pub mod middleware;
+pub mod modules;
+pub mod router;
+pub mod types;
+
+use db::connection::probe_health;
+use db::init_db;
+use modules::audit::router::*;
+use modules::billing::router::*;
+use modules::cash::router::*;
+use modules::customers::router::*;
+use modules::debts::router::*;
+use modules::developer::router::*;
+use modules::inventory::router::*;
+use modules::licensing::router::*;
+use modules::reports::router::*;
+use modules::sales::router::*;
+use modules::settings::router::*;
+use modules::stocktake::router::*;
+use modules::suppliers::router::*;
+use tauri::Manager;
+
+#[cfg(windows)]
+fn show_fatal_dialog(title: &str, message: &str) {
+    use std::ptr::null_mut;
+    use winapi::um::winuser::{MessageBoxW, MB_ICONERROR, MB_OK};
+    let to_wide = |s: &str| -> Vec<u16> { s.encode_utf16().chain(std::iter::once(0)).collect() };
+    let text = to_wide(message);
+    let cap = to_wide(title);
+    unsafe {
+        MessageBoxW(null_mut(), text.as_ptr(), cap.as_ptr(), MB_OK | MB_ICONERROR);
+    }
+}
+
+#[cfg(not(windows))]
+fn show_fatal_dialog(title: &str, message: &str) {
+    eprintln!("{title}: {message}");
+}
+
+fn load_runtime_environment(app: &tauri::AppHandle) -> Result<(), String> {
+    if std::env::var_os("DATABASE_URL").is_some() {
+        return Ok(());
+    }
+
+    let config_file = app
+        .path()
+        .app_config_dir()
+        .map_err(|error| format!("No se pudo resolver la configuración de la aplicación: {error}"))?
+        .join(".env");
+
+    if config_file.exists() {
+        dotenvy::from_path(&config_file).map_err(|error| {
+            format!("No se pudo leer la configuración de la aplicación: {error}")
+        })?;
+        return Ok(());
+    }
+
+    #[cfg(debug_assertions)]
+    {
+        let development_file = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join(".env");
+        if development_file.exists() {
+            dotenvy::from_path(&development_file).map_err(|error| {
+                format!("No se pudo leer la configuración de desarrollo: {error}")
+            })?;
+            return Ok(());
+        }
+    }
+
+    Err(format!(
+        "No se encontró DATABASE_URL. Configura {}",
+        config_file.display()
+    ))
+}
+
+#[cfg_attr(mobile, tauri::mobile_entry_point)]
+pub fn run() {
+    let started = std::time::Instant::now();
+    dotenvy::dotenv().ok();
+
+    let developer_state = modules::developer::state::shared();
+    logging::init(developer_state.clone());
+
+    tauri::Builder::default()
+        // =====================================================
+        // Plugins
+        // =====================================================
+        .plugin(tauri_plugin_opener::init())
+        .plugin(tauri_plugin_dialog::init())
+        // =====================================================
+        // Inicialización
+        // =====================================================
+        .manage(developer_state)
+        .setup(move |app| {
+            let handle = app.handle().clone();
+
+            if let Err(error) = load_runtime_environment(&handle) {
+                tracing::error!("{error}");
+                show_fatal_dialog(
+                    "Error de Configuración - CashFlow POS",
+                    &format!(
+                        "No se pudo cargar la configuración de la aplicación (DATABASE_URL).\n\n\
+                         Verifica que exista el archivo .env con la conexión a PostgreSQL o configura las variables de entorno del sistema.\n\n\
+                         Detalle: {error}"
+                    ),
+                );
+                handle.exit(1);
+                return Ok(());
+            }
+
+            let pool = match tauri::async_runtime::block_on(init_db()) {
+                Ok(pool) => pool,
+                Err(error) => {
+                    tracing::error!(
+                        error = %error,
+                        "No se pudo inicializar la base de datos"
+                    );
+                    show_fatal_dialog(
+                        "Error de Base de Datos - CashFlow POS",
+                        &format!(
+                            "No se pudo conectar a la base de datos PostgreSQL.\n\n\
+                             Verifica que el servicio de PostgreSQL esté iniciado y accesible en este equipo, y que las credenciales en .env sean correctas.\n\n\
+                             Detalle: {error}"
+                        ),
+                    );
+                    handle.exit(1);
+                    return Ok(());
+                }
+            };
+            let health_pool = pool.clone();
+            if !handle.manage(pool) {
+                tracing::error!("No se pudo registrar el pool de base de datos");
+                show_fatal_dialog(
+                    "Error de Inicio - CashFlow POS",
+                    "No se pudo registrar el pool de base de datos en la aplicación.",
+                );
+                handle.exit(1);
+                return Ok(());
+            }
+
+            if let Some(window) = handle.get_webview_window("main") {
+                window.show().ok();
+            }
+
+            tauri::async_runtime::spawn(async move {
+                tracing::info!(ok = true, "Base de datos lista");
+                let db = probe_health(&health_pool)
+                    .await
+                    .map_err(|error| error.to_string());
+                logging::print_startup_panel(&logging::StartupInfo {
+                    app_version: env!("CARGO_PKG_VERSION"),
+                    profile: if cfg!(debug_assertions) {
+                        "debug"
+                    } else {
+                        "release"
+                    },
+                    log_filter: logging::effective_filter(
+                        std::env::var("RUST_LOG").ok().as_deref(),
+                    ),
+                    db,
+                    pool_size: health_pool.size(),
+                    pool_idle: health_pool.num_idle(),
+                    pool_max: health_pool.options().get_max_connections(),
+                    startup: started.elapsed(),
+                });
+            });
+
+            Ok(())
+        })
+        // =====================================================
+        // Comandos Tauri
+        // =====================================================
+        .invoke_handler(tauri::generate_handler![
+            // =================================================
+            // Categories
+            // =================================================
+            list_categories,
+            get_category,
+            create_category,
+            update_category,
+            // =================================================
+            // Products
+            // =================================================
+            list_products,
+            get_product,
+            create_product,
+            update_product,
+            deactivate_product,
+            // =================================================
+            // Variants
+            // =================================================
+            list_variants,
+            get_variant,
+            find_by_barcode,
+            generate_internal_barcode,
+            search_variants,
+            create_variant,
+            update_variant,
+            // =================================================
+            // Inventory
+            // =================================================
+            register_stock_entry,
+            register_initial_stock,
+            register_manual_entry,
+            register_manual_out,
+            adjust_stock,
+            get_kardex,
+            get_low_stock,
+            get_inventory_value,
+            get_product_stock_stats,
+            // =================================================
+            // Importación masiva de inventario
+            // =================================================
+            preview_import_inventory,
+            execute_import_inventory,
+            export_inventory,
+            export_inventory_template,
+            print_variant_labels,
+            // =================================================
+            // Licencias offline
+            // =================================================
+            get_license_status,
+            activate_license,
+            // =================================================
+            // Stocktake
+            // =================================================
+            start_stocktake,
+            get_current_stocktake,
+            list_stocktakes,
+            list_stocktake_lines,
+            find_stocktake_line_by_code,
+            set_stocktake_count,
+            get_stocktake_review,
+            apply_stocktake,
+            cancel_stocktake,
+            // =================================================
+            // Settings
+            // =================================================
+            get_settings,
+            update_settings,
+            // =================================================
+            // Cash
+            // =================================================
+            open_cash_session,
+            close_cash_session,
+            get_current_cash_session,
+            get_cash_session,
+            get_cash_session_report,
+            list_cash_sessions,
+            register_cash_movement,
+            list_cash_movements,
+            print_cash_report,
+            // =================================================
+            // Sales
+            // =================================================
+            create_sale,
+            get_sale,
+            list_sales,
+            void_sale,
+            assign_sale_customer,
+            // =================================================
+            // Billing / Printer
+            // =================================================
+            print_sale_ticket,
+            // =================================================
+            // Reports
+            // =================================================
+            get_dashboard_kpis,
+            get_sales_series,
+            get_sales_by_payment_method,
+            get_sales_heatmap,
+            get_top_products,
+            get_sales_by_category,
+            get_stale_products,
+            get_inventory_valuation,
+            get_inventory_turnover,
+            get_stock_alerts,
+            get_payables_summary,
+            get_payables_aging,
+            get_top_creditors,
+            get_upcoming_dues,
+            get_top_customers,
+            get_customer_sales_split,
+            save_report_csv,
+            // =================================================
+            // Audit
+            // =================================================
+            list_audit_events,
+            get_audit_event,
+            list_audit_events_by_correlation,
+            // =================================================
+            // Debts
+            // =================================================
+            get_debt_options,
+            list_debts,
+            get_debt,
+            get_debt_summary,
+            get_debt_category_stats,
+            list_due_debts,
+            list_debt_history,
+            create_debt,
+            update_debt,
+            void_debt,
+            register_debt_payment,
+            void_debt_payment,
+            // =================================================
+            // Customers
+            // =================================================
+            list_customers,
+            get_customer,
+            get_customer_names,
+            create_customer,
+            update_customer,
+            set_customer_active,
+            // =================================================
+            // Suppliers
+            // =================================================
+            list_suppliers,
+            get_supplier,
+            create_supplier,
+            update_supplier,
+            set_supplier_active,
+            // Developer Mode
+            set_developer_mode,
+            get_developer_status,
+            get_developer_events,
+            clear_developer_events,
+            get_health,
+        ])
+        // =====================================================
+        // Ejecutar aplicación
+        // =====================================================
+        .run(tauri::generate_context!())
+        .expect("Error al iniciar la aplicación Tauri");
+}
+
+===== main.rs =====
+// Prevents additional console window on Windows in release, DO NOT REMOVE!!
+#![cfg_attr(not(debug_assertions), windows_subsystem = "windows")]
+
+fn main() {
+    pos_lib::run()
+}
+
+===== router.rs =====
+
+
+===== modules\mod.rs =====
+pub mod audit;
+pub mod billing;
+pub mod cash;
+pub mod customers;
+pub mod debts;
+pub mod developer;
+pub mod inventory;
+pub mod licensing;
+pub mod reports;
+pub mod sales;
+pub mod settings; // ← agregar esta línea
+pub mod stocktake;
+pub mod suppliers;
+
+===== app_error.rs =====
+use thiserror::Error;
+
+#[derive(Debug, Error)]
+pub enum AppError {
+    #[error("{0}")]
+    NotFound(String),
+
+    #[error("{0}")]
+    Validation(String),
+
+    #[error("Error de base de datos: {0}")]
+    Database(#[from] sqlx::Error),
+
+    #[error("Error interno: {0}")]
+    Internal(String),
+}
+
+impl AppError {
+    pub fn not_found(msg: &str) -> Self {
+        Self::NotFound(msg.to_string())
+    }
+
+    pub fn validation(msg: &str) -> Self {
+        Self::Validation(msg.to_string())
+    }
+
+    pub fn internal(msg: &str) -> Self {
+        Self::Internal(msg.to_string())
+    }
+}
+
+impl serde::Serialize for AppError {
+    fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
+    where
+        S: serde::Serializer,
+    {
+        serializer.serialize_str(&self.to_string())
+    }
+}
+
+===== config\app.rs =====
+
+===== config\database.rs =====
+
+===== config\mod.rs =====
+
+
+===== .env.example =====
+DATABASE_URL=
+SQLX_OFFLINE=
+
+===== connection.rs =====
+use sqlx::{postgres::PgPoolOptions, Connection, PgConnection, PgPool};
+use std::time::{Duration, Instant};
+
+/// Tipo central del pool — se comparte via tauri State<DbPool>
+pub type DbPool = PgPool;
+
+/// Inicializa el pool de conexiones y corre las migraciones automáticamente.
+/// Se llama una sola vez al arrancar la app en `lib.rs`.
+pub async fn init_db() -> Result<DbPool, sqlx::Error> {
+    // Leer DATABASE_URL desde .env o variable de entorno del sistema
+    let database_url = std::env::var("DATABASE_URL").map_err(|_| {
+        sqlx::Error::Configuration(
+            "DATABASE_URL no está definida. Crea un archivo .env en src-tauri/".into(),
+        )
+    })?;
+
+    tracing::info!("Conectando a PostgreSQL...");
+
+    // Sonda previa: expone el error real antes de crear el pool.
+    PgConnection::connect(&database_url).await?.close().await?;
+
+    let pool = PgPoolOptions::new()
+        .max_connections(10)
+        .min_connections(2)
+        .acquire_timeout(Duration::from_secs(5))
+        .idle_timeout(Duration::from_secs(300))
+        .connect(&database_url)
+        .await?;
+
+    tracing::info!(ok = true, "Pool de conexiones creado");
+
+    tracing::info!("Ejecutando migraciones...");
+    sqlx::migrate!("./migrations").run(&pool).await?;
+
+    tracing::info!(ok = true, "Migraciones aplicadas");
+
+    Ok(pool)
+}
+
+/// Foto de salud tomada una vez al arrancar (solo para el panel de desarrollo).
+#[derive(Debug, Clone)]
+pub struct DbHealth {
+    pub database: String,
+    /// Texto completo de `version()`; el panel lo acorta.
+    pub server_version: String,
+    pub latency: Duration,
+}
+
+/// Consulta ligera con latencia medida. No toca datos de negocio.
+pub async fn probe_health(pool: &DbPool) -> Result<DbHealth, sqlx::Error> {
+    let started = Instant::now();
+    let (database, server_version): (String, String) =
+        sqlx::query_as("SELECT current_database(), version()")
+            .fetch_one(pool)
+            .await?;
+    Ok(DbHealth {
+        database,
+        server_version,
+        latency: started.elapsed(),
+    })
+}
