@@ -31,4 +31,5 @@ pub struct UpdateSettingsDto {
     pub show_payment_method: Option<bool>,
     pub low_stock_default_threshold: Option<i32>,
     pub logo_url: Option<String>,
+    pub printer_name: Option<String>,
 }

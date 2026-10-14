@@ -1,5 +1,5 @@
 import React, { useCallback, useEffect, useState } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useLocation, useNavigate } from 'react-router-dom';
 import { ToastContainer, ToastData } from '../../components/ui/Toast';
 import { useSettings } from '../../context/AppContext';
 import { updateSettings } from '../../services/settings.service';
@@ -17,9 +17,10 @@ import {
 } from '../../utils/shortcuts';
 import { APP_THEMES, applyTheme, loadSavedTheme, type AppTheme } from '../../utils/theme';
 import { applyDeveloperMode, readDeveloperMode } from '../../utils/developerMode';
+import { BackupSettingsForm } from '../../components/backup/BackupSettingsForm';
 import './Settings.css';
 
-type Section = 'business' | 'money' | 'regional' | 'inventory' | 'ticket' | 'appearance' | 'shortcuts' | 'developer';
+type Section = 'business' | 'money' | 'regional' | 'inventory' | 'ticket' | 'appearance' | 'shortcuts' | 'backup' | 'developer';
 
 const SECTIONS: { id: Section; label: string }[] = [
   { id: 'business', label: 'Negocio' },
@@ -29,6 +30,7 @@ const SECTIONS: { id: Section; label: string }[] = [
   { id: 'ticket', label: 'Ticket' },
   { id: 'appearance', label: 'Temas' },
   { id: 'shortcuts', label: 'Atajos' },
+  { id: 'backup', label: 'Backup' },
   { id: 'developer', label: 'Desarrollador' },
 ];
 
@@ -228,7 +230,22 @@ let rememberedSection: Section = 'business';
 export const Settings: React.FC = () => {
   const { settings, applySettings } = useSettings();
   const navigate = useNavigate();
-  const [section, setSection] = useState<Section>(rememberedSection);
+  const location = useLocation();
+  const [section, setSection] = useState<Section>(() => {
+    const stateSection = (location.state as { section?: Section } | null)?.section;
+    if (stateSection && SECTIONS.some(s => s.id === stateSection)) {
+      return stateSection;
+    }
+    return rememberedSection;
+  });
+
+  useEffect(() => {
+    const stateSection = (location.state as { section?: Section } | null)?.section;
+    if (stateSection && SECTIONS.some(s => s.id === stateSection)) {
+      setSection(stateSection);
+      rememberedSection = stateSection;
+    }
+  }, [location.state]);
   const [theme, setTheme] = useState<AppTheme>(() => loadSavedTheme());
   const [shortcuts, setShortcuts] = useState<NavigationShortcuts>({});
   const [capturingShortcut, setCapturingShortcut] = useState<NavigationPath | null>(null);
@@ -938,6 +955,8 @@ export const Settings: React.FC = () => {
           </section>
         )}
 
+        {section === 'backup' && <BackupSettingsForm onToast={addToast} />}
+
         {section === 'developer' && (
           <section className="settings-section">
             <h2 className="settings-section-title">Desarrollador</h2>
@@ -967,19 +986,21 @@ export const Settings: React.FC = () => {
           </section>
         )}
 
-        <div className="form-actions">
-          <button
-            type="button"
-            className="btn btn-ghost"
-            onClick={handleReset}
-            disabled={saving || !dirty}
-          >
-            Descartar cambios
-          </button>
-          <button type="submit" className="btn btn-primary" disabled={saving || !dirty}>
-            {saving ? 'Guardando…' : 'Guardar ajustes'}
-          </button>
-        </div>
+        {section !== 'backup' && (
+          <div className="form-actions">
+            <button
+              type="button"
+              className="btn btn-ghost"
+              onClick={handleReset}
+              disabled={saving || !dirty}
+            >
+              Descartar cambios
+            </button>
+            <button type="submit" className="btn btn-primary" disabled={saving || !dirty}>
+              {saving ? 'Guardando…' : 'Guardar ajustes'}
+            </button>
+          </div>
+        )}
       </form>
 
       <ToastContainer toasts={toasts} onDismiss={dismissToast} />

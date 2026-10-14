@@ -10,7 +10,7 @@ use crate::modules::audit::{
 use crate::modules::settings::{dto::UpdateSettingsDto, models::AppSettings};
 
 pub async fn get_settings(pool: &PgPool) -> Result<Option<AppSettings>, sqlx::Error> {
-    sqlx::query_as!(AppSettings, "SELECT * FROM app_settings WHERE id = 1")
+    sqlx::query_as::<_, AppSettings>("SELECT * FROM app_settings WHERE id = 1")
         .fetch_optional(pool)
         .await
 }
@@ -21,19 +21,16 @@ pub async fn update_settings(
 ) -> Result<Option<AppSettings>, sqlx::Error> {
     let mut tx = pool.begin().await?;
 
-    let before = sqlx::query_as!(
-        AppSettings,
-        "SELECT * FROM app_settings WHERE id = 1 FOR UPDATE"
-    )
-    .fetch_optional(&mut *tx)
-    .await?;
+    let before =
+        sqlx::query_as::<_, AppSettings>("SELECT * FROM app_settings WHERE id = 1 FOR UPDATE")
+            .fetch_optional(&mut *tx)
+            .await?;
 
     let Some(before) = before else {
         return Ok(None);
     };
 
-    let after = sqlx::query_as!(
-        AppSettings,
+    let after = sqlx::query_as::<_, AppSettings>(
         "UPDATE app_settings
          SET business_name               = COALESCE($1, business_name),
              tax_id                      = $2,
@@ -56,32 +53,34 @@ pub async fn update_settings(
              show_cashier                = COALESCE($19, show_cashier),
              show_tax_breakdown          = COALESCE($20, show_tax_breakdown),
              show_discounts              = COALESCE($21, show_discounts),
-             show_payment_method         = COALESCE($22, show_payment_method)
+             show_payment_method         = COALESCE($22, show_payment_method),
+             printer_name                = $23
          WHERE id = 1
          RETURNING *",
-        dto.business_name,
-        dto.tax_id,
-        dto.address,
-        dto.phone,
-        dto.email,
-        dto.currency,
-        dto.tax_rate_bps,
-        dto.ticket_header,
-        dto.ticket_footer,
-        dto.low_stock_default_threshold,
-        dto.logo_url,
-        dto.currency_decimals,
-        dto.tax_name,
-        dto.timezone,
-        dto.show_logo,
-        dto.show_tax_id,
-        dto.show_address,
-        dto.show_phone,
-        dto.show_cashier,
-        dto.show_tax_breakdown,
-        dto.show_discounts,
-        dto.show_payment_method
     )
+    .bind(dto.business_name)
+    .bind(dto.tax_id)
+    .bind(dto.address)
+    .bind(dto.phone)
+    .bind(dto.email)
+    .bind(dto.currency)
+    .bind(dto.tax_rate_bps)
+    .bind(dto.ticket_header)
+    .bind(dto.ticket_footer)
+    .bind(dto.low_stock_default_threshold)
+    .bind(dto.logo_url)
+    .bind(dto.currency_decimals)
+    .bind(dto.tax_name)
+    .bind(dto.timezone)
+    .bind(dto.show_logo)
+    .bind(dto.show_tax_id)
+    .bind(dto.show_address)
+    .bind(dto.show_phone)
+    .bind(dto.show_cashier)
+    .bind(dto.show_tax_breakdown)
+    .bind(dto.show_discounts)
+    .bind(dto.show_payment_method)
+    .bind(dto.printer_name)
     .fetch_one(&mut *tx)
     .await?;
 

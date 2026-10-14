@@ -28,6 +28,7 @@ pub struct AppSettings {
     pub show_payment_method: bool,
     pub low_stock_default_threshold: i32,
     pub logo_url: Option<String>,
+    pub printer_name: Option<String>,
     pub created_at: DateTime<Utc>,
     pub updated_at: DateTime<Utc>,
 }
