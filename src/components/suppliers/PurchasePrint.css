@@ -1,0 +1,83 @@
+/*
+ * Documento imprimible de la lista de compras.
+ * Los colores son fijos a propósito: el papel siempre debe salir negro sobre blanco.
+ */
+.purchase-print-root { display: none; }
+
+@media print {
+  @page { size: A4; margin: 14mm 12mm; }
+
+  html.purchase-printing,
+  html.purchase-printing body {
+    height: auto !important;
+    overflow: visible !important;
+    background: #fff !important;
+  }
+  html.purchase-printing #root { display: none !important; }
+
+  .purchase-print-root {
+    display: block;
+    color: #000;
+    background: #fff;
+    font-family: 'Inter', system-ui, sans-serif;
+    font-size: 10.5pt;
+    line-height: 1.35;
+  }
+
+  .pp-header { margin-bottom: 6mm; padding-bottom: 3mm; border-bottom: 0.5mm solid #000; }
+  .pp-business { font-size: 9.5pt; color: #444; text-transform: uppercase; letter-spacing: 0.05em; }
+  .purchase-print-root h1 { font-size: 20pt; font-weight: 700; margin: 1mm 0; }
+  .pp-meta { font-size: 10pt; color: #333; }
+  .pp-notes { margin-top: 2mm; font-size: 10pt; font-style: italic; }
+
+  .pp-group { margin-top: 7mm; }
+  .pp-group-head {
+    display: flex;
+    justify-content: space-between;
+    align-items: baseline;
+    gap: 6mm;
+    break-after: avoid;
+  }
+  .purchase-print-root h2 { font-size: 13pt; font-weight: 700; }
+  .pp-group-sum { font-size: 9.5pt; color: #333; white-space: nowrap; }
+  .pp-contact { font-size: 9.5pt; color: #444; margin-bottom: 1.5mm; break-after: avoid; }
+
+  .pp-table { width: 100%; border-collapse: collapse; }
+  .pp-table thead { display: table-header-group; }
+  .pp-table th {
+    text-align: left;
+    font-size: 8.5pt;
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+    padding: 1.5mm 2mm;
+    border-bottom: 0.4mm solid #000;
+  }
+  .pp-table td { padding: 2mm; border-bottom: 0.2mm solid #bbb; vertical-align: top; }
+  .pp-table tr { break-inside: avoid; }
+
+  .pp-check { width: 9mm; text-align: center; }
+  .pp-box {
+    display: inline-block;
+    width: 4.5mm;
+    height: 4.5mm;
+    border: 0.4mm solid #000;
+    vertical-align: middle;
+  }
+  .pp-num { text-align: right; white-space: nowrap; font-variant-numeric: tabular-nums; }
+  .pp-qty { font-weight: 700; font-size: 11.5pt; }
+  .pp-product { display: block; font-weight: 600; }
+  .pp-sub { display: block; font-size: 9pt; color: #444; }
+  .pp-note { font-style: italic; }
+
+  .pp-footer {
+    display: flex;
+    flex-direction: column;
+    gap: 1mm;
+    margin-top: 8mm;
+    padding-top: 3mm;
+    border-top: 0.5mm solid #000;
+    break-inside: avoid;
+    font-size: 10pt;
+  }
+  .pp-footer span { font-size: 8.5pt; color: #444; }
+}

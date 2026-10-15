@@ -4,6 +4,7 @@ import type {
   PurchaseListDetail,
   PurchaseListSummary,
 } from '../../types/purchases';
+import { buildPrintModel, printDocumentTitle, type PrintModel } from '../../utils/purchasePrint';
 import type { RestockOverview, SupplierOverview } from '../../types/suppliers';
 import {
   addRecommendedToList,
@@ -37,6 +38,7 @@ import {
 } from '../../utils/purchaseList';
 import { todayInTimeZone } from '../../utils/debts';
 import { PurchaseItemPicker } from './PurchaseItemPicker';
+import { PurchasePrintJob } from './PurchasePrintJob';
 import { PurchaseLineRow, type ItemPatch } from './PurchaseLineRow';
 import './SuppliersBase.css';
 import './PurchasePanel.css';
@@ -49,6 +51,12 @@ interface PurchasePanelProps {
   onAction: (action: ContactAction) => void;
   onCopy: (text: string, what: string) => void;
   onNotify: (message: string, type?: 'success' | 'error' | 'warning') => void;
+}
+
+interface PurchasePrintJobState {
+  id: number;
+  model: PrintModel;
+  documentTitle: string;
 }
 
 export const PurchasePanel: React.FC<PurchasePanelProps> = ({
@@ -86,6 +94,7 @@ export const PurchasePanel: React.FC<PurchasePanelProps> = ({
   const [headerError, setHeaderError] = useState<string | null>(null);
   const [pendingStatus, setPendingStatus] = useState<('draft' | 'ordered' | 'cancelled') | null>(null);
   const [statusBusy, setStatusBusy] = useState(false);
+  const [printJob, setPrintJob] = useState<PurchasePrintJobState | null>(null);
   const [pickerOpen, setPickerOpen] = useState(false);
   const [sidebarOpen, setSidebarOpen] = useState(true);
   const [working, setWorking] = useState(false);
@@ -355,6 +364,16 @@ export const PurchasePanel: React.FC<PurchasePanelProps> = ({
     setSidebarOpen(true);
   };
 
+  const handlePrint = () => {
+    if (!detail || detail.items.length === 0) return;
+    const day = todayInTimeZone(timezone);
+    setPrintJob({
+      id: Date.now(),
+      model: buildPrintModel(detail.list, detail.items, { businessName, day }),
+      documentTitle: printDocumentTitle(detail.list.title, day),
+    });
+  };
+
   return (
     <section className="purchase-panel" aria-label="Listas de compras">
       <aside className={`purchase-sidebar${sidebarOpen ? ' purchase-sidebar--open' : ''}`}>
@@ -508,6 +527,15 @@ export const PurchasePanel: React.FC<PurchasePanelProps> = ({
                 </span>
               </div>
               <div className="purchase-status-actions">
+                <button
+                  type="button"
+                  className="suppliers-btn"
+                  disabled={detail.items.length === 0}
+                  title={detail.items.length === 0
+                    ? 'La lista está vacía'
+                    : 'Abre el diálogo de impresión: elige “Guardar como PDF”'}
+                  onClick={handlePrint}
+                >Imprimir / Guardar PDF</button>
                 {statusActions(detail.list.status).map(action => (
                   <button
                     key={action.target}
@@ -716,6 +744,14 @@ export const PurchasePanel: React.FC<PurchasePanelProps> = ({
             reloadSummaries();
           }}
           onNotify={onNotify}
+        />
+      )}
+      {printJob && (
+        <PurchasePrintJob
+          key={printJob.id}
+          model={printJob.model}
+          documentTitle={printJob.documentTitle}
+          onDone={() => setPrintJob(null)}
         />
       )}
     </section>
