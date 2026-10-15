@@ -1,8 +1,8 @@
 # CashFlow POS
 
-CashFlow POS is a Windows desktop point-of-sale application for small retail operations.
-It combines a React and TypeScript frontend with a Rust/Tauri backend and PostgreSQL
-persistence.
+CashFlow POS is a Windows desktop point-of-sale and business-management application for
+small retail operations. It combines a React and TypeScript frontend with a Rust/Tauri
+backend and PostgreSQL persistence.
 
 The repository is **source-available but proprietary**. It is publicly readable for
 inspection and evaluation, but it is not distributed under an OSI-approved open-source
@@ -11,44 +11,42 @@ distribution, and commercial exploitation.
 
 ## Project Status and Scope
 
-The operational core is implemented across inventory, sales, cash management, printing,
-settings, auditing, licensing, and technical diagnostics. Several navigation routes exist
-as placeholders and are explicitly listed below. Packaging, distribution, and the final
-productization workflow are not documented as complete because they are not established
-by the repository.
-
-There is no objective project-completion metric in the codebase. This README therefore
-uses capability status rather than an invented percentage or coverage claim.
+The application includes working workflows for inventory, sales, cash management,
+customers, debts, suppliers, reports, stocktakes, backups, settings, auditing, licensing,
+and technical diagnostics. The repository does not establish a completed installer,
+signing, update, or release process, so those are not described as complete here.
 
 ### Implemented capabilities
 
-- Product categories, products, variants, and internal barcodes.
+- Product categories, products, variants, internal barcodes, and inventory valuation.
 - Stock entries, stock outs, manual adjustments, initial stock, low-stock queries, and
-  inventory valuation.
-- Kardex-style inventory movement history.
-- Bulk inventory import and export through Excel files.
+  stock statistics.
+- Kardex-style inventory movement history and Excel inventory import/export.
+- Import preview and validation; execution creates a pre-import safety backup first and
+  cancels the import if that backup cannot be created.
 - Physical stocktakes with review, application, and cancellation flows.
 - Sales with line items, payments, taxes, discounts, and sales history.
 - Cash sessions, opening balances, cash movements, closing, and reconciliation data.
+- Customer records and debt/payment management.
+- Supplier directory, product/category links, restock suggestions, contact workflows,
+  supplier payables, and CSV exports.
+- Business reports for sales, inventory, and payables.
 - Thermal ticket and product-label printing through ESC/POS-related Windows code.
 - Business, currency, tax, timezone, ticket, theme, shortcut, and local operator settings.
+- Manual and scheduled PostgreSQL backups, configurable retention, optional AES-256
+  encryption, email delivery, and backup restoration.
 - Append-only audit events for business operations and selected technical failures.
 - Developer Mode with an in-memory event buffer, startup diagnostics, PostgreSQL health
   information, and a live technical event feed.
 - Offline purchase and rental license validation.
 
-### Partial or incomplete capabilities
+### Known follow-up work
 
-The following routes currently render placeholder screens rather than complete workflows:
-
-- Customers
-- Debts
-- Suppliers
-- Reports
-
-Other known follow-up work includes richer audit exploration, navigation from Developer
-Mode to the audit explorer, persistence of the Developer Mode preference across restarts,
-and a documented packaging and update process.
+- Establish a reproducible packaging, signing, update, and release process.
+- Add CI and coverage reporting if they become project requirements.
+- Review date/time behavior across all modules that expose date filters, not only Audit.
+- Evaluate additional remote backup destinations if local and email copies are not
+  sufficient for a deployment.
 
 ## Architecture
 
@@ -75,8 +73,8 @@ application initializes its connection pool and runs pending migrations during s
 
 - `src/App.tsx`: application providers and startup synchronization.
 - `src/routes`: licensed application routes and layout composition.
-- `src/pages`: inventory, sales, cash, stocktake, audit, settings, licensing, and
-  Developer Mode screens.
+- `src/pages`: inventory, sales, cash, stocktake, customers, debts, suppliers, reports,
+  audit, settings, licensing, and Developer Mode screens.
 - `src/components`: shared layout, UI, and domain components.
 - `src/context`: shared application and settings state.
 - `src/services`: typed wrappers around Tauri `invoke` calls.
@@ -102,14 +100,15 @@ application initializes its connection pool and runs pending migrations during s
 | `cash` | Cash sessions and cash movements | Implemented |
 | `stocktake` | Physical counts, review, application, and cancellation | Implemented |
 | `billing` | Ticket and label construction/printing | Implemented in the current desktop flow |
+| `backup` | PostgreSQL backup, retention, encryption, email delivery, and restoration | Implemented |
 | `settings` | Business, currency, tax, ticket, timezone, theme, and shortcut settings | Implemented |
 | `audit` | Business events, technical failures, filtering, pagination, and date boundaries | Implemented |
 | `licensing` | Offline license state and signature validation | Implemented with UI-level enforcement |
 | `developer` | In-memory diagnostics, startup health, and technical event feed | Implemented |
-| `customers` | Customer management | Placeholder route |
-| `debts` | Debt management | Placeholder route |
-| `suppliers` | Supplier management | Placeholder route |
-| `reports` | Business reports | Placeholder route |
+| `customers` | Customer records and lookup | Implemented |
+| `debts` | Debt records, payments, and reporting support | Implemented |
+| `suppliers` | Supplier directory, catalog links, restocking, and payables | Implemented |
+| `reports` | Sales, inventory, and payables reports | Implemented |
 
 ## Technology Stack
 
@@ -142,7 +141,7 @@ src/                         React application
   services/                  Tauri command clients
   utils/                     Frontend utilities
 src-tauri/
-  migrations/                PostgreSQL migrations 001 through 012
+  migrations/                PostgreSQL migrations 001 through 032
   src/db/                    Database connection and migration startup
   src/modules/               Domain modules
   src/logging.rs             Console and Developer Mode logging
@@ -191,6 +190,20 @@ The application also runs pending migrations during startup through
 `sqlx::migrate!("./migrations")`. Because the project uses SQLx query macros, the schema
 must be available to the compiler through `DATABASE_URL`, or a valid SQLx offline cache
 must be prepared according to the local SQLx workflow.
+
+## Inventory Import and Backups
+
+The inventory Excel flow validates a preview before writing data. On confirmation, the
+application creates a safety backup before importing; if the backup fails, the import is
+cancelled. The generated Excel template includes the required columns and accepted
+formats.
+
+Backups use the configured local directory. By default, Windows backups are saved under
+`Documents\CashFlow-Backups`. Manual and scheduled backups use the configured retention
+policy. Pre-restore and pre-import backups retain the two newest files and all files less
+than 30 days old. Encryption is optional; encrypted backups require the configured
+password to restore. The application creates a `LEEME.txt` guide in the backup directory
+without replacing an existing guide.
 
 ## Development Commands
 
@@ -298,15 +311,13 @@ a separate written agreement with the rights holder.
 
 ## Known Limitations and Roadmap
 
-- Complete the Customers, Debts, Suppliers, and Reports workflows.
-- Add richer audit exploration and direct navigation from Developer Mode.
-- Decide whether Developer Mode should persist across application restarts.
-- Establish a reproducible packaging, signing, update, and release process.
-- Add CI and coverage reporting if they become project requirements.
-- Review date/time behavior across all modules that expose date filters, not only Audit.
+- The license gate is enforced in the user interface and is not tamper-proof DRM.
+- A reproducible packaging, signing, update, and release process is not documented.
+- CI and coverage reporting are not configured in the repository.
+- Date/time behavior should be reviewed across all modules that expose date filters.
 
-These items are roadmap statements, not claims that the corresponding functionality is
-currently available.
+These limitations concern release and hardening work; they do not imply that the
+implemented business modules listed above are placeholder routes.
 
 ## Licensing and Copyright
 
