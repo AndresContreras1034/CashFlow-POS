@@ -55,7 +55,6 @@ pub struct SupplierFilterDto {
 pub struct LinkSupplierVariantDto {
     pub variant_id: i32,
     pub supplier_sku: Option<String>,
-    pub last_cost: Option<i64>,
     pub is_preferred: bool,
     pub notes: Option<String>,
     pub created_by: Option<String>,
@@ -64,9 +63,23 @@ pub struct LinkSupplierVariantDto {
 #[derive(Debug, Clone, Deserialize)]
 pub struct UpdateSupplierVariantDto {
     pub supplier_sku: Option<String>,
-    pub last_cost: Option<i64>,
     pub is_preferred: bool,
     pub notes: Option<String>,
+    pub updated_by: Option<String>,
+}
+
+#[derive(Debug, Clone, Default, Deserialize)]
+pub struct LinkableFilterDto {
+    pub search: Option<String>,
+    pub category_id: Option<i32>,
+    pub only_unassigned: Option<bool>,
+    pub page: Option<i64>,
+    pub page_size: Option<i64>,
+}
+
+#[derive(Debug, Clone, Deserialize)]
+pub struct BulkLinkDto {
+    pub variant_ids: Vec<i32>,
     pub updated_by: Option<String>,
 }
 

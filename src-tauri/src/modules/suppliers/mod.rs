@@ -1,3 +1,4 @@
+pub mod bulk;
 pub mod dto;
 pub mod handlers;
 pub mod links;

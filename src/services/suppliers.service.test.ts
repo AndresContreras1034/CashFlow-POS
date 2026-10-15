@@ -63,6 +63,24 @@ describe('contrato con los comandos de Tauri', () => {
       'list_supplier_variants',
       { supplierId: 4, filter: {} },
     ],
+    [
+      'linkSupplierVariants',
+      () => service.linkSupplierVariants(4, { variant_ids: [9, 10], updated_by: 'Ana' }),
+      'link_supplier_variants',
+      { supplierId: 4, dto: { variant_ids: [9, 10], updated_by: 'Ana' } },
+    ],
+    [
+      'searchLinkableVariants',
+      () => service.searchLinkableVariants(4, { search: 'aceite', only_unassigned: true }),
+      'search_linkable_variants',
+      { supplierId: 4, filter: { search: 'aceite', only_unassigned: true } },
+    ],
+    [
+      'listLinkableVariantIds',
+      () => service.listLinkableVariantIds(4, { category_id: 7 }),
+      'list_linkable_variant_ids',
+      { supplierId: 4, filter: { category_id: 7 } },
+    ],
     ['listVariantSuppliers', () => service.listVariantSuppliers(9), 'list_variant_suppliers', { variantId: 9 }],
     ['getRestockOverview', () => service.getRestockOverview({ supplier_id: 4 }), 'get_restock_overview', { filter: { supplier_id: 4 } }],
     [

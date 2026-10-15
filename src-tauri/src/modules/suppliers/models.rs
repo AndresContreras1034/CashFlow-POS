@@ -68,7 +68,6 @@ pub struct SupplierVariantLink {
     pub supplier_id: i32,
     pub variant_id: i32,
     pub supplier_sku: Option<String>,
-    pub last_cost: Option<i64>,
     pub is_preferred: bool,
     pub last_purchase_at: Option<DateTime<Utc>>,
     pub notes: Option<String>,
@@ -83,7 +82,6 @@ pub struct SupplierVariantView {
     pub supplier_id: i32,
     pub variant_id: i32,
     pub supplier_sku: Option<String>,
-    pub last_cost: Option<i64>,
     pub is_preferred: bool,
     pub last_purchase_at: Option<DateTime<Utc>>,
     pub notes: Option<String>,
@@ -100,6 +98,7 @@ pub struct SupplierVariantView {
     pub stock_min: i32,
     pub stock_status: String,
     pub variant_cost: i64,
+    pub variant_price: i64,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, FromRow)]
@@ -110,7 +109,6 @@ pub struct VariantSupplier {
     pub phone: Option<String>,
     pub whatsapp: Option<String>,
     pub supplier_sku: Option<String>,
-    pub last_cost: Option<i64>,
     pub last_purchase_at: Option<DateTime<Utc>>,
     pub is_preferred: bool,
 }

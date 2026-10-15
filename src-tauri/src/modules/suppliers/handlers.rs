@@ -7,11 +7,13 @@ use crate::modules::audit::{
     failure::{finish, FailureContext},
     models::AuditModule,
 };
+use crate::modules::suppliers::payables::{self, SupplierPayables};
 use crate::modules::suppliers::{
+    bulk::{self, BulkLinkResult, LinkableIds, LinkablePage},
     dto::{
-        CreateSupplierDto, LinkSupplierVariantDto, PaginatedResponse, RestockFilterDto,
-        SetSupplierActiveDto, SetSupplierCategoriesDto, SupplierFilterDto,
-        SupplierVariantFilterDto, UnlinkSupplierVariantDto, UpdateSupplierDto,
+        BulkLinkDto, CreateSupplierDto, LinkSupplierVariantDto, LinkableFilterDto,
+        PaginatedResponse, RestockFilterDto, SetSupplierActiveDto, SetSupplierCategoriesDto,
+        SupplierFilterDto, SupplierVariantFilterDto, UnlinkSupplierVariantDto, UpdateSupplierDto,
         UpdateSupplierVariantDto,
     },
     models::{
@@ -20,7 +22,6 @@ use crate::modules::suppliers::{
     },
     service,
 };
-use crate::modules::suppliers::payables::{self, SupplierPayables};
 
 #[tauri::command]
 pub async fn list_suppliers(
@@ -133,6 +134,49 @@ pub async fn list_supplier_variants(
     filter: SupplierVariantFilterDto,
 ) -> Result<PaginatedResponse<SupplierVariantView>, String> {
     service::list_supplier_variants(&pool, supplier_id, filter)
+        .await
+        .map_err(|error: AppError| error.to_string())
+}
+
+#[tauri::command]
+pub async fn link_supplier_variants(
+    pool: State<'_, DbPool>,
+    supplier_id: i32,
+    dto: BulkLinkDto,
+) -> Result<BulkLinkResult, String> {
+    let context = FailureContext {
+        module: AuditModule::Suppliers,
+        action: "link_variants",
+        entity_type: Some("supplier"),
+        entity_id: Some(supplier_id.to_string()),
+        actor: declared_actor(&dto.updated_by),
+    };
+    finish(
+        &pool,
+        context,
+        bulk::link_supplier_variants(&pool, supplier_id, dto).await,
+    )
+    .await
+}
+
+#[tauri::command]
+pub async fn search_linkable_variants(
+    pool: State<'_, DbPool>,
+    supplier_id: i32,
+    filter: LinkableFilterDto,
+) -> Result<LinkablePage, String> {
+    bulk::search_linkable_variants(&pool, supplier_id, filter)
+        .await
+        .map_err(|error: AppError| error.to_string())
+}
+
+#[tauri::command]
+pub async fn list_linkable_variant_ids(
+    pool: State<'_, DbPool>,
+    supplier_id: i32,
+    filter: LinkableFilterDto,
+) -> Result<LinkableIds, String> {
+    bulk::list_linkable_variant_ids(&pool, supplier_id, filter)
         .await
         .map_err(|error: AppError| error.to_string())
 }

@@ -5,7 +5,7 @@ import {
 } from '../../services/suppliers.service';
 import type { SupplierVariantLink } from '../../types/suppliers';
 import { errorMessage } from '../../utils/audit';
-import { formatAttributes, MONEY_DEFAULTS, moneyStep } from '../../utils/format';
+import { formatAttributes } from '../../utils/format';
 import { actorField } from '../../utils/preferences';
 import {
   emptyLinkForm,
@@ -22,7 +22,6 @@ interface VariantInfo {
   id: number;
   product_name: string;
   attributes: Record<string, string>;
-  cost: number;
 }
 
 interface SupplierLinkFormProps {
@@ -41,10 +40,9 @@ export const SupplierLinkForm: React.FC<SupplierLinkFormProps> = ({
   onCancel,
 }) => {
   const editing = initial !== null;
-  const decimals = MONEY_DEFAULTS.decimals;
 
   const [values, setValues] = useState<LinkFormValues>(() =>
-    initial ? linkToFormValues(initial, decimals) : emptyLinkForm(),
+    initial ? linkToFormValues(initial) : emptyLinkForm(),
   );
   const [errors, setErrors] = useState<LinkFormErrors>({});
   const [serverError, setServerError] = useState<string | null>(null);
@@ -55,7 +53,7 @@ export const SupplierLinkForm: React.FC<SupplierLinkFormProps> = ({
     event.preventDefault();
     if (submittingRef.current) return;
 
-    const { errors: found, fields } = validateLinkForm(values, decimals);
+    const { errors: found, fields } = validateLinkForm(values);
     setErrors(found);
     if (!fields) return;
 
@@ -120,28 +118,6 @@ export const SupplierLinkForm: React.FC<SupplierLinkFormProps> = ({
           />
           {errors.supplierSku && (
             <span className="supplier-link-field-error">{errors.supplierSku}</span>
-          )}
-        </div>
-
-        <div className="supplier-link-field">
-          <label htmlFor="link-last-cost">Último costo de compra</label>
-          <input
-            id="link-last-cost"
-            className="suppliers-input"
-            type="number"
-            min={0}
-            step={moneyStep(decimals)}
-            value={values.lastCost}
-            aria-invalid={errors.lastCost ? true : undefined}
-            onChange={e => {
-              const next = e.target.value;
-              setValues(curr => ({ ...curr, lastCost: next }));
-              setErrors(curr => (curr.lastCost ? { ...curr, lastCost: undefined } : curr));
-            }}
-            placeholder={decimals > 0 ? '0.00' : '0'}
-          />
-          {errors.lastCost && (
-            <span className="supplier-link-field-error">{errors.lastCost}</span>
           )}
         </div>
 

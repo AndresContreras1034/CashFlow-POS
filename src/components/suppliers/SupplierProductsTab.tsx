@@ -1,18 +1,18 @@
 import React, { useCallback, useEffect, useRef, useState } from 'react';
-import { searchVariants } from '../../services/inventory.service';
 import {
   listSupplierVariants,
   unlinkSupplierVariant,
 } from '../../services/suppliers.service';
-import type { PaginatedResponse, VariantWithProduct } from '../../types';
+import type { PaginatedResponse } from '../../types';
 import type { SupplierVariantView } from '../../types/suppliers';
 import { errorMessage } from '../../utils/audit';
-import { formatAttributes, formatDate, formatMoney } from '../../utils/format';
+import { calcMargin, formatAttributes, formatDate, formatMargin, formatMoney } from '../../utils/format';
 import { actorField } from '../../utils/preferences';
 import { useDebounce } from '../../hooks/useDebounce';
 import { StockBadge } from '../inventory/StockBadge';
 import { Modal } from '../ui/Modal';
 import { SupplierLinkForm } from './SupplierLinkForm';
+import { SupplierLinkPicker } from './SupplierLinkPicker';
 import './SuppliersBase.css';
 import './SupplierProductsTab.css';
 
@@ -27,8 +27,7 @@ interface SupplierProductsTabProps {
 
 type DialogState =
   | { kind: 'none' }
-  | { kind: 'search' }
-  | { kind: 'link'; variant: VariantWithProduct }
+  | { kind: 'picker' }
   | { kind: 'edit'; view: SupplierVariantView };
 
 export const SupplierProductsTab: React.FC<SupplierProductsTabProps> = ({
@@ -51,13 +50,6 @@ export const SupplierProductsTab: React.FC<SupplierProductsTabProps> = ({
   const [dialog, setDialog] = useState<DialogState>({ kind: 'none' });
   const [unlinkingId, setUnlinkingId] = useState<number | null>(null);
   const [confirmUnlinkId, setConfirmUnlinkId] = useState<number | null>(null);
-
-  // Búsqueda de variantes para enlazar
-  const [variantSearchInput, setVariantSearchInput] = useState('');
-  const debouncedVariantSearch = useDebounce(variantSearchInput.trim(), 300);
-  const [variantResults, setVariantResults] = useState<VariantWithProduct[]>([]);
-  const [searchingVariants, setSearchingVariants] = useState(false);
-  const searchRequestRef = useRef(0);
 
   const refresh = useCallback(() => setReloadToken(t => t + 1), []);
 
@@ -92,34 +84,6 @@ export const SupplierProductsTab: React.FC<SupplierProductsTabProps> = ({
       requestRef.current += 1;
     };
   }, [supplierId, search, onlyPreferred, page, reloadToken]);
-
-  // Búsqueda en vivo de variantes para el modal "Enlazar producto"
-  useEffect(() => {
-    if (debouncedVariantSearch.length < 2) {
-      setVariantResults([]);
-      setSearchingVariants(false);
-      return;
-    }
-
-    const requestId = ++searchRequestRef.current;
-    setSearchingVariants(true);
-
-    searchVariants(debouncedVariantSearch)
-      .then(items => {
-        if (requestId !== searchRequestRef.current) return;
-        setVariantResults(items);
-        setSearchingVariants(false);
-      })
-      .catch(() => {
-        if (requestId !== searchRequestRef.current) return;
-        setVariantResults([]);
-        setSearchingVariants(false);
-      });
-
-    return () => {
-      searchRequestRef.current += 1;
-    };
-  }, [debouncedVariantSearch]);
 
   const handleUnlink = async (linkId: number) => {
     if (!isActive) return;
@@ -171,13 +135,9 @@ export const SupplierProductsTab: React.FC<SupplierProductsTabProps> = ({
           type="button"
           className="suppliers-btn suppliers-btn-primary"
           disabled={!isActive}
-          onClick={() => {
-            setVariantSearchInput('');
-            setVariantResults([]);
-            setDialog({ kind: 'search' });
-          }}
+          onClick={() => setDialog({ kind: 'picker' })}
         >
-          + Enlazar producto
+          + Enlazar productos
         </button>
       </div>
 
@@ -210,7 +170,8 @@ export const SupplierProductsTab: React.FC<SupplierProductsTabProps> = ({
                 <th>Producto</th>
                 <th>Categoría</th>
                 <th>Stock</th>
-                <th>Costo</th>
+                <th>Costo (inventario)</th>
+                <th>Margen</th>
                 <th>SKU Prov.</th>
                 <th>Preferido</th>
                 <th>Último pedido</th>
@@ -222,12 +183,8 @@ export const SupplierProductsTab: React.FC<SupplierProductsTabProps> = ({
                 const attrs = formatAttributes(link.attributes);
                 const isConfirming = confirmUnlinkId === link.id;
 
-                let costLabel = 'Sin costo';
-                if (link.last_cost !== null) {
-                  costLabel = formatMoney(link.last_cost);
-                } else if (link.variant_cost > 0) {
-                  costLabel = `${formatMoney(link.variant_cost)} (costo de variante)`;
-                }
+                const costLabel = link.variant_cost > 0 ? formatMoney(link.variant_cost) : 'Sin costo';
+                const margin = formatMargin(calcMargin(link.variant_price, link.variant_cost));
 
                 return (
                   <tr key={link.id}>
@@ -247,6 +204,7 @@ export const SupplierProductsTab: React.FC<SupplierProductsTabProps> = ({
                       <StockBadge stock={link.stock} stockMin={link.stock_min} />
                     </td>
                     <td>{costLabel}</td>
+                    <td>{margin}</td>
                     <td>{link.supplier_sku ?? '—'}</td>
                     <td>
                       {link.is_preferred ? (
@@ -335,91 +293,17 @@ export const SupplierProductsTab: React.FC<SupplierProductsTabProps> = ({
         </nav>
       )}
 
-      {/* Modal buscador de variantes */}
-      {dialog.kind === 'search' && (
-        <Modal
-          title="Buscar producto para enlazar"
+      {dialog.kind === 'picker' && (
+        <SupplierLinkPicker
+          supplierId={supplierId}
           onClose={() => setDialog({ kind: 'none' })}
-          width={640}
-        >
-          <div className="variant-search-wrap">
-            <input
-              type="text"
-              className="suppliers-input"
-              autoFocus
-              placeholder="Escribe al menos 2 caracteres (nombre, SKU o código)…"
-              value={variantSearchInput}
-              onChange={e => setVariantSearchInput(e.target.value)}
-            />
-
-            {searchingVariants && (
-              <p className="supplier-tab-muted">Buscando productos…</p>
-            )}
-
-            {!searchingVariants &&
-              variantSearchInput.trim().length >= 2 &&
-              variantResults.length === 0 && (
-                <p className="supplier-tab-muted">
-                  No se encontraron productos coincidentes.
-                </p>
-              )}
-
-            {variantResults.length > 0 && (
-              <div className="variant-search-results" role="listbox">
-                {variantResults.map(v => {
-                  const attrs = formatAttributes(v.attributes);
-                  return (
-                    <button
-                      key={v.id}
-                      type="button"
-                      className="variant-search-item"
-                      onClick={() => setDialog({ kind: 'link', variant: v })}
-                    >
-                      <div className="variant-search-item-info">
-                        <span className="variant-search-item-title">
-                          {v.product_name}
-                        </span>
-                        <span className="variant-search-item-meta">
-                          {attrs ? `${attrs} · ` : ''}
-                          Categoría: {v.category_name}
-                          {v.sku ? ` · SKU: ${v.sku}` : ''}
-                        </span>
-                      </div>
-                      <StockBadge stock={v.stock} stockMin={v.stock_min} />
-                    </button>
-                  );
-                })}
-              </div>
-            )}
-          </div>
-        </Modal>
-      )}
-
-      {/* Modal formulario de nuevo enlace */}
-      {dialog.kind === 'link' && (
-        <Modal
-          title="Enlazar producto a proveedor"
-          onClose={() => setDialog({ kind: 'none' })}
-          width={620}
-        >
-          <SupplierLinkForm
-            supplierId={supplierId}
-            variant={{
-              id: dialog.variant.id,
-              product_name: dialog.variant.product_name,
-              attributes: dialog.variant.attributes,
-              cost: dialog.variant.cost,
-            }}
-            initial={null}
-            onSaved={() => {
-              setDialog({ kind: 'none' });
-              onNotify('Producto enlazado con éxito', 'success');
-              refresh();
-              onChanged();
-            }}
-            onCancel={() => setDialog({ kind: 'search' })}
-          />
-        </Modal>
+          onNotify={onNotify}
+          onSaved={() => {
+            setDialog({ kind: 'none' });
+            refresh();
+            onChanged();
+          }}
+        />
       )}
 
       {/* Modal formulario de edición de enlace */}
@@ -435,7 +319,6 @@ export const SupplierProductsTab: React.FC<SupplierProductsTabProps> = ({
               id: dialog.view.variant_id,
               product_name: dialog.view.product_name,
               attributes: dialog.view.attributes,
-              cost: dialog.view.variant_cost,
             }}
             initial={dialog.view}
             onSaved={() => {

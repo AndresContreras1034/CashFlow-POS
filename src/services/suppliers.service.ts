@@ -1,7 +1,12 @@
 import { invoke } from '@tauri-apps/api/core';
 import type { PaginatedResponse } from '../types';
 import type {
+  BulkLinkDto,
+  BulkLinkResult,
   CreateSupplierDto,
+  LinkableFilterDto,
+  LinkableIds,
+  LinkablePage,
   LinkSupplierVariantDto,
   RestockFilterDto,
   RestockGroup,
@@ -72,6 +77,21 @@ export const listSupplierVariants = (
   filter: SupplierVariantFilterDto = {},
 ): Promise<PaginatedResponse<SupplierVariantView>> =>
   invoke('list_supplier_variants', { supplierId, filter });
+
+export const linkSupplierVariants = (
+  supplierId: number,
+  dto: BulkLinkDto,
+): Promise<BulkLinkResult> => invoke('link_supplier_variants', { supplierId, dto });
+
+export const searchLinkableVariants = (
+  supplierId: number,
+  filter: LinkableFilterDto = {},
+): Promise<LinkablePage> => invoke('search_linkable_variants', { supplierId, filter });
+
+export const listLinkableVariantIds = (
+  supplierId: number,
+  filter: LinkableFilterDto = {},
+): Promise<LinkableIds> => invoke('list_linkable_variant_ids', { supplierId, filter });
 
 export const listVariantSuppliers = (variantId: number): Promise<VariantSupplier[]> =>
   invoke('list_variant_suppliers', { variantId });

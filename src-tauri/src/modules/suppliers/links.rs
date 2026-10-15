@@ -231,7 +231,7 @@ async fn unmark_preferred(
     correlation_id: Uuid,
 ) -> Result<(), LinkError> {
     let existing = sqlx::query_as::<_, SupplierVariantLink>(
-        "SELECT id, supplier_id, variant_id, supplier_sku, last_cost, is_preferred,
+        "SELECT id, supplier_id, variant_id, supplier_sku, is_preferred,
                 last_purchase_at, notes, created_by, created_at, updated_at
          FROM supplier_variants
          WHERE variant_id = $1 AND is_preferred
@@ -249,7 +249,7 @@ async fn unmark_preferred(
     let after = sqlx::query_as::<_, SupplierVariantLink>(
         "UPDATE supplier_variants SET is_preferred = FALSE
          WHERE id = $1
-         RETURNING id, supplier_id, variant_id, supplier_sku, last_cost, is_preferred,
+         RETURNING id, supplier_id, variant_id, supplier_sku, is_preferred,
                    last_purchase_at, notes, created_by, created_at, updated_at",
     )
     .bind(before.id)
@@ -305,15 +305,14 @@ pub async fn link_supplier_variant(
 
     let link = sqlx::query_as::<_, SupplierVariantLink>(
         "INSERT INTO supplier_variants
-             (supplier_id, variant_id, supplier_sku, last_cost, is_preferred, notes, created_by)
-         VALUES ($1, $2, $3, $4, $5, $6, $7)
-         RETURNING id, supplier_id, variant_id, supplier_sku, last_cost, is_preferred,
+             (supplier_id, variant_id, supplier_sku, is_preferred, notes, created_by)
+         VALUES ($1, $2, $3, $4, $5, $6)
+         RETURNING id, supplier_id, variant_id, supplier_sku, is_preferred,
                    last_purchase_at, notes, created_by, created_at, updated_at",
     )
     .bind(supplier_id)
     .bind(dto.variant_id)
     .bind(&dto.supplier_sku)
-    .bind(dto.last_cost)
     .bind(dto.is_preferred)
     .bind(&dto.notes)
     .bind(created_by)
@@ -336,7 +335,6 @@ pub async fn link_supplier_variant(
             "supplier_id": link.supplier_id,
             "variant_id": link.variant_id,
             "supplier_sku": link.supplier_sku,
-            "last_cost": link.last_cost,
             "is_preferred": link.is_preferred,
         }),
     )
@@ -363,7 +361,7 @@ pub async fn update_supplier_variant(
     lock_variant(&mut tx, location.1).await?;
 
     let before = sqlx::query_as::<_, SupplierVariantLink>(
-        "SELECT id, supplier_id, variant_id, supplier_sku, last_cost, is_preferred,
+        "SELECT id, supplier_id, variant_id, supplier_sku, is_preferred,
                 last_purchase_at, notes, created_by, created_at, updated_at
          FROM supplier_variants WHERE id = $1 FOR UPDATE",
     )
@@ -375,7 +373,6 @@ pub async fn update_supplier_variant(
         return Err(LinkError::NotFound);
     }
     if before.supplier_sku == dto.supplier_sku
-        && before.last_cost == dto.last_cost
         && before.is_preferred == dto.is_preferred
         && before.notes == dto.notes
     {
@@ -397,14 +394,13 @@ pub async fn update_supplier_variant(
 
     let after = sqlx::query_as::<_, SupplierVariantLink>(
         "UPDATE supplier_variants
-         SET supplier_sku = $2, last_cost = $3, is_preferred = $4, notes = $5
+         SET supplier_sku = $2, is_preferred = $3, notes = $4
          WHERE id = $1
-         RETURNING id, supplier_id, variant_id, supplier_sku, last_cost, is_preferred,
+         RETURNING id, supplier_id, variant_id, supplier_sku, is_preferred,
                    last_purchase_at, notes, created_by, created_at, updated_at",
     )
     .bind(link_id)
     .bind(&dto.supplier_sku)
-    .bind(dto.last_cost)
     .bind(dto.is_preferred)
     .bind(&dto.notes)
     .fetch_one(&mut *tx)
@@ -454,7 +450,7 @@ pub async fn unlink_supplier_variant(
     lock_supplier(&mut tx, location.0, false).await?;
     lock_variant(&mut tx, location.1).await?;
     let link = sqlx::query_as::<_, SupplierVariantLink>(
-        "SELECT id, supplier_id, variant_id, supplier_sku, last_cost, is_preferred,
+        "SELECT id, supplier_id, variant_id, supplier_sku, is_preferred,
                 last_purchase_at, notes, created_by, created_at, updated_at
          FROM supplier_variants WHERE id = $1 FOR UPDATE",
     )
@@ -486,7 +482,6 @@ pub async fn unlink_supplier_variant(
             "supplier_id": link.supplier_id,
             "variant_id": link.variant_id,
             "supplier_sku": link.supplier_sku,
-            "last_cost": link.last_cost,
             "is_preferred": link.is_preferred,
             "last_purchase_at": link.last_purchase_at,
             "notes": link.notes,
@@ -547,11 +542,11 @@ pub async fn list_supplier_variants(
     let page_size = filter.page_size.unwrap_or(20).clamp(1, 100);
     let offset = (page - 1).saturating_mul(page_size);
     let selection = format!(
-        "SELECT sv.id, sv.supplier_id, sv.variant_id, sv.supplier_sku, sv.last_cost,
+        "SELECT sv.id, sv.supplier_id, sv.variant_id, sv.supplier_sku,
                 sv.is_preferred, sv.last_purchase_at, sv.notes, sv.created_by, sv.created_at,
                 sv.updated_at, p.name AS product_name, v.attributes, v.sku, v.barcode,
                 p.category_id, c.name AS category_name, v.stock, v.stock_min,
-                {STOCK_STATUS_CASE} AS stock_status, v.cost AS variant_cost
+                {STOCK_STATUS_CASE} AS stock_status, v.cost AS variant_cost, v.price AS variant_price
          FROM supplier_variants sv
          JOIN product_variants v ON v.id = sv.variant_id
          JOIN products p ON p.id = v.product_id
@@ -590,7 +585,7 @@ pub async fn list_variant_suppliers(
 
     sqlx::query_as::<_, VariantSupplier>(
         "SELECT sv.id, s.id AS supplier_id, s.name AS supplier_name, s.phone, s.whatsapp,
-                sv.supplier_sku, sv.last_cost, sv.last_purchase_at, sv.is_preferred
+                sv.supplier_sku, sv.last_purchase_at, sv.is_preferred
          FROM supplier_variants sv
          JOIN suppliers s ON s.id = sv.supplier_id
          WHERE sv.variant_id = $1

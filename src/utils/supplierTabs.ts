@@ -1,5 +1,4 @@
 import type { RestockUrgency } from '../types/suppliers';
-import { minorToInput, parseMoneyInput } from './format';
 
 // ============================================================
 // Enlace proveedor ↔ variante
@@ -9,7 +8,6 @@ export const LINK_LIMITS = { supplierSku: 100, notes: 2000 } as const;
 
 export interface LinkFormValues {
   supplierSku: string;
-  lastCost: string;
   isPreferred: boolean;
   notes: string;
 }
@@ -18,35 +16,30 @@ export type LinkFormErrors = Partial<Record<keyof LinkFormValues, string>>;
 
 export interface LinkFields {
   supplier_sku: string | null;
-  last_cost: number | null;
   is_preferred: boolean;
   notes: string | null;
 }
 
 export const emptyLinkForm = (): LinkFormValues => ({
   supplierSku: '',
-  lastCost: '',
   isPreferred: false,
   notes: '',
 });
 
 export const linkToFormValues = (
-  link: Pick<LinkFields, 'supplier_sku' | 'last_cost' | 'is_preferred' | 'notes'>,
-  decimals: number,
+  link: Pick<LinkFields, 'supplier_sku' | 'is_preferred' | 'notes'>,
 ): LinkFormValues => ({
   supplierSku: link.supplier_sku ?? '',
-  lastCost: link.last_cost === null ? '' : minorToInput(link.last_cost, decimals),
   isPreferred: link.is_preferred,
   notes: link.notes ?? '',
 });
 
 /**
  * Valida el formulario de enlace (comodidad de uso: el backend vuelve a validar)
- * y construye los campos del DTO. El costo es opcional; si se escribe, debe ser > 0.
+ * y construye los campos del DTO. El costo no se usa en este enlace.
  */
 export const validateLinkForm = (
   values: LinkFormValues,
-  decimals: number,
 ): { errors: LinkFormErrors; fields: LinkFields | null } => {
   const errors: LinkFormErrors = {};
 
@@ -58,27 +51,12 @@ export const validateLinkForm = (
     errors.notes = `Las notas no pueden superar ${LINK_LIMITS.notes} caracteres`;
   }
 
-  let cost: number | null = null;
-  const rawCost = values.lastCost.trim();
-  if (rawCost !== '') {
-    const parsed = parseMoneyInput(rawCost, decimals);
-    if (parsed === null || parsed <= 0) {
-      errors.lastCost =
-        decimals > 0
-          ? `Ingresa un costo mayor a 0 (máx. ${decimals} decimales) o déjalo vacío`
-          : 'Ingresa un costo entero mayor a 0 o déjalo vacío';
-    } else {
-      cost = parsed;
-    }
-  }
-
   if (Object.keys(errors).length > 0) return { errors, fields: null };
 
   return {
     errors,
     fields: {
       supplier_sku: sku === '' ? null : sku,
-      last_cost: cost,
       is_preferred: values.isPreferred,
       notes: values.notes.trim() === '' ? null : values.notes.trim(),
     },

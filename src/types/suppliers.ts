@@ -54,7 +54,6 @@ export interface SupplierVariantLink {
   supplier_id: number;
   variant_id: number;
   supplier_sku: string | null;
-  last_cost: number | null;
   is_preferred: boolean;
   last_purchase_at: string | null;
   notes: string | null;
@@ -74,6 +73,7 @@ export interface SupplierVariantView extends SupplierVariantLink {
   stock_min: number;
   stock_status: 'ok' | 'low' | 'out_of_stock';
   variant_cost: number;
+  variant_price: number;
 }
 
 export interface VariantSupplier {
@@ -83,7 +83,6 @@ export interface VariantSupplier {
   phone: string | null;
   whatsapp: string | null;
   supplier_sku: string | null;
-  last_cost: number | null;
   last_purchase_at: string | null;
   is_preferred: boolean;
 }
@@ -134,7 +133,6 @@ export interface SetSupplierCategoriesDto {
 export interface LinkSupplierVariantDto {
   variant_id: number;
   supplier_sku?: string | null;
-  last_cost?: number | null;
   is_preferred: boolean;
   notes?: string | null;
   created_by?: string | null;
@@ -142,10 +140,57 @@ export interface LinkSupplierVariantDto {
 
 export interface UpdateSupplierVariantDto {
   supplier_sku?: string | null;
-  last_cost?: number | null;
   is_preferred: boolean;
   notes?: string | null;
   updated_by?: string | null;
+}
+
+export interface LinkableFilterDto {
+  search?: string;
+  category_id?: number;
+  only_unassigned?: boolean;
+  page?: number;
+  page_size?: number;
+}
+
+export interface BulkLinkDto {
+  variant_ids: number[];
+  updated_by?: string | null;
+}
+
+export interface LinkableVariant {
+  variant_id: number;
+  product_id: number;
+  product_name: string;
+  brand: string | null;
+  attributes: Record<string, string>;
+  sku: string | null;
+  barcode: string | null;
+  category_name: string;
+  stock: number;
+  stock_min: number;
+  variant_cost: number;
+  linked_here: boolean;
+  supplier_count: number;
+}
+
+export interface LinkablePage {
+  data: LinkableVariant[];
+  total: number;
+  page: number;
+  page_size: number;
+  total_pages: number;
+}
+
+export interface LinkableIds {
+  ids: number[];
+  truncated: boolean;
+}
+
+export interface BulkLinkResult {
+  requested: number;
+  linked: number;
+  already_linked: number;
 }
 
 export interface UnlinkSupplierVariantDto {

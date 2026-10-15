@@ -238,13 +238,8 @@ pub fn calc_restock_urgency(
     RestockUrgency::Low
 }
 
-/// Costo unitario: last_cost del enlace si > 0; si no, product_variants.cost si > 0; si no, None.
-pub fn choose_unit_cost(link_last_cost: Option<i64>, variant_cost: i64) -> Option<i64> {
-    if let Some(cost) = link_last_cost {
-        if cost > 0 {
-            return Some(cost);
-        }
-    }
+/// Costo unitario: usa únicamente el costo de la variante.
+pub fn choose_unit_cost(_link_last_cost: Option<i64>, variant_cost: i64) -> Option<i64> {
     if variant_cost > 0 {
         return Some(variant_cost);
     }
@@ -770,10 +765,8 @@ mod tests {
 
     #[test]
     fn test_choose_unit_cost() {
-        // Si last_cost del enlace > 0, se usa ese
-        assert_eq!(choose_unit_cost(Some(1200), 1000), Some(1200));
-
-        // Si last_cost es None o <= 0, se usa variant_cost si > 0
+        // Solo se usa el costo de la variante.
+        assert_eq!(choose_unit_cost(Some(1200), 1000), Some(1000));
         assert_eq!(choose_unit_cost(None, 1000), Some(1000));
         assert_eq!(choose_unit_cost(Some(0), 1000), Some(1000));
         assert_eq!(choose_unit_cost(Some(-50), 1000), Some(1000));

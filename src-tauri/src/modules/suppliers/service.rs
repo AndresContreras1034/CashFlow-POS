@@ -43,18 +43,6 @@ pub(crate) fn category_diff(before: &[i32], after: &[i32]) -> (Vec<i32>, Vec<i32
     )
 }
 
-fn validate_last_cost(value: Option<i64>, step: i64) -> Result<(), AppError> {
-    if let Some(cost) = value {
-        if cost < 0 {
-            return Err(AppError::validation(
-                "El último costo no puede ser negativo",
-            ));
-        }
-        crate::modules::inventory::service::validate_money_step(cost, step, "El último costo")?;
-    }
-    Ok(())
-}
-
 pub const DOCUMENT_TYPES: [&str; 4] = ["NIT", "CC", "CE", "OTRO"];
 pub const PRIORITIES: [&str; 3] = ["normal", "preferred", "urgent"];
 
@@ -232,8 +220,6 @@ pub async fn link_supplier_variant(
     supplier_id: i32,
     mut dto: LinkSupplierVariantDto,
 ) -> Result<SupplierVariantLink, AppError> {
-    let step = crate::modules::inventory::service::money_step(pool).await?;
-    validate_last_cost(dto.last_cost, step)?;
     (dto.supplier_sku, dto.notes) =
         normalize_variant_texts(dto.supplier_sku.take(), dto.notes.take())?;
     links::link_supplier_variant(pool, supplier_id, dto)
@@ -246,8 +232,6 @@ pub async fn update_supplier_variant(
     link_id: i32,
     mut dto: UpdateSupplierVariantDto,
 ) -> Result<SupplierVariantLink, AppError> {
-    let step = crate::modules::inventory::service::money_step(pool).await?;
-    validate_last_cost(dto.last_cost, step)?;
     (dto.supplier_sku, dto.notes) =
         normalize_variant_texts(dto.supplier_sku.take(), dto.notes.take())?;
     links::update_supplier_variant(pool, link_id, dto)
@@ -484,21 +468,6 @@ mod tests {
     fn category_diff_reports_additions_and_removals() {
         assert_eq!(category_diff(&[1, 3, 5], &[2, 3, 5]), (vec![2], vec![1]));
         assert_eq!(category_diff(&[1, 2], &[1, 2]), (vec![], vec![]));
-    }
-
-    #[test]
-    fn last_cost_obeys_nonnegative_and_currency_step_rules() {
-        assert!(validate_last_cost(None, 100).is_ok());
-        assert!(validate_last_cost(Some(1200), 100).is_ok());
-        assert!(matches!(
-            validate_last_cost(Some(1201), 100),
-            Err(AppError::Validation(_))
-        ));
-        assert!(matches!(
-            validate_last_cost(Some(-100), 100),
-            Err(AppError::Validation(_))
-        ));
-        assert!(validate_last_cost(Some(1201), 1).is_ok());
     }
 }
 
