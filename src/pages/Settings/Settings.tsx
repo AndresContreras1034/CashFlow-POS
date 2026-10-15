@@ -18,9 +18,10 @@ import {
 import { APP_THEMES, applyTheme, loadSavedTheme, type AppTheme } from '../../utils/theme';
 import { applyDeveloperMode, readDeveloperMode } from '../../utils/developerMode';
 import { BackupSettingsForm } from '../../components/backup/BackupSettingsForm';
+import { TourPanel } from '../../tour';
 import './Settings.css';
 
-type Section = 'business' | 'money' | 'regional' | 'inventory' | 'ticket' | 'appearance' | 'shortcuts' | 'backup' | 'developer';
+type Section = 'business' | 'money' | 'regional' | 'inventory' | 'ticket' | 'appearance' | 'shortcuts' | 'backup' | 'developer' | 'tutorial';
 
 const SECTIONS: { id: Section; label: string }[] = [
   { id: 'business', label: 'Negocio' },
@@ -32,6 +33,7 @@ const SECTIONS: { id: Section; label: string }[] = [
   { id: 'shortcuts', label: 'Atajos' },
   { id: 'backup', label: 'Backup' },
   { id: 'developer', label: 'Desarrollador' },
+  { id: 'tutorial', label: 'Tutoriales' },
 ];
 
 const TICKET_TOGGLES = [
@@ -957,6 +959,8 @@ export const Settings: React.FC = () => {
 
         {section === 'backup' && <BackupSettingsForm onToast={addToast} />}
 
+        {section === 'tutorial' && <TourPanel />}
+
         {section === 'developer' && (
           <section className="settings-section">
             <h2 className="settings-section-title">Desarrollador</h2>
@@ -986,7 +990,7 @@ export const Settings: React.FC = () => {
           </section>
         )}
 
-        {section !== 'backup' && (
+        {section !== 'backup' && section !== 'tutorial' && (
           <div className="form-actions">
             <button
               type="button"

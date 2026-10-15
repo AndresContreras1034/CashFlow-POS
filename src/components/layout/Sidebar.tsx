@@ -61,6 +61,7 @@ export const Sidebar: React.FC = () => {
 
   useEffect(() => {
     const handleShortcut = (event: KeyboardEvent) => {
+      if (document.body.hasAttribute('data-tour-active')) return;
       if (event.altKey || event.ctrlKey || event.metaKey || event.shiftKey) return;
       const target = event.target;
       if (

@@ -16,6 +16,7 @@ import Sales from '../pages/Sales/Sales';
 import SalesHistory from '../pages/SalesHistory/SalesHistory';
 import { StocktakePage } from '../pages/Stocktake/Stocktake';
 import Reports from '../pages/Reports/Reports';
+import { TourHelpButton } from '../tour';
 
 export const AppRouter: React.FC = () => (
   <BrowserRouter>
@@ -59,6 +60,7 @@ export const AppRouter: React.FC = () => (
         {/* Configuración */}
         <Route path="/settings" element={<Settings />} />
         </Routes>
+        <TourHelpButton />
       </AppLayout>
     </LicenseGate>
   </BrowserRouter>
