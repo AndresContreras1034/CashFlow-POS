@@ -75,7 +75,7 @@
   outline-offset: 2px;
 }
 
-@media (max-width: 768px) {
+@container app-content (max-width: 768px) {
   .supplier-call-filters { align-items: stretch; flex-direction: column; }
   .supplier-call-search { min-width: 100%; }
 }

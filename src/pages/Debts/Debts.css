@@ -83,7 +83,7 @@
   white-space: nowrap;
 }
 
-@media (max-width: 640px) {
+@container app-content (max-width: 640px) {
   .debts-page { padding: 18px 14px; }
   .debts-pagination { justify-content: space-between; gap: 6px; }
 }

@@ -95,7 +95,7 @@
   color: var(--danger);
 }
 
-@media (max-width: 640px) {
+@container app-content (max-width: 640px) {
   .supplier-payables-summary { grid-template-columns: 1fr; }
   .supplier-payables-count { grid-column: auto; }
 }

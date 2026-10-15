@@ -195,7 +195,7 @@
   min-height: 90px;
 }
 
-@media (max-width: 760px) {
+@container app-content (max-width: 760px) {
   .reports-products-filters {
     align-items: stretch;
     flex-direction: column;

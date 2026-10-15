@@ -246,7 +246,7 @@
   margin: 0 8px;
 }
 
-@media (max-width: 760px) {
+@container app-content (max-width: 760px) {
   .st-page { padding: 16px; }
   .st-header { flex-direction: column; }
   .st-filters { align-items: stretch; flex-direction: column; }

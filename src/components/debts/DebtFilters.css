@@ -32,7 +32,7 @@
 .debts-error-text { color: var(--danger); font-size: 13px; }
 .debts-filters-actions { display: flex; gap: 8px; flex-wrap: wrap; }
 
-@media (max-width: 640px) {
+@container app-content (max-width: 640px) {
   .debts-filters-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
   .debts-filters-grid .debts-field:first-child { grid-column: 1 / -1; }
 }

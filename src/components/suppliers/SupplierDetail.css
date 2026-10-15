@@ -137,7 +137,7 @@
   text-align: center;
 }
 
-@media (max-width: 600px) {
+@container app-content (max-width: 600px) {
   .supplier-detail-dl {
     grid-template-columns: 1fr;
     gap: 4px;

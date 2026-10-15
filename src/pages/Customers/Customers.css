@@ -155,7 +155,7 @@
   color: var(--text-secondary);
 }
 
-@media (max-width: 640px) {
+@container app-content (max-width: 640px) {
   .customers-page { padding: 18px 14px; }
   .customers-pagination { justify-content: space-between; }
 }

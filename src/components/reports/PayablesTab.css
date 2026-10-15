@@ -120,13 +120,13 @@
   background: color-mix(in srgb, var(--success) 14%, var(--bg-surface));
 }
 
-@media (max-width: 1024px) {
+@container app-content (max-width: 1024px) {
   .reports-payables-summary {
     grid-template-columns: repeat(3, minmax(0, 1fr));
   }
 }
 
-@media (max-width: 640px) {
+@container app-content (max-width: 640px) {
   .reports-payables-filters {
     justify-content: stretch;
   }

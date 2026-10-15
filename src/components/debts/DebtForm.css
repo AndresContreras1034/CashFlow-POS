@@ -13,6 +13,6 @@
 .debts-form select[aria-invalid='true'],
 .debts-form textarea[aria-invalid='true'] { border-color: var(--danger); }
 
-@media (max-width: 640px) {
+@container app-content (max-width: 640px) {
   .debts-form-grid { grid-template-columns: 1fr; }
 }

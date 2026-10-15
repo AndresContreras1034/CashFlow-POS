@@ -43,6 +43,6 @@
 .debts-categories > summary { cursor: pointer; font-size: 13px; font-weight: 500; }
 .debts-categories .debts-table-wrap { margin-top: 10px; }
 
-@media (max-width: 900px) {
+@container app-content (max-width: 900px) {
   .debts-summary { grid-template-columns: 1fr 1fr; }
 }

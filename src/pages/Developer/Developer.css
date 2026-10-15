@@ -24,7 +24,7 @@
 .developer-detail dt { margin-top: 10px; font-size: 11px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.04em; color: var(--text-secondary); }
 .developer-detail dd { margin: 2px 0 0; font-size: 13px; color: var(--text-primary); overflow-wrap: anywhere; }
 .developer-mono { font-family: var(--font-mono); }
-@media (max-width: 900px) { .developer-body { grid-template-columns: 1fr; } .developer-page { padding: 20px 16px; } }
+@container app-content (max-width: 900px) { .developer-body { grid-template-columns: 1fr; } .developer-page { padding: 20px 16px; } }
 
 .developer-health {
 	background: var(--bg-surface);

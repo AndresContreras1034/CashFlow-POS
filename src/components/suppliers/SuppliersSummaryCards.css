@@ -81,13 +81,13 @@
   min-height: auto;
 }
 
-@media (max-width: 900px) {
+@container app-content (max-width: 900px) {
   .suppliers-summary {
     grid-template-columns: repeat(2, 1fr);
   }
 }
 
-@media (max-width: 480px) {
+@container app-content (max-width: 480px) {
   .suppliers-summary {
     grid-template-columns: 1fr;
   }

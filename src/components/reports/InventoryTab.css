@@ -81,13 +81,13 @@
   background: var(--warning-dim);
 }
 
-@media (max-width: 1024px) {
+@container app-content (max-width: 1024px) {
   .reports-inventory-kpis {
     grid-template-columns: repeat(2, minmax(0, 1fr));
   }
 }
 
-@media (max-width: 640px) {
+@container app-content (max-width: 640px) {
   .reports-inventory-kpis {
     grid-template-columns: 1fr;
   }

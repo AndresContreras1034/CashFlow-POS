@@ -70,7 +70,7 @@
   color: var(--text-secondary);
 }
 
-@media (max-width: 640px) {
+@container app-content (max-width: 640px) {
   .customer-stats { grid-template-columns: 1fr; }
   .customer-dl { grid-template-columns: 1fr; gap: 3px; }
   .customer-dl dd { margin-bottom: 7px; }

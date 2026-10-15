@@ -136,7 +136,7 @@
   white-space: nowrap;
 }
 
-@media (max-width: 640px) {
+@container app-content (max-width: 640px) {
   .audit-page { padding: 18px 14px; }
   .audit-filters-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
   .audit-filters-grid .audit-field:first-child { grid-column: 1 / -1; }
@@ -213,7 +213,7 @@
 .audit-corr-item--current { border-color: var(--accent); background: var(--accent-dim); }
 .audit-corr-summary { grid-column: 1 / -1; color: var(--text-secondary); }
 
-@media (max-width: 640px) {
+@container app-content (max-width: 640px) {
   .audit-dl { grid-template-columns: 1fr; gap: 3px; }
   .audit-dl dd { margin-bottom: 7px; }
   .audit-corr-item { grid-template-columns: minmax(0, 1fr) auto; }

@@ -75,7 +75,7 @@
   font-size: 11.5px;
 }
 
-@media (max-width: 600px) {
+@container app-content (max-width: 600px) {
   .cash-report-header {
     flex-direction: column;
   }

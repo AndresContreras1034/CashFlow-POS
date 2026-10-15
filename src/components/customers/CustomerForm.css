@@ -25,6 +25,6 @@
 .customer-form select[aria-invalid='true'],
 .customer-form textarea[aria-invalid='true'] { border-color: var(--danger); }
 
-@media (max-width: 640px) {
+@container app-content (max-width: 640px) {
   .customer-form-grid { grid-template-columns: 1fr; }
 }

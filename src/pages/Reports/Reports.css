@@ -330,13 +330,13 @@
   gap: 18px;
 }
 
-@media (max-width: 1200px) {
+@container app-content (max-width: 1200px) {
   .reports-kpis {
     grid-template-columns: repeat(3, minmax(0, 1fr));
   }
 }
 
-@media (max-width: 760px) {
+@container app-content (max-width: 760px) {
   .reports-page {
     padding: 18px 14px 28px;
   }

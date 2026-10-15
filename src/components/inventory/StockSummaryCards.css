@@ -41,7 +41,7 @@
   color: var(--warning);
 }
 
-@media (max-width: 900px) {
+@container app-content (max-width: 900px) {
   .stock-summary {
     grid-template-columns: 1fr 1fr;
   }

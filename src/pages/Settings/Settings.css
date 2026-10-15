@@ -404,7 +404,7 @@
 
 .settings-shortcut-clear:hover { color: var(--danger); }
 
-@media (max-width: 600px) {
+@container app-content (max-width: 600px) {
   .settings-page { padding: 20px 16px; }
   .settings-tab { padding: 8px 10px; font-size: 12px; }
   .settings-section { padding: 16px; }

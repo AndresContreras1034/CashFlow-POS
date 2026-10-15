@@ -78,7 +78,7 @@
   outline-offset: 2px;
 }
 
-@media (max-width: 640px) {
+@container app-content (max-width: 640px) {
   .supplier-call-item { grid-template-columns: 1fr auto; }
   .supplier-call-item-nums { grid-column: 1 / -1; }
   .supplier-call-totals { align-items: flex-start; }

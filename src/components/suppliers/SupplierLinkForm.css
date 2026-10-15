@@ -90,7 +90,7 @@
   padding-top: 8px;
 }
 
-@media (max-width: 600px) {
+@container app-content (max-width: 600px) {
   .supplier-link-form-grid {
     grid-template-columns: 1fr;
   }

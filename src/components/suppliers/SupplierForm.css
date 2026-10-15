@@ -34,6 +34,6 @@
 }
 .supplier-form-actions { display: flex; justify-content: flex-end; gap: 8px; }
 
-@media (max-width: 640px) {
+@container app-content (max-width: 640px) {
   .supplier-form-grid { grid-template-columns: 1fr; }
 }

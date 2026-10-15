@@ -488,7 +488,7 @@
    RESPONSIVE
    ============================================================ */
 
-@media (max-width: 900px) {
+@container app-content (max-width: 900px) {
   .sales-page {
     padding: 22px 24px;
   }
@@ -507,7 +507,7 @@
   }
 }
 
-@media (max-width: 700px) {
+@container app-content (max-width: 700px) {
   .sales-page {
     padding: 18px;
   }
@@ -561,7 +561,7 @@
   }
 }
 
-@media (max-width: 450px) {
+@container app-content (max-width: 450px) {
   .sales-page {
     padding: 14px;
   }
@@ -684,7 +684,7 @@
   font-size: 12px;
 }
 
-@media (max-width: 640px) {
+@container app-content (max-width: 640px) {
   .sales-held-item {
     align-items: flex-start;
     flex-direction: column;

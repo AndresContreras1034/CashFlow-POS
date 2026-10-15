@@ -2,8 +2,9 @@
 
 .suppliers-page {
   padding: 24px 32px;
-  max-width: 1400px;
-  margin: 0 auto;
+  width: 100%;
+  min-width: 0;
+  box-sizing: border-box;
   display: flex;
   flex-direction: column;
   gap: 16px;
@@ -227,7 +228,7 @@
   outline-offset: 2px;
 }
 
-@media (max-width: 768px) {
+@container app-content (max-width: 768px) {
   .suppliers-page {
     padding: 16px;
   }

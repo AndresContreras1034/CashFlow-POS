@@ -321,7 +321,7 @@ select.form-input option {
 
 /* ── Responsive ── */
 
-@media (max-width: 900px) {
+@container app-content (max-width: 900px) {
   .cash-summary-grid {
     grid-template-columns: repeat(2, 1fr);
   }
@@ -335,7 +335,7 @@ select.form-input option {
   }
 }
 
-@media (max-width: 600px) {
+@container app-content (max-width: 600px) {
   .cash-page {
     padding: 20px 16px;
   }
@@ -410,7 +410,7 @@ select.form-input option {
     font-size: 13.5px;
   }
 
-  @media (max-width: 600px) {
+  @container app-content (max-width: 600px) {
     .cash-closed-session {
       align-items: stretch;
       flex-direction: column;
