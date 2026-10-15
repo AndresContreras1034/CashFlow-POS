@@ -141,7 +141,7 @@ pub async fn open_session(pool: &PgPool, dto: OpenSessionDto) -> Result<CashSess
     .await?;
 
     audit_repo::insert_event(
-        &mut *tx,
+        &mut tx,
         NewAuditEvent {
             correlation_id: Some(Uuid::new_v4()),
             category: AuditCategory::Business,
@@ -237,7 +237,7 @@ pub async fn close_session(
     .fetch_one(&mut *tx)
     .await?;
 
-    let report = build_session_report(&mut *tx, id, "Z").await?;
+    let report = build_session_report(&mut tx, id, "Z").await?;
     if report.cash.expected_amount != expected_amount {
         return Err(CloseSessionError::Db(sqlx::Error::Protocol(format!(
             "El esperado del informe Z ({}) no coincide con el esperado del cierre ({expected_amount})",
@@ -251,7 +251,7 @@ pub async fn close_session(
         .await?;
 
     audit_repo::insert_event(
-        &mut *tx,
+        &mut tx,
         NewAuditEvent {
             correlation_id: Some(Uuid::new_v4()),
             category: AuditCategory::Business,

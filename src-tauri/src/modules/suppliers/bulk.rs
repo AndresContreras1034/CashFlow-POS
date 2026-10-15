@@ -329,7 +329,7 @@ pub async fn link_supplier_variants(
 
     let shown: Vec<i32> = linked.iter().copied().take(AUDIT_IDS_LIMIT).collect();
     audit_repo::insert_event(
-        &mut *tx,
+        &mut tx,
         NewAuditEvent {
             correlation_id: Some(Uuid::new_v4()),
             category: AuditCategory::Business,

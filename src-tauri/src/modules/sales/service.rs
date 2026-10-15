@@ -150,9 +150,11 @@ pub async fn list_sales(
     pool: &PgPool,
     filter: SaleFilterDto,
 ) -> Result<SaleListResponse, AppError> {
-    if filter.payment_method.as_deref().map_or(false, |method| {
-        !matches!(method, "cash" | "card" | "transfer")
-    }) {
+    if filter
+        .payment_method
+        .as_deref()
+        .is_some_and(|method| !matches!(method, "cash" | "card" | "transfer"))
+    {
         return Err(AppError::validation(
             "El método de pago debe ser cash, card o transfer",
         ));

@@ -1034,10 +1034,7 @@ async fn d02_venta_con_valor_y_motivo_se_guarda_como_venta_normal(pool: PgPool) 
 async fn d03_total_cero_con_pago_se_rechaza(pool: PgPool) {
     let variant_id = seed_variant(&pool, 10_000, 5).await;
     open_cash(&pool).await;
-    let mut dto = new_sale(
-        vec![item(variant_id, 1)],
-        vec![pay(PaymentMethod::Card, 1)],
-    );
+    let mut dto = new_sale(vec![item(variant_id, 1)], vec![pay(PaymentMethod::Card, 1)]);
     dto.discount = Some(10_000);
     dto.courtesy_reason = Some("Apoyo".to_string());
 
@@ -1077,7 +1074,10 @@ async fn d05_motivo_de_200_caracteres_se_acepta(pool: PgPool) {
     let created = service::create_sale(&pool, dto)
         .await
         .expect("un motivo de 200 caracteres debe aceptarse");
-    assert_eq!(created.sale.courtesy_reason.as_deref(), Some(reason.as_str()));
+    assert_eq!(
+        created.sale.courtesy_reason.as_deref(),
+        Some(reason.as_str())
+    );
 }
 
 #[sqlx::test(migrations = "./migrations")]
@@ -1093,12 +1093,11 @@ async fn d06_motivo_de_201_caracteres_se_rechaza_sin_evento_de_fallo(pool: PgPoo
         .expect_err("un motivo de 201 caracteres debe rechazarse")
         .to_string();
     assert!(message.contains("200 caracteres"), "{message}");
-    let failure_events: i64 = sqlx::query_scalar(
-        "SELECT COUNT(*) FROM audit_events WHERE outcome::TEXT = 'failure'",
-    )
-    .fetch_one(&pool)
-    .await
-    .unwrap();
+    let failure_events: i64 =
+        sqlx::query_scalar("SELECT COUNT(*) FROM audit_events WHERE outcome::TEXT = 'failure'")
+            .fetch_one(&pool)
+            .await
+            .unwrap();
     assert_eq!(failure_events, 0);
     assert_untouched(&pool, variant_id, 5).await;
 }
@@ -1233,25 +1232,23 @@ async fn e01_efectivo_con_vuelto_guarda_neto_y_turno(pool: PgPool) {
 
     assert_eq!(sale.sale.cash_received, Some(20_000));
     assert_eq!(sale.sale.change_given, Some(10_000));
-    let payments_total: i64 =
-        sqlx::query_scalar(
-            "SELECT COALESCE(SUM(amount), 0)::BIGINT FROM sale_payments WHERE sale_id = $1",
-        )
-            .bind(sale.sale.id)
-            .fetch_one(&pool)
-            .await
-            .unwrap();
+    let payments_total: i64 = sqlx::query_scalar(
+        "SELECT COALESCE(SUM(amount), 0)::BIGINT FROM sale_payments WHERE sale_id = $1",
+    )
+    .bind(sale.sale.id)
+    .fetch_one(&pool)
+    .await
+    .unwrap();
     assert_eq!(payments_total, 10_000);
-    let (movement_type, movement_amount, saved_session_id): (String, i64, i32) =
-        sqlx::query_as(
-            "SELECT cm.movement_type::TEXT, cm.amount, s.cash_session_id
+    let (movement_type, movement_amount, saved_session_id): (String, i64, i32) = sqlx::query_as(
+        "SELECT cm.movement_type::TEXT, cm.amount, s.cash_session_id
              FROM cash_movements cm JOIN sales s ON s.id = cm.sale_id
              WHERE cm.sale_id = $1",
-        )
-        .bind(sale.sale.id)
-        .fetch_one(&pool)
-        .await
-        .unwrap();
+    )
+    .bind(sale.sale.id)
+    .fetch_one(&pool)
+    .await
+    .unwrap();
     assert_eq!(movement_type, "sale_in");
     assert_eq!(movement_amount, 10_000);
     assert_eq!(saved_session_id, session_id);
@@ -1397,7 +1394,10 @@ async fn e07_sin_recibido_los_dos_campos_se_guardan_null(pool: PgPool) {
 
     let sale = service::create_sale(
         &pool,
-        new_sale(vec![item(variant_id, 1)], vec![pay(PaymentMethod::Cash, 10_000)]),
+        new_sale(
+            vec![item(variant_id, 1)],
+            vec![pay(PaymentMethod::Cash, 10_000)],
+        ),
     )
     .await
     .unwrap();
@@ -1448,32 +1448,29 @@ async fn e09_check_de_bd_rechaza_recibido_inconsistente(pool: PgPool) {
     .await
     .unwrap();
 
-    let without_change = sqlx::query(
-        "UPDATE sales SET cash_received = 20_000, change_given = NULL WHERE id = $1",
-    )
-    .bind(valid.sale.id)
-    .execute(&pool)
-    .await;
+    let without_change =
+        sqlx::query("UPDATE sales SET cash_received = 20_000, change_given = NULL WHERE id = $1")
+            .bind(valid.sale.id)
+            .execute(&pool)
+            .await;
     assert!(without_change.is_err());
 
-    let change_not_below_received = sqlx::query(
-        "UPDATE sales SET cash_received = 10_000, change_given = 10_000 WHERE id = $1",
-    )
-    .bind(valid.sale.id)
-    .execute(&pool)
-    .await;
+    let change_not_below_received =
+        sqlx::query("UPDATE sales SET cash_received = 10_000, change_given = 10_000 WHERE id = $1")
+            .bind(valid.sale.id)
+            .execute(&pool)
+            .await;
     assert!(change_not_below_received.is_err());
 
     let mut courtesy = new_sale(vec![item(variant_id, 1)], vec![]);
     courtesy.discount = Some(10_000);
     courtesy.courtesy_reason = Some("Apoyo".to_string());
     let free_sale = service::create_sale(&pool, courtesy).await.unwrap();
-    let received_on_zero_total = sqlx::query(
-        "UPDATE sales SET cash_received = 1, change_given = 0 WHERE id = $1",
-    )
-    .bind(free_sale.sale.id)
-    .execute(&pool)
-    .await;
+    let received_on_zero_total =
+        sqlx::query("UPDATE sales SET cash_received = 1, change_given = 0 WHERE id = $1")
+            .bind(free_sale.sale.id)
+            .execute(&pool)
+            .await;
     assert!(received_on_zero_total.is_err());
 }
 
@@ -1567,10 +1564,7 @@ async fn f01_descuento_de_linea_guarda_subtotal_bruto(pool: PgPool) {
 
     let sale = service::create_sale(
         &pool,
-        new_sale(
-            vec![discounted_item],
-            vec![pay(PaymentMethod::Card, 9_000)],
-        ),
+        new_sale(vec![discounted_item], vec![pay(PaymentMethod::Card, 9_000)]),
     )
     .await
     .unwrap();
@@ -1638,7 +1632,10 @@ async fn f03_invariantes_sql_de_venta_bruta_y_pagos(pool: PgPool) {
     .await
     .unwrap();
 
-    assert_eq!(gross_items, subtotal, "Σ precio × cantidad = subtotal bruto");
+    assert_eq!(
+        gross_items, subtotal,
+        "Σ precio × cantidad = subtotal bruto"
+    );
     assert_eq!(subtotal - discount, total);
     assert_eq!(payments_total, total);
     assert!(gross_semantics);
@@ -1689,10 +1686,21 @@ async fn f05_auditoria_separa_descuentos_de_linea_y_global(pool: PgPool) {
 async fn g01_filtra_por_numero_de_venta(pool: PgPool) {
     let v = seed_variant(&pool, 10_000, 5).await;
     open_cash(&pool).await;
-    let sale = service::create_sale(&pool, new_sale(vec![item(v, 1)], vec![pay(PaymentMethod::Card, 10_000)]))
-        .await.unwrap();
-    let listed = service::list_sales(&pool, SaleFilterDto { sale_id: Some(sale.sale.id), ..Default::default() })
-        .await.unwrap();
+    let sale = service::create_sale(
+        &pool,
+        new_sale(vec![item(v, 1)], vec![pay(PaymentMethod::Card, 10_000)]),
+    )
+    .await
+    .unwrap();
+    let listed = service::list_sales(
+        &pool,
+        SaleFilterDto {
+            sale_id: Some(sale.sale.id),
+            ..Default::default()
+        },
+    )
+    .await
+    .unwrap();
     assert_eq!(listed.data.len(), 1);
     assert_eq!(listed.data[0].id, sale.sale.id);
 }
@@ -1701,14 +1709,28 @@ async fn g01_filtra_por_numero_de_venta(pool: PgPool) {
 async fn g02_venta_mixta_aparece_en_ambos_metodos(pool: PgPool) {
     let v = seed_variant(&pool, 10_000, 5).await;
     open_cash(&pool).await;
-    service::create_sale(&pool, new_sale(
-        vec![item(v, 1)],
-        vec![pay(PaymentMethod::Card, 4_000), pay(PaymentMethod::Cash, 6_000)],
-    )).await.unwrap();
+    service::create_sale(
+        &pool,
+        new_sale(
+            vec![item(v, 1)],
+            vec![
+                pay(PaymentMethod::Card, 4_000),
+                pay(PaymentMethod::Cash, 6_000),
+            ],
+        ),
+    )
+    .await
+    .unwrap();
     for method in ["cash", "card"] {
-        let listed = service::list_sales(&pool, SaleFilterDto {
-            payment_method: Some(method.to_string()), ..Default::default()
-        }).await.unwrap();
+        let listed = service::list_sales(
+            &pool,
+            SaleFilterDto {
+                payment_method: Some(method.to_string()),
+                ..Default::default()
+            },
+        )
+        .await
+        .unwrap();
         assert_eq!(listed.data.len(), 1);
     }
 }
@@ -1717,11 +1739,21 @@ async fn g02_venta_mixta_aparece_en_ambos_metodos(pool: PgPool) {
 async fn g03_filtra_por_turno(pool: PgPool) {
     let v = seed_variant(&pool, 10_000, 5).await;
     let session_id = open_cash(&pool).await;
-    service::create_sale(&pool, new_sale(vec![item(v, 1)], vec![pay(PaymentMethod::Cash, 10_000)]))
-        .await.unwrap();
-    let listed = service::list_sales(&pool, SaleFilterDto {
-        cash_session_id: Some(session_id), ..Default::default()
-    }).await.unwrap();
+    service::create_sale(
+        &pool,
+        new_sale(vec![item(v, 1)], vec![pay(PaymentMethod::Cash, 10_000)]),
+    )
+    .await
+    .unwrap();
+    let listed = service::list_sales(
+        &pool,
+        SaleFilterDto {
+            cash_session_id: Some(session_id),
+            ..Default::default()
+        },
+    )
+    .await
+    .unwrap();
     assert_eq!(listed.data.len(), 1);
 }
 
@@ -1729,10 +1761,18 @@ async fn g03_filtra_por_turno(pool: PgPool) {
 async fn g04_total_filtrado_solo_suma_ventas_completadas(pool: PgPool) {
     let v = seed_variant(&pool, 10_000, 5).await;
     open_cash(&pool).await;
-    let completed = service::create_sale(&pool, new_sale(vec![item(v, 1)], vec![pay(PaymentMethod::Card, 10_000)]))
-        .await.unwrap();
-    let cancelled = service::create_sale(&pool, new_sale(vec![item(v, 1)], vec![pay(PaymentMethod::Card, 10_000)]))
-        .await.unwrap();
+    let completed = service::create_sale(
+        &pool,
+        new_sale(vec![item(v, 1)], vec![pay(PaymentMethod::Card, 10_000)]),
+    )
+    .await
+    .unwrap();
+    let cancelled = service::create_sale(
+        &pool,
+        new_sale(vec![item(v, 1)], vec![pay(PaymentMethod::Card, 10_000)]),
+    )
+    .await
+    .unwrap();
     sqlx::query(
         "UPDATE sales SET status = 'cancelled', voided_at = NOW(), void_reason = 'test', \
          voided_by = 'test' WHERE id = $1",
@@ -1741,7 +1781,9 @@ async fn g04_total_filtrado_solo_suma_ventas_completadas(pool: PgPool) {
     .execute(&pool)
     .await
     .unwrap();
-    let listed = service::list_sales(&pool, SaleFilterDto::default()).await.unwrap();
+    let listed = service::list_sales(&pool, SaleFilterDto::default())
+        .await
+        .unwrap();
     assert_eq!(listed.total_amount, completed.sale.total);
 }
 
@@ -1749,8 +1791,12 @@ async fn g04_total_filtrado_solo_suma_ventas_completadas(pool: PgPool) {
 async fn g05_get_sale_devuelve_nombres_de_items(pool: PgPool) {
     let v = seed_variant(&pool, 10_000, 5).await;
     open_cash(&pool).await;
-    let sale = service::create_sale(&pool, new_sale(vec![item(v, 1)], vec![pay(PaymentMethod::Card, 10_000)]))
-        .await.unwrap();
+    let sale = service::create_sale(
+        &pool,
+        new_sale(vec![item(v, 1)], vec![pay(PaymentMethod::Card, 10_000)]),
+    )
+    .await
+    .unwrap();
     let detail = service::get_sale(&pool, sale.sale.id).await.unwrap();
     assert_eq!(detail.item_names.len(), 1);
     assert_eq!(detail.item_names[0].item_id, detail.items[0].id);
@@ -1758,15 +1804,24 @@ async fn g05_get_sale_devuelve_nombres_de_items(pool: PgPool) {
 
 #[sqlx::test(migrations = "./migrations")]
 async fn g06_rechaza_metodo_de_pago_invalido(pool: PgPool) {
-    let result = service::list_sales(&pool, SaleFilterDto {
-        payment_method: Some("bitcoin".to_string()), ..Default::default()
-    }).await;
+    let result = service::list_sales(
+        &pool,
+        SaleFilterDto {
+            payment_method: Some("bitcoin".to_string()),
+            ..Default::default()
+        },
+    )
+    .await;
     assert!(result.unwrap_err().to_string().contains("método de pago"));
 }
 
 async fn set_variant_cost(pool: &PgPool, variant_id: i32, cost: i64) {
     sqlx::query("UPDATE product_variants SET cost = $1 WHERE id = $2")
-        .bind(cost).bind(variant_id).execute(pool).await.unwrap();
+        .bind(cost)
+        .bind(variant_id)
+        .execute(pool)
+        .await
+        .unwrap();
 }
 
 #[sqlx::test(migrations = "./migrations")]
@@ -1774,8 +1829,12 @@ async fn h01_guarda_snapshot_del_costo_en_la_linea(pool: PgPool) {
     let v = seed_variant(&pool, 10_000, 5).await;
     set_variant_cost(&pool, v, 2_500).await;
     open_cash(&pool).await;
-    let sale = service::create_sale(&pool, new_sale(vec![item(v, 1)], vec![pay(PaymentMethod::Card, 10_000)]))
-        .await.unwrap();
+    let sale = service::create_sale(
+        &pool,
+        new_sale(vec![item(v, 1)], vec![pay(PaymentMethod::Card, 10_000)]),
+    )
+    .await
+    .unwrap();
     assert_eq!(sale.items[0].unit_cost, Some(2_500));
 }
 
@@ -1784,8 +1843,12 @@ async fn h02_cambiar_costo_no_modifica_snapshot(pool: PgPool) {
     let v = seed_variant(&pool, 10_000, 5).await;
     set_variant_cost(&pool, v, 2_500).await;
     open_cash(&pool).await;
-    let sale = service::create_sale(&pool, new_sale(vec![item(v, 1)], vec![pay(PaymentMethod::Card, 10_000)]))
-        .await.unwrap();
+    let sale = service::create_sale(
+        &pool,
+        new_sale(vec![item(v, 1)], vec![pay(PaymentMethod::Card, 10_000)]),
+    )
+    .await
+    .unwrap();
     set_variant_cost(&pool, v, 3_000).await;
     let fetched = service::get_sale(&pool, sale.sale.id).await.unwrap();
     assert_eq!(fetched.items[0].unit_cost, Some(2_500));
@@ -1796,10 +1859,18 @@ async fn h03_movimiento_de_venta_registra_costo(pool: PgPool) {
     let v = seed_variant(&pool, 10_000, 5).await;
     set_variant_cost(&pool, v, 2_500).await;
     open_cash(&pool).await;
-    let sale = service::create_sale(&pool, new_sale(vec![item(v, 1)], vec![pay(PaymentMethod::Card, 10_000)]))
-        .await.unwrap();
-    let cost: i64 = sqlx::query_scalar("SELECT unit_cost FROM inventory_movements WHERE sale_id = $1")
-        .bind(sale.sale.id).fetch_one(&pool).await.unwrap();
+    let sale = service::create_sale(
+        &pool,
+        new_sale(vec![item(v, 1)], vec![pay(PaymentMethod::Card, 10_000)]),
+    )
+    .await
+    .unwrap();
+    let cost: i64 =
+        sqlx::query_scalar("SELECT unit_cost FROM inventory_movements WHERE sale_id = $1")
+            .bind(sale.sale.id)
+            .fetch_one(&pool)
+            .await
+            .unwrap();
     assert_eq!(cost, 2_500);
 }
 
@@ -1807,8 +1878,12 @@ async fn h03_movimiento_de_venta_registra_costo(pool: PgPool) {
 async fn h04_costo_no_definido_se_guarda_null(pool: PgPool) {
     let v = seed_variant(&pool, 10_000, 5).await;
     open_cash(&pool).await;
-    let sale = service::create_sale(&pool, new_sale(vec![item(v, 1)], vec![pay(PaymentMethod::Card, 10_000)]))
-        .await.unwrap();
+    let sale = service::create_sale(
+        &pool,
+        new_sale(vec![item(v, 1)], vec![pay(PaymentMethod::Card, 10_000)]),
+    )
+    .await
+    .unwrap();
     assert_eq!(sale.items[0].unit_cost, None);
 }
 

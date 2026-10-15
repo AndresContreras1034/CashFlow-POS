@@ -26,6 +26,7 @@ auditoria_*.txt
 resultado_*.txt
 resumen_resultados.txt
 exportar_auditoria.txt
+**/import_audit.txt
 /audit_logs.txt
 auditoria_reportes/
 etapa2.diff

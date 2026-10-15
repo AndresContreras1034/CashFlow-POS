@@ -398,7 +398,7 @@ fn report_money_pair(lines: &mut Vec<String>, label: &str, value: i64, decimals:
 fn report_pair(lines: &mut Vec<String>, label: &str, value: &str) {
     let label = report_ascii(label);
     let value = report_ascii(value);
-    if label.len() + value.len() + 1 <= CHARS_PER_LINE {
+    if label.len() + value.len() < CHARS_PER_LINE {
         lines.push(two_col(&label, &value));
     } else {
         lines.extend(report_wrap(&label));

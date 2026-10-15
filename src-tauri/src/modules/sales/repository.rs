@@ -471,7 +471,7 @@ pub async fn create_sale(pool: &PgPool, dto: CreateSaleDto) -> Result<SaleDetail
 
     // El detalle por ítem vive en sale_items; este evento conserva el resumen.
     audit_repo::insert_event(
-        &mut *tx,
+        &mut tx,
         NewAuditEvent {
             correlation_id: Some(Uuid::new_v4()),
             category: AuditCategory::Business,
@@ -693,7 +693,7 @@ pub async fn void_sale(
         .map(|item| i64::from(item.quantity))
         .sum::<i64>();
     audit_repo::insert_event(
-        &mut *tx,
+        &mut tx,
         NewAuditEvent {
             correlation_id: Some(Uuid::new_v4()),
             category: AuditCategory::Business,
@@ -784,7 +784,7 @@ pub async fn assign_customer(
         None => format!("Venta #{id} quedó sin cliente"),
     };
     audit_repo::insert_event(
-        &mut *tx,
+        &mut tx,
         NewAuditEvent {
             correlation_id: Some(Uuid::new_v4()),
             category: AuditCategory::Business,

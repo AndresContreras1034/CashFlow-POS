@@ -41,7 +41,7 @@ pub fn format_size(bytes: i64) -> String {
 async fn write(pool: &PgPool, event: NewAuditEvent) {
     match pool.acquire().await {
         Ok(mut conn) => {
-            if let Err(e) = audit_repo::insert_event(&mut *conn, event).await {
+            if let Err(e) = audit_repo::insert_event(&mut conn, event).await {
                 tracing::warn!(error = %e, "No se pudo registrar el backup en auditoría");
             }
         }

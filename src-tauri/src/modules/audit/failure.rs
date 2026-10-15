@@ -78,7 +78,7 @@ async fn write_audit_event(
         error_message: Some(message.to_string()),
     };
 
-    match repository::insert_event(&mut *conn, event).await {
+    match repository::insert_event(&mut conn, event).await {
         Ok(_) => true,
         Err(insert_error) => {
             tracing::error!(

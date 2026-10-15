@@ -178,7 +178,7 @@ pub async fn register_manual_movement(
     };
 
     audit_repo::insert_event(
-        &mut *tx,
+        &mut tx,
         NewAuditEvent {
             correlation_id: Some(Uuid::new_v4()),
             category: AuditCategory::Business,

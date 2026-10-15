@@ -337,7 +337,7 @@ async fn record_stock_entry(
     let stock_before = variant.stock - quantity;
 
     audit_repo::insert_event(
-        &mut *tx,
+        &mut tx,
         stock_event(
             "stock_in",
             &variant,
@@ -451,7 +451,7 @@ pub async fn register_manual_out(
     let stock_before = updated_variant.stock + quantity;
 
     audit_repo::insert_event(
-        &mut *tx,
+        &mut tx,
         stock_event(
             "stock_out",
             &updated_variant,
@@ -521,7 +521,7 @@ pub async fn adjust_stock(
 
     if stock_before != updated.stock {
         audit_repo::insert_event(
-            &mut *tx,
+            &mut tx,
             stock_event(
                 "stock_adjust",
                 &updated,

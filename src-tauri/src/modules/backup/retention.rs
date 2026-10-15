@@ -46,7 +46,7 @@ pub const PRE_MAX_AGE_DAYS: i64 = 30;
 
 pub fn ids_to_delete(entries: &[Entry], policy: Policy) -> Vec<i32> {
     let mut sorted: Vec<&Entry> = entries.iter().collect();
-    sorted.sort_by(|a, b| b.at.cmp(&a.at));
+    sorted.sort_by_key(|entry| std::cmp::Reverse(entry.at));
 
     let mut keep: HashSet<i32> = HashSet::new();
     if let Some(newest) = sorted.first() {
@@ -78,7 +78,7 @@ pub fn ids_to_delete(entries: &[Entry], policy: Policy) -> Vec<i32> {
 
 pub fn pre_ids_to_delete(entries: &[(i32, DateTime<Utc>)], now: DateTime<Utc>) -> Vec<i32> {
     let mut sorted: Vec<&(i32, DateTime<Utc>)> = entries.iter().collect();
-    sorted.sort_by(|a, b| b.1.cmp(&a.1));
+    sorted.sort_by_key(|entry| std::cmp::Reverse(entry.1));
 
     sorted
         .into_iter()
@@ -122,8 +122,10 @@ pub async fn apply(pool: &PgPool, settings: &BackupSettings) -> Result<usize, sq
 
 pub async fn apply_pre(pool: &PgPool) -> Result<usize, sqlx::Error> {
     let candidates = repository::list_pre_rotatable(pool).await?;
-    let entries: Vec<(i32, DateTime<Utc>)> =
-        candidates.iter().map(|record| (record.id, record.started_at)).collect();
+    let entries: Vec<(i32, DateTime<Utc>)> = candidates
+        .iter()
+        .map(|record| (record.id, record.started_at))
+        .collect();
 
     let mut removed = 0;
     for id in pre_ids_to_delete(&entries, Utc::now()) {

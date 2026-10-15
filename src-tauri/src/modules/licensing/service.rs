@@ -22,7 +22,7 @@ const CLOCK_SKEW: Duration = Duration::minutes(5);
 const MAX_LICENSE_FILE_BYTES: usize = 16 * 1024;
 
 fn decode_hex(hex: &str) -> Result<Vec<u8>, AppError> {
-    if hex.is_empty() || hex.len() % 2 != 0 {
+    if hex.is_empty() || !hex.len().is_multiple_of(2) {
         return Err(AppError::validation("La firma de la licencia no es válida"));
     }
     hex.as_bytes()
@@ -214,12 +214,12 @@ pub async fn activate(pool: &PgPool, path: &str) -> Result<(), AppError> {
 
     let mut tx = pool.begin().await.map_err(AppError::from)?;
 
-    repository::save_license(&mut *tx, &stored)
+    repository::save_license(&mut tx, &stored)
         .await
         .map_err(AppError::from)?;
 
     audit_repo::insert_event(
-        &mut *tx,
+        &mut tx,
         NewAuditEvent {
             correlation_id: Some(uuid::Uuid::new_v4()),
             category: AuditCategory::Business,

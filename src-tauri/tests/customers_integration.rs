@@ -3,9 +3,7 @@
 
 use pos_lib::modules::{
     customers::{
-        dto::{
-            CreateCustomerDto, CustomerFilterDto, SetCustomerActiveDto, UpdateCustomerDto,
-        },
+        dto::{CreateCustomerDto, CustomerFilterDto, SetCustomerActiveDto, UpdateCustomerDto},
         service as customers,
     },
     sales::{
@@ -127,13 +125,13 @@ async fn customer_normalization_and_duplicate_documents(pool: PgPool) {
     assert_eq!(created.document_number.as_deref(), Some("123"));
     assert_eq!(created.phone, None);
 
-    let duplicate = customers::create_customer(
-        &pool,
-        customer_with_document("Otra Ana", "CC", "123"),
-    )
-    .await;
+    let duplicate =
+        customers::create_customer(&pool, customer_with_document("Otra Ana", "CC", "123")).await;
     let duplicate_message = duplicate.unwrap_err().to_string();
-    assert!(duplicate_message.contains("documento"), "{duplicate_message}");
+    assert!(
+        duplicate_message.contains("documento"),
+        "{duplicate_message}"
+    );
     assert_eq!(count(&pool, "SELECT COUNT(*) FROM customers").await, 1);
 }
 
@@ -149,7 +147,9 @@ async fn customer_validation_edits_and_activation_are_audited(pool: PgPool) {
         .is_err());
     assert_eq!(count(&pool, "SELECT COUNT(*) FROM customers").await, 0);
 
-    let created = customers::create_customer(&pool, customer("Ana")).await.unwrap();
+    let created = customers::create_customer(&pool, customer("Ana"))
+        .await
+        .unwrap();
     let updated = customers::update_customer(
         &pool,
         created.id,
@@ -191,11 +191,19 @@ async fn customer_validation_edits_and_activation_are_audited(pool: PgPool) {
     .unwrap();
     assert!(reactivated.is_active);
     assert_eq!(
-        count(&pool, "SELECT COUNT(*) FROM audit_events WHERE action = 'deactivate'").await,
+        count(
+            &pool,
+            "SELECT COUNT(*) FROM audit_events WHERE action = 'deactivate'"
+        )
+        .await,
         1
     );
     assert_eq!(
-        count(&pool, "SELECT COUNT(*) FROM audit_events WHERE action = 'activate'").await,
+        count(
+            &pool,
+            "SELECT COUNT(*) FROM audit_events WHERE action = 'activate'"
+        )
+        .await,
         1
     );
 
@@ -215,8 +223,12 @@ async fn customer_validation_edits_and_activation_are_audited(pool: PgPool) {
 
 #[sqlx::test(migrations = "./migrations")]
 async fn customer_name_lookup_deduplicates_ids_and_handles_empty_input(pool: PgPool) {
-    let ana = customers::create_customer(&pool, customer("Ana")).await.unwrap();
-    let beto = customers::create_customer(&pool, customer("Beto")).await.unwrap();
+    let ana = customers::create_customer(&pool, customer("Ana"))
+        .await
+        .unwrap();
+    let beto = customers::create_customer(&pool, customer("Beto"))
+        .await
+        .unwrap();
 
     let names = customers::get_customer_names(&pool, vec![beto.id, ana.id, ana.id, 999_999])
         .await
@@ -230,7 +242,9 @@ async fn customer_name_lookup_deduplicates_ids_and_handles_empty_input(pool: PgP
 
 #[sqlx::test(migrations = "./migrations")]
 async fn creating_sale_with_customer_updates_customer_statistics(pool: PgPool) {
-    let customer = customers::create_customer(&pool, customer("Ana")).await.unwrap();
+    let customer = customers::create_customer(&pool, customer("Ana"))
+        .await
+        .unwrap();
     let variant = seed_variant(&pool).await;
     open_cash(&pool).await;
 
@@ -246,18 +260,23 @@ async fn creating_sale_with_customer_updates_customer_statistics(pool: PgPool) {
 
 #[sqlx::test(migrations = "./migrations")]
 async fn assigning_changing_and_clearing_customer_only_changes_customer_id(pool: PgPool) {
-    let ana = customers::create_customer(&pool, customer("Ana")).await.unwrap();
-    let beto = customers::create_customer(&pool, customer("Beto")).await.unwrap();
+    let ana = customers::create_customer(&pool, customer("Ana"))
+        .await
+        .unwrap();
+    let beto = customers::create_customer(&pool, customer("Beto"))
+        .await
+        .unwrap();
     let variant = seed_variant(&pool).await;
     open_cash(&pool).await;
-    let created = sales::create_sale(&pool, sale(variant, None)).await.unwrap();
+    let created = sales::create_sale(&pool, sale(variant, None))
+        .await
+        .unwrap();
 
-    let stock_before: i32 =
-        sqlx::query_scalar("SELECT stock FROM product_variants WHERE id = $1")
-            .bind(variant)
-            .fetch_one(&pool)
-            .await
-            .unwrap();
+    let stock_before: i32 = sqlx::query_scalar("SELECT stock FROM product_variants WHERE id = $1")
+        .bind(variant)
+        .fetch_one(&pool)
+        .await
+        .unwrap();
     let assigned = sales::assign_customer(&pool, created.sale.id, assign(Some(ana.id)))
         .await
         .unwrap();
@@ -301,7 +320,9 @@ async fn assigning_changing_and_clearing_customer_only_changes_customer_id(pool:
 
 #[sqlx::test(migrations = "./migrations")]
 async fn assignment_rejects_missing_or_inactive_customer_and_is_idempotent(pool: PgPool) {
-    let customer = customers::create_customer(&pool, customer("Ana")).await.unwrap();
+    let customer = customers::create_customer(&pool, customer("Ana"))
+        .await
+        .unwrap();
     let variant = seed_variant(&pool).await;
     open_cash(&pool).await;
     let created = sales::create_sale(&pool, sale(variant, Some(customer.id)))
@@ -312,17 +333,25 @@ async fn assignment_rejects_missing_or_inactive_customer_and_is_idempotent(pool:
         .await
         .unwrap();
     assert_eq!(
-        count(&pool, "SELECT COUNT(*) FROM audit_events WHERE action = 'assign_customer'").await,
+        count(
+            &pool,
+            "SELECT COUNT(*) FROM audit_events WHERE action = 'assign_customer'"
+        )
+        .await,
         0
     );
 
-    assert!(sales::assign_customer(&pool, created.sale.id, assign(Some(999_999)))
-        .await
-        .is_err());
+    assert!(
+        sales::assign_customer(&pool, created.sale.id, assign(Some(999_999)))
+            .await
+            .is_err()
+    );
     deactivate(&pool, customer.id).await;
-    assert!(sales::assign_customer(&pool, created.sale.id, assign(Some(customer.id)))
-        .await
-        .is_err());
+    assert!(
+        sales::assign_customer(&pool, created.sale.id, assign(Some(customer.id)))
+            .await
+            .is_err()
+    );
     assert!(sales::assign_customer(&pool, 999_999, assign(None))
         .await
         .is_err());
@@ -330,20 +359,34 @@ async fn assignment_rejects_missing_or_inactive_customer_and_is_idempotent(pool:
     let fetched = sales::get_sale(&pool, created.sale.id).await.unwrap();
     assert_eq!(fetched.sale.customer_id, Some(customer.id));
     assert_eq!(
-        count(&pool, "SELECT COUNT(*) FROM audit_events WHERE action = 'assign_customer'").await,
+        count(
+            &pool,
+            "SELECT COUNT(*) FROM audit_events WHERE action = 'assign_customer'"
+        )
+        .await,
         0
     );
 }
 
 #[sqlx::test(migrations = "./migrations")]
 async fn sales_filter_can_select_customer(pool: PgPool) {
-    let ana = customers::create_customer(&pool, customer("Ana")).await.unwrap();
-    let beto = customers::create_customer(&pool, customer("Beto")).await.unwrap();
+    let ana = customers::create_customer(&pool, customer("Ana"))
+        .await
+        .unwrap();
+    let beto = customers::create_customer(&pool, customer("Beto"))
+        .await
+        .unwrap();
     let variant = seed_variant(&pool).await;
     open_cash(&pool).await;
-    sales::create_sale(&pool, sale(variant, Some(ana.id))).await.unwrap();
-    sales::create_sale(&pool, sale(variant, Some(beto.id))).await.unwrap();
-    sales::create_sale(&pool, sale(variant, None)).await.unwrap();
+    sales::create_sale(&pool, sale(variant, Some(ana.id)))
+        .await
+        .unwrap();
+    sales::create_sale(&pool, sale(variant, Some(beto.id)))
+        .await
+        .unwrap();
+    sales::create_sale(&pool, sale(variant, None))
+        .await
+        .unwrap();
 
     let result = sales::list_sales(
         &pool,
@@ -355,5 +398,8 @@ async fn sales_filter_can_select_customer(pool: PgPool) {
     .await
     .unwrap();
     assert_eq!(result.total, 1);
-    assert!(result.data.iter().all(|item| item.customer_id == Some(ana.id)));
+    assert!(result
+        .data
+        .iter()
+        .all(|item| item.customer_id == Some(ana.id)));
 }

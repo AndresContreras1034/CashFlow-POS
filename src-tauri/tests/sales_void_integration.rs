@@ -13,13 +13,12 @@ static SEQ: AtomicU32 = AtomicU32::new(1);
 
 async fn seed_variant(pool: &PgPool, price: i64, stock: i32) -> i32 {
     let suffix = SEQ.fetch_add(1, Ordering::Relaxed);
-    let category_id: i32 = sqlx::query_scalar(
-        "INSERT INTO categories (name) VALUES ($1) RETURNING id",
-    )
-    .bind(format!("void-category-{suffix}"))
-    .fetch_one(pool)
-    .await
-    .unwrap();
+    let category_id: i32 =
+        sqlx::query_scalar("INSERT INTO categories (name) VALUES ($1) RETURNING id")
+            .bind(format!("void-category-{suffix}"))
+            .fetch_one(pool)
+            .await
+            .unwrap();
     let product_id: i32 = sqlx::query_scalar(
         "INSERT INTO products (category_id, name, is_active) VALUES ($1, $2, TRUE) RETURNING id",
     )
@@ -95,11 +94,7 @@ fn void_dto(target_status: SaleStatus, reason: &str) -> VoidSaleDto {
     }
 }
 
-async fn create_cash_sale(
-    pool: &PgPool,
-    variant_id: i32,
-    cash_received: Option<i64>,
-) -> i32 {
+async fn create_cash_sale(pool: &PgPool, variant_id: i32, cash_received: Option<i64>) -> i32 {
     sales_service::create_sale(
         pool,
         sale_dto(
@@ -214,11 +209,7 @@ async fn v03_venta_de_tarjeta_se_devuelve_sin_turno_abierto(pool: PgPool) {
     let session_id = open_cash(&pool).await;
     let created = sales_service::create_sale(
         &pool,
-        sale_dto(
-            variant_id,
-            vec![payment(PaymentMethod::Card, 10_000)],
-            None,
-        ),
+        sale_dto(variant_id, vec![payment(PaymentMethod::Card, 10_000)], None),
     )
     .await
     .unwrap();
@@ -243,12 +234,11 @@ async fn v04_venta_en_efectivo_sin_turno_no_modifica_nada(pool: PgPool) {
     let session_id = open_cash(&pool).await;
     let sale_id = create_cash_sale(&pool, variant_id, None).await;
     close_cash(&pool, session_id, 10_000).await;
-    let before_status: SaleStatus =
-        sqlx::query_scalar("SELECT status FROM sales WHERE id = $1")
-            .bind(sale_id)
-            .fetch_one(&pool)
-            .await
-            .unwrap();
+    let before_status: SaleStatus = sqlx::query_scalar("SELECT status FROM sales WHERE id = $1")
+        .bind(sale_id)
+        .fetch_one(&pool)
+        .await
+        .unwrap();
     let inventory_before = count(&pool, "inventory_movements").await;
     let cash_before = count(&pool, "cash_movements").await;
     let audit_before = count(&pool, "audit_events").await;
@@ -263,12 +253,11 @@ async fn v04_venta_en_efectivo_sin_turno_no_modifica_nada(pool: PgPool) {
     .to_string();
 
     assert!(error.contains("turno de caja"), "{error}");
-    let after_status: SaleStatus =
-        sqlx::query_scalar("SELECT status FROM sales WHERE id = $1")
-            .bind(sale_id)
-            .fetch_one(&pool)
-            .await
-            .unwrap();
+    let after_status: SaleStatus = sqlx::query_scalar("SELECT status FROM sales WHERE id = $1")
+        .bind(sale_id)
+        .fetch_one(&pool)
+        .await
+        .unwrap();
     assert_eq!(after_status, before_status);
     assert_eq!(stock(&pool, variant_id).await, 4);
     assert_eq!(count(&pool, "inventory_movements").await, inventory_before);
@@ -345,12 +334,11 @@ async fn v07_validaciones_no_escriben_fallos_de_auditoria(pool: PgPool) {
     for dto in invalid {
         assert!(sales_service::void_sale(&pool, sale_id, dto).await.is_err());
     }
-    let failures: i64 = sqlx::query_scalar(
-        "SELECT COUNT(*) FROM audit_events WHERE outcome::TEXT = 'failure'",
-    )
-    .fetch_one(&pool)
-    .await
-    .unwrap();
+    let failures: i64 =
+        sqlx::query_scalar("SELECT COUNT(*) FROM audit_events WHERE outcome::TEXT = 'failure'")
+            .fetch_one(&pool)
+            .await
+            .unwrap();
     assert_eq!(failures, 0);
     let status: SaleStatus = sqlx::query_scalar("SELECT status FROM sales WHERE id = $1")
         .bind(sale_id)
@@ -520,11 +508,7 @@ async fn v12_venta_de_tarjeta_se_anula_con_o_sin_turno_sin_sale_out(pool: PgPool
     let first_session = open_cash(&pool).await;
     let first_sale = sales_service::create_sale(
         &pool,
-        sale_dto(
-            variant_id,
-            vec![payment(PaymentMethod::Card, 10_000)],
-            None,
-        ),
+        sale_dto(variant_id, vec![payment(PaymentMethod::Card, 10_000)], None),
     )
     .await
     .unwrap();
@@ -541,11 +525,7 @@ async fn v12_venta_de_tarjeta_se_anula_con_o_sin_turno_sin_sale_out(pool: PgPool
     let second_session = open_cash(&pool).await;
     let second_sale = sales_service::create_sale(
         &pool,
-        sale_dto(
-            variant_id,
-            vec![payment(PaymentMethod::Card, 10_000)],
-            None,
-        ),
+        sale_dto(variant_id, vec![payment(PaymentMethod::Card, 10_000)], None),
     )
     .await
     .unwrap();
@@ -560,11 +540,10 @@ async fn v12_venta_de_tarjeta_se_anula_con_o_sin_turno_sin_sale_out(pool: PgPool
 
     assert_eq!(count(&pool, "cash_movements").await, movements_before);
     assert_eq!(stock(&pool, variant_id).await, 5);
-    let open_status: String =
-        sqlx::query_scalar("SELECT status FROM cash_sessions WHERE id = $1")
-            .bind(second_session)
-            .fetch_one(&pool)
-            .await
-            .unwrap();
+    let open_status: String = sqlx::query_scalar("SELECT status FROM cash_sessions WHERE id = $1")
+        .bind(second_session)
+        .fetch_one(&pool)
+        .await
+        .unwrap();
     assert_eq!(open_status, "open");
 }

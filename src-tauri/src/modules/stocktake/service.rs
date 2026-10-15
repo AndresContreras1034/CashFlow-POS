@@ -115,7 +115,7 @@ pub async fn start_stocktake(
     }
 
     audit_repo::insert_event(
-        &mut *tx,
+        &mut tx,
         stocktake_event(
             "start",
             id,
@@ -318,7 +318,7 @@ pub async fn apply_stocktake(
         .map_err(AppError::from)?;
 
     audit_repo::insert_event(
-        &mut *tx,
+        &mut tx,
         stocktake_event(
             "apply",
             stocktake_id,
@@ -366,7 +366,7 @@ pub async fn cancel_stocktake(pool: &PgPool, stocktake_id: i32) -> Result<(), Ap
     let stocktake = load(&mut tx, stocktake_id).await?;
 
     audit_repo::insert_event(
-        &mut *tx,
+        &mut tx,
         stocktake_event(
             "cancel",
             stocktake_id,

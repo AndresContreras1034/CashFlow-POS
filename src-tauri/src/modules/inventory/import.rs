@@ -94,7 +94,7 @@ fn to_i32(value: f64) -> Option<i32> {
 
 fn to_cents(value: f64) -> Option<i64> {
     let cents = (value * 100.0).round();
-    if cents >= 0.0 && cents <= 9.0e15 {
+    if (0.0..=9.0e15).contains(&cents) {
         Some(cents as i64)
     } else {
         None
@@ -216,7 +216,7 @@ fn parse_row(row: &[Data], row_number: usize) -> Result<ParsedRow, (String, Stri
     let attributes_raw = get_str(10).unwrap_or_default();
     let attributes = parse_attributes(&attributes_raw);
     let declared_attributes = attributes_raw
-        .split(|character| character == '\n' || character == ';')
+        .split(['\n', ';'])
         .filter(|pair| !pair.trim().is_empty())
         .count();
     let parsed_attributes = attributes.as_object().map(|map| map.len()).unwrap_or(0);
@@ -252,7 +252,7 @@ fn parse_row(row: &[Data], row_number: usize) -> Result<ParsedRow, (String, Stri
 /// "Color: Dorado; Talla: M" o multilínea -> {"Color":"Dorado","Talla":"M"}
 fn parse_attributes(raw: &str) -> JsonValue {
     let mut map = Map::new();
-    for pair in raw.split(|c| c == '\n' || c == ';') {
+    for pair in raw.split(['\n', ';']) {
         let pair = pair.trim();
         if pair.is_empty() {
             continue;
@@ -467,7 +467,7 @@ async fn run_import(
                 RowOutcome::Error { .. } => None,
             })
             .collect();
-        load_lookups(&mut *tx, &ok_rows).await?
+        load_lookups(&mut tx, &ok_rows).await?
     };
 
     let mut new_category_keys: HashSet<String> = HashSet::new();
@@ -634,7 +634,7 @@ async fn run_import(
     // Solo "execute" sin errores escribe. El preview nunca inserta nada.
     if !dry_run && errors == 0 {
         write_import(
-            &mut *tx,
+            &mut tx,
             &lookups.categories,
             &lookups.products,
             &new_categories_list,
@@ -649,7 +649,7 @@ async fn run_import(
             .map(str::to_string);
 
         audit_repo::insert_event(
-            &mut *tx,
+            &mut tx,
             NewAuditEvent {
                 correlation_id: Some(Uuid::new_v4()),
                 category: AuditCategory::Business,

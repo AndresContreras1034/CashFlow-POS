@@ -1,8 +1,7 @@
 use pos_lib::modules::{
     cash::{
-        dto::CloseSessionDto,
-        models::CashSessionReport,
-        repository as cash_repository, service as cash_service,
+        dto::CloseSessionDto, models::CashSessionReport, repository as cash_repository,
+        service as cash_service,
     },
     sales::{
         dto::{CreateSaleDto, CreateSaleItemDto, CreateSalePaymentDto, VoidSaleDto},
@@ -195,13 +194,12 @@ async fn r02_esperado_del_informe_z_coincide_con_el_cierre(pool: PgPool) {
 
     close_session(&pool, session_id, 12_000).await.unwrap();
     let report = stored_report(&pool, session_id).await;
-    let expected: i64 = sqlx::query_scalar(
-        "SELECT expected_amount FROM cash_sessions WHERE id = $1",
-    )
-    .bind(session_id)
-    .fetch_one(&pool)
-    .await
-    .unwrap();
+    let expected: i64 =
+        sqlx::query_scalar("SELECT expected_amount FROM cash_sessions WHERE id = $1")
+            .bind(session_id)
+            .fetch_one(&pool)
+            .await
+            .unwrap();
     assert_eq!(report.kind, "Z");
     assert_eq!(report.cash.expected_amount, expected);
 }
@@ -244,8 +242,14 @@ async fn r03_z_se_conserva_y_anulacion_se_asigna_al_turno_de_realizacion(pool: P
     let second_report = cash_service::get_session_report(&pool, second_session)
         .await
         .unwrap();
-    assert_eq!(first_after.voids.cancelled_count, first_before.voids.cancelled_count);
-    assert_eq!(first_after.voids.cancelled_total, first_before.voids.cancelled_total);
+    assert_eq!(
+        first_after.voids.cancelled_count,
+        first_before.voids.cancelled_count
+    );
+    assert_eq!(
+        first_after.voids.cancelled_total,
+        first_before.voids.cancelled_total
+    );
     assert_eq!(second_report.kind, "X");
     assert_eq!(second_report.voids.cancelled_count, 1);
     assert_eq!(second_report.voids.cancelled_total, 10_000);
@@ -290,13 +294,11 @@ async fn r05_venta_sin_turno_no_entra_en_informe(pool: PgPool) {
 #[sqlx::test(migrations = "./migrations")]
 async fn r06_turno_cerrado_sin_z_reporta_que_no_hay_informe(pool: PgPool) {
     let session_id = open_session(&pool, 0).await;
-    sqlx::query(
-        "UPDATE cash_sessions SET status = 'closed', closed_at = NOW() WHERE id = $1",
-    )
-    .bind(session_id)
-    .execute(&pool)
-    .await
-    .unwrap();
+    sqlx::query("UPDATE cash_sessions SET status = 'closed', closed_at = NOW() WHERE id = $1")
+        .bind(session_id)
+        .execute(&pool)
+        .await
+        .unwrap();
 
     let error = cash_service::get_session_report(&pool, session_id)
         .await
@@ -417,16 +419,17 @@ async fn r08_cierre_concurrente_con_venta_conserva_un_estado_coherente(pool: PgP
             assert_eq!(report.cash.expected_amount, 11_000);
         }
         Err(error) => {
-            assert!(error.to_string().contains("No hay un turno de caja abierto"));
+            assert!(error
+                .to_string()
+                .contains("No hay un turno de caja abierto"));
             assert_eq!(report.sales.count, 0);
             assert_eq!(report.cash.cash_sales, 0);
             assert_eq!(report.cash.expected_amount, 1_000);
-            let stock: i32 =
-                sqlx::query_scalar("SELECT stock FROM product_variants WHERE id = $1")
-                    .bind(variant_id)
-                    .fetch_one(&pool)
-                    .await
-                    .unwrap();
+            let stock: i32 = sqlx::query_scalar("SELECT stock FROM product_variants WHERE id = $1")
+                .bind(variant_id)
+                .fetch_one(&pool)
+                .await
+                .unwrap();
             assert_eq!(stock, 5);
         }
     }

@@ -304,7 +304,7 @@ async fn inspect_inner(
         .unwrap_or_default();
 
     let encrypted = crypto::is_encrypted(path.to_path_buf()).await?;
-    if encrypted && password.map_or(true, str::is_empty) {
+    if encrypted && password.is_none_or(str::is_empty) {
         return Ok(BackupInspection {
             file_name,
             size_bytes: metadata.len(),
@@ -390,12 +390,11 @@ async fn carry_over_license(pool: &PgPool, db: &mut PgConnection) -> Result<bool
     .await
     .map_err(|error| format!("No se pudo leer la licencia de este equipo: {error}"))?;
 
-    let restored_id: Option<String> = sqlx::query_scalar(
-        "SELECT installation_id FROM license_state WHERE id = 1",
-    )
-    .fetch_optional(&mut *db)
-    .await
-    .map_err(|error| format!("No se pudo leer la licencia del backup: {error}"))?;
+    let restored_id: Option<String> =
+        sqlx::query_scalar("SELECT installation_id FROM license_state WHERE id = 1")
+            .fetch_optional(&mut *db)
+            .await
+            .map_err(|error| format!("No se pudo leer la licencia del backup: {error}"))?;
 
     match live {
         Some((installation_id, license_file, last_seen_at)) => {

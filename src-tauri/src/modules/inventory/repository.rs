@@ -120,7 +120,7 @@ pub async fn create_category(
     .await?;
 
     audit_repo::insert_event(
-        &mut *tx,
+        &mut tx,
         inventory_event(
             "create",
             "category",
@@ -182,7 +182,7 @@ pub async fn update_category(
             field_list(&changes)
         );
         audit_repo::insert_event(
-            &mut *tx,
+            &mut tx,
             inventory_event(
                 "update",
                 "category",
@@ -352,7 +352,7 @@ pub async fn create_product(pool: &PgPool, dto: CreateProductDto) -> Result<Prod
     .await?;
 
     audit_repo::insert_event(
-        &mut *tx,
+        &mut tx,
         inventory_event(
             "create",
             "product",
@@ -421,7 +421,7 @@ pub async fn update_product(
             field_list(&changes)
         );
         audit_repo::insert_event(
-            &mut *tx,
+            &mut tx,
             inventory_event(
                 "update",
                 "product",
@@ -591,7 +591,7 @@ pub async fn create_variant(
     }
 
     audit_repo::insert_event(
-        &mut *tx,
+        &mut tx,
         inventory_event(
             "create",
             "variant",
@@ -709,7 +709,7 @@ pub async fn update_variant(
             .join(", ");
 
         audit_repo::insert_event(
-            &mut *tx,
+            &mut tx,
             NewAuditEvent {
                 correlation_id: Some(Uuid::new_v4()),
                 category: AuditCategory::Business,

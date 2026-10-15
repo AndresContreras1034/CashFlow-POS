@@ -462,7 +462,7 @@ pub async fn create_purchase_list(
     .map_err(AppError::from)?;
 
     audit_repo::insert_event(
-        &mut *tx,
+        &mut tx,
         list_event(
             actor,
             "purchase_list_create",
@@ -508,7 +508,7 @@ pub async fn update_purchase_list(
     }
 
     audit_repo::insert_event(
-        &mut *tx,
+        &mut tx,
         list_event(
             actor,
             "purchase_list_update",
@@ -587,7 +587,7 @@ pub async fn set_purchase_list_status(
         _ => "cancelada",
     };
     audit_repo::insert_event(
-        &mut *tx,
+        &mut tx,
         list_event(
             actor,
             "purchase_list_status",
@@ -876,7 +876,7 @@ async fn finish_add(
         base.extend(more.clone());
     }
     audit_repo::insert_event(
-        &mut *tx,
+        &mut tx,
         list_event(
             actor,
             "purchase_list_add_items",

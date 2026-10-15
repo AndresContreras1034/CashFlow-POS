@@ -20,6 +20,17 @@ use crate::modules::suppliers::{
 const STOCK_STATUS_CASE: &str = "CASE WHEN v.stock <= 0 THEN 'out_of_stock' \
      WHEN v.stock <= v.stock_min THEN 'low' ELSE 'ok' END";
 
+struct LinkAuditEvent {
+    correlation_id: Uuid,
+    actor: Option<String>,
+    action: &'static str,
+    entity_type: &'static str,
+    entity_id: i32,
+    summary: String,
+    changes: Option<JsonValue>,
+    metadata: JsonValue,
+}
+
 #[derive(Debug)]
 pub enum LinkError {
     Db(sqlx::Error),
@@ -42,29 +53,22 @@ impl From<sqlx::Error> for LinkError {
 
 async fn record_event(
     conn: &mut sqlx::PgConnection,
-    correlation_id: Uuid,
-    actor: Option<String>,
-    action: &str,
-    entity_type: &str,
-    entity_id: i32,
-    summary: String,
-    changes: Option<JsonValue>,
-    metadata: JsonValue,
+    event: LinkAuditEvent,
 ) -> Result<(), sqlx::Error> {
     audit_repo::insert_event(
         conn,
         NewAuditEvent {
-            correlation_id: Some(correlation_id),
+            correlation_id: Some(event.correlation_id),
             category: AuditCategory::Business,
             module: AuditModule::Suppliers,
-            action: action.to_string(),
+            action: event.action.to_string(),
             outcome: AuditOutcome::Success,
-            actor,
-            entity_type: Some(entity_type.to_string()),
-            entity_id: Some(entity_id.to_string()),
-            summary,
-            changes,
-            metadata: Some(metadata),
+            actor: event.actor,
+            entity_type: Some(event.entity_type.to_string()),
+            entity_id: Some(event.entity_id.to_string()),
+            summary: event.summary,
+            changes: event.changes,
+            metadata: Some(event.metadata),
             error_message: None,
         },
     )
@@ -181,17 +185,19 @@ pub async fn set_supplier_categories(
     let correlation_id = Uuid::new_v4();
     record_event(
         &mut tx,
-        correlation_id,
-        actor,
-        "set_categories",
-        "supplier",
-        supplier_id,
-        format!("Categorías del proveedor #{supplier_id} actualizadas"),
-        Some(json!({ "categories": { "from": before, "to": category_ids } })),
-        json!({
-            "from_names": from_names.iter().map(|(_, name)| name).collect::<Vec<_>>(),
-            "to_names": to_names.iter().map(|(_, name)| name).collect::<Vec<_>>(),
-        }),
+        LinkAuditEvent {
+            correlation_id,
+            actor,
+            action: "set_categories",
+            entity_type: "supplier",
+            entity_id: supplier_id,
+            summary: format!("Categorías del proveedor #{supplier_id} actualizadas"),
+            changes: Some(json!({ "categories": { "from": before, "to": category_ids } })),
+            metadata: json!({
+                "from_names": from_names.iter().map(|(_, name)| name).collect::<Vec<_>>(),
+                "to_names": to_names.iter().map(|(_, name)| name).collect::<Vec<_>>(),
+            }),
+        },
     )
     .await?;
 
@@ -262,18 +268,20 @@ async fn unmark_preferred(
     );
     record_event(
         conn,
-        correlation_id,
-        actor,
-        "update_variant",
-        "supplier_variant",
-        after.id,
-        format!("Variante #{} dejó de ser preferida", after.variant_id),
-        Some(JsonValue::Object(changes)),
-        json!({
-            "supplier_id": after.supplier_id,
-            "variant_id": after.variant_id,
-            "preferred_by_supplier_id": supplier_id,
-        }),
+        LinkAuditEvent {
+            correlation_id,
+            actor,
+            action: "update_variant",
+            entity_type: "supplier_variant",
+            entity_id: after.id,
+            summary: format!("Variante #{} dejó de ser preferida", after.variant_id),
+            changes: Some(JsonValue::Object(changes)),
+            metadata: json!({
+                "supplier_id": after.supplier_id,
+                "variant_id": after.variant_id,
+                "preferred_by_supplier_id": supplier_id,
+            }),
+        },
     )
     .await?;
     Ok(())
@@ -321,22 +329,24 @@ pub async fn link_supplier_variant(
 
     record_event(
         &mut tx,
-        correlation_id,
-        actor,
-        "link_variant",
-        "supplier_variant",
-        link.id,
-        format!(
-            "Variante #{} vinculada al proveedor #{supplier_id}",
-            link.variant_id
-        ),
-        None,
-        json!({
-            "supplier_id": link.supplier_id,
-            "variant_id": link.variant_id,
-            "supplier_sku": link.supplier_sku,
-            "is_preferred": link.is_preferred,
-        }),
+        LinkAuditEvent {
+            correlation_id,
+            actor,
+            action: "link_variant",
+            entity_type: "supplier_variant",
+            entity_id: link.id,
+            summary: format!(
+                "Variante #{} vinculada al proveedor #{supplier_id}",
+                link.variant_id
+            ),
+            changes: None,
+            metadata: json!({
+                "supplier_id": link.supplier_id,
+                "variant_id": link.variant_id,
+                "supplier_sku": link.supplier_sku,
+                "is_preferred": link.is_preferred,
+            }),
+        },
     )
     .await?;
     tx.commit().await?;
@@ -419,14 +429,16 @@ pub async fn update_supplier_variant(
     );
     record_event(
         &mut tx,
-        correlation_id,
-        actor,
-        "update_variant",
-        "supplier_variant",
-        after.id,
-        format!("Vínculo de variante #{} actualizado", after.variant_id),
-        Some(JsonValue::Object(changes)),
-        json!({ "supplier_id": after.supplier_id, "variant_id": after.variant_id }),
+        LinkAuditEvent {
+            correlation_id,
+            actor,
+            action: "update_variant",
+            entity_type: "supplier_variant",
+            entity_id: after.id,
+            summary: format!("Vínculo de variante #{} actualizado", after.variant_id),
+            changes: Some(JsonValue::Object(changes)),
+            metadata: json!({ "supplier_id": after.supplier_id, "variant_id": after.variant_id }),
+        },
     )
     .await?;
     tx.commit().await?;
@@ -468,24 +480,26 @@ pub async fn unlink_supplier_variant(
 
     record_event(
         &mut tx,
-        Uuid::new_v4(),
-        actor,
-        "unlink_variant",
-        "supplier_variant",
-        link.id,
-        format!(
-            "Variante #{} desvinculada del proveedor #{}",
-            link.variant_id, link.supplier_id
-        ),
-        None,
-        json!({
-            "supplier_id": link.supplier_id,
-            "variant_id": link.variant_id,
-            "supplier_sku": link.supplier_sku,
-            "is_preferred": link.is_preferred,
-            "last_purchase_at": link.last_purchase_at,
-            "notes": link.notes,
-        }),
+        LinkAuditEvent {
+            correlation_id: Uuid::new_v4(),
+            actor,
+            action: "unlink_variant",
+            entity_type: "supplier_variant",
+            entity_id: link.id,
+            summary: format!(
+                "Variante #{} desvinculada del proveedor #{}",
+                link.variant_id, link.supplier_id
+            ),
+            changes: None,
+            metadata: json!({
+                "supplier_id": link.supplier_id,
+                "variant_id": link.variant_id,
+                "supplier_sku": link.supplier_sku,
+                "is_preferred": link.is_preferred,
+                "last_purchase_at": link.last_purchase_at,
+                "notes": link.notes,
+            }),
+        },
     )
     .await?;
     tx.commit().await?;

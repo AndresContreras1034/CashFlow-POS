@@ -182,7 +182,14 @@ pub async fn restore_backup(
     actor: Option<String>,
 ) -> Result<RestoreOutcome, String> {
     let default_dir = default_backup_dir(&app)?;
-    restore::restore(app, pool.inner().clone(), default_dir, PathBuf::from(path), password, actor)
+    restore::restore(
+        app,
+        pool.inner().clone(),
+        default_dir,
+        PathBuf::from(path),
+        password,
+        actor,
+    )
     .await
     .map_err(|e: AppError| e.to_string())
 }
