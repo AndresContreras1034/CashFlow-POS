@@ -10,6 +10,8 @@ export interface TourStep {
 
 export interface TourDef {
   id: string
+  /** Emoji que identifica al módulo en el tour. */
+  icon: string
   label: string
   description: string
   route: string
@@ -26,6 +28,7 @@ export const TOURS: TourDef[] = [
   /* ------------------------------------------------------------------ VENTAS */
   {
     id: 'sales',
+    icon: '🛒',
     label: 'Ventas',
     description: 'Cómo cobrar una venta paso a paso.',
     route: '/sales',
@@ -125,6 +128,7 @@ export const TOURS: TourDef[] = [
   /* ------------------------------------------------------- HISTORIAL VENTAS */
   {
     id: 'sales-history',
+    icon: '🧾',
     label: 'Historial de ventas',
     description: 'Buscar ventas, reimprimir, anular o devolver.',
     route: '/sales-history',
@@ -174,6 +178,7 @@ export const TOURS: TourDef[] = [
   /* -------------------------------------------------------------- INVENTARIO */
   {
     id: 'inventory',
+    icon: '📦',
     label: 'Inventario',
     description: 'Productos, stock, filtros, Excel y toma de inventario.',
     route: '/inventory',
@@ -263,6 +268,7 @@ export const TOURS: TourDef[] = [
   /* ------------------------------------------------------ DETALLE PRODUCTO */
   {
     id: 'product-detail',
+    icon: '🏷️',
     label: 'Detalle de producto',
     description: 'Variantes, movimientos de stock y kardex.',
     route: '/inventory',
@@ -323,6 +329,7 @@ export const TOURS: TourDef[] = [
   /* -------------------------------------------------------------- STOCKTAKE */
   {
     id: 'stocktake',
+    icon: '📋',
     label: 'Toma de inventario',
     description: 'Conteo físico y ajuste de diferencias.',
     route: '/stocktake',
@@ -390,6 +397,7 @@ export const TOURS: TourDef[] = [
   /* -------------------------------------------------------------------- CAJA */
   {
     id: 'cash',
+    icon: '💵',
     label: 'Caja',
     description: 'Turnos, movimientos manuales, arqueo e informes X / Z.',
     route: '/cash',
@@ -461,6 +469,7 @@ export const TOURS: TourDef[] = [
   /* ---------------------------------------------------------------- CLIENTES */
   {
     id: 'customers',
+    icon: '👥',
     label: 'Clientes',
     description: 'Directorio de clientes y sus compras.',
     route: '/customers',
@@ -509,6 +518,7 @@ export const TOURS: TourDef[] = [
   /* ------------------------------------------------------------------ DEUDAS */
   {
     id: 'debts',
+    icon: '💳',
     label: 'Deudas',
     description: 'Obligaciones por pagar del negocio y sus abonos.',
     route: '/debts',
@@ -605,6 +615,7 @@ export const TOURS: TourDef[] = [
   /* ------------------------------------------------------------- PROVEEDORES */
   {
     id: 'suppliers',
+    icon: '🚚',
     label: 'Proveedores',
     description: 'Directorio, reposición de stock y panel “Para llamar”.',
     route: '/suppliers',
@@ -695,6 +706,7 @@ export const TOURS: TourDef[] = [
   /* ---------------------------------------------------------------- REPORTES */
   {
     id: 'reports',
+    icon: '📊',
     label: 'Reportes',
     description: 'Resumen, productos, inventario y obligaciones.',
     route: '/reports',
@@ -762,6 +774,7 @@ export const TOURS: TourDef[] = [
   /* --------------------------------------------------------------- AUDITORÍA */
   {
     id: 'audit',
+    icon: '🔍',
     label: 'Auditoría',
     description: 'Registro de solo lectura de las operaciones.',
     route: '/audit',
@@ -838,6 +851,7 @@ export const TOURS: TourDef[] = [
   /* ----------------------------------------------------------------- AJUSTES */
   {
     id: 'settings',
+    icon: '⚙️',
     label: 'Ajustes',
     description: 'Negocio, dinero, ticket, temas, atajos y copias de seguridad.',
     route: '/settings',
