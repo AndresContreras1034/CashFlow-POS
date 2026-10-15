@@ -153,6 +153,9 @@ pub struct StaleProduct {
     /// True when the inventory value is understated because no unit cost is recorded.
     pub cost_missing: bool,
     pub days_since_last_sale: Option<i64>,
+    pub total_value_at_cost: i64,
+    pub total_rows: i64,
+    pub total_without_cost: i64,
 }
 
 /// Current stock and cost snapshot; date filters are intentionally ignored.

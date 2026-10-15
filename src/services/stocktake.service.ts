@@ -37,6 +37,12 @@ export const setStocktakeCount = (
 ): Promise<void> =>
   invoke('set_stocktake_count', { stocktakeId, variantId, countedStock });
 
+export const incrementStocktakeCount = (
+  stocktakeId: number,
+  variantId: number
+): Promise<number> =>
+  invoke('increment_stocktake_count', { stocktakeId, variantId });
+
 export const getStocktakeReview = (stocktakeId: number): Promise<StocktakeReviewDto> =>
   invoke('get_stocktake_review', { stocktakeId });
 

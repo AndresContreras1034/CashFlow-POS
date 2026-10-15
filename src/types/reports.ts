@@ -112,6 +112,9 @@ export interface StaleProduct {
   stock_value_at_cost: number;
   cost_missing: boolean;
   days_since_last_sale: number | null;
+  total_value_at_cost: number;
+  total_rows: number;
+  total_without_cost: number;
 }
 
 export interface CategoryValuation {

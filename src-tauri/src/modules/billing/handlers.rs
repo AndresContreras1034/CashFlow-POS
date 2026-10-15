@@ -1,4 +1,4 @@
-use chrono::{DateTime, Utc};
+use chrono::{DateTime, NaiveDateTime, Utc};
 use sqlx::PgPool;
 use tauri::State;
 
@@ -44,6 +44,21 @@ struct ItemRow {
 struct PaymentRow {
     method: PaymentMethod,
     amount: i64,
+}
+
+async fn local_sale_time(
+    pool: &PgPool,
+    created_at: DateTime<Utc>,
+    timezone: &str,
+) -> Result<NaiveDateTime, String> {
+    sqlx::query_scalar("SELECT $1::TIMESTAMPTZ AT TIME ZONE $2")
+        .bind(created_at)
+        .bind(timezone)
+        .fetch_one(pool)
+        .await
+        .map_err(|error| {
+            format!("No se pudo convertir la fecha del ticket a la zona de Ajustes: {error}")
+        })
 }
 
 // ------------------------------------------------------------
@@ -140,6 +155,7 @@ async fn fetch_ticket_data(pool: &PgPool, sale_id: i32) -> Result<TicketData, St
              Ve a Ajustes y guarda el nombre del negocio antes de imprimir."
                 .to_string()
         })?;
+    let local_created_at = local_sale_time(pool, sale.created_at, &settings.timezone).await?;
 
     let lines: Vec<TicketLine> = item_rows
         .into_iter()
@@ -182,7 +198,7 @@ async fn fetch_ticket_data(pool: &PgPool, sale_id: i32) -> Result<TicketData, St
 
         sale_id: sale.id,
         ticket_number: counter::ticket_number(sale.id),
-        created_at: sale.created_at,
+        created_at: local_created_at,
         created_by: sale.created_by,
         status: sale.status,
         courtesy_reason: sale.courtesy_reason,
@@ -236,7 +252,7 @@ pub async fn print_sale_ticket(
 
     let bytes = ticket::build_sale_ticket_with_copy(&data, copy.unwrap_or(false));
 
-    printer::print_raw(&bytes)
+    printer::print_raw(pool.inner(), &bytes).await
 }
 
 #[tauri::command]
@@ -263,5 +279,23 @@ pub async fn print_cash_report(
         is_copy: copy.unwrap_or(false),
     };
     let bytes = ticket::build_cash_report_ticket(&data);
-    printer::print_raw(&bytes)
+    printer::print_raw(pool.inner(), &bytes).await
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[sqlx::test(migrations = "./migrations")]
+    async fn ticket_time_uses_settings_timezone_across_midnight(pool: PgPool) {
+        let utc = DateTime::parse_from_rfc3339("2025-01-01T01:30:00Z")
+            .unwrap()
+            .with_timezone(&Utc);
+
+        let local = local_sale_time(&pool, utc, "America/Bogota").await.unwrap();
+        assert_eq!(
+            local.format("%d/%m/%Y %I:%M %p").to_string(),
+            "31/12/2024 08:30 PM"
+        );
+    }
 }

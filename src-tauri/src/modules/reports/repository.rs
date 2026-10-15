@@ -192,6 +192,9 @@ struct StaleProductRow {
     stock_value_at_cost: i64,
     cost_missing: bool,
     days_since_last_sale: Option<i64>,
+    total_value_at_cost: i64,
+    total_rows: i64,
+    total_without_cost: i64,
 }
 
 #[derive(sqlx::FromRow)]
@@ -631,15 +634,14 @@ pub async fn fetch_stale_products(
     category_id: Option<i32>,
     limit: i64,
 ) -> Result<Vec<StaleProduct>, sqlx::Error> {
-    let rows = sqlx::query_as!(
-        StaleProductRow,
+    let rows = sqlx::query_as::<_, StaleProductRow>(
         r#"SELECT
-               v.id AS "variant_id!",
-               p.name AS "product_name!",
-               v.attributes AS "attributes!",
-               v.stock AS "stock!",
-               (v.stock::NUMERIC * v.cost::NUMERIC)::BIGINT AS "stock_value_at_cost!",
-               (v.cost = 0) AS "cost_missing!",
+               v.id AS variant_id,
+               p.name AS product_name,
+               v.attributes,
+               v.stock,
+               (v.stock::NUMERIC * v.cost::NUMERIC)::BIGINT AS stock_value_at_cost,
+               (v.cost = 0) AS cost_missing,
                (
                    $2::DATE - (
                        SELECT MAX((prior.created_at AT TIME ZONE $3)::DATE)
@@ -652,7 +654,14 @@ pub async fn fetch_stale_products(
                                AND prior_item.variant_id = v.id
                          )
                    )
-               )::BIGINT AS "days_since_last_sale?"
+               )::BIGINT AS days_since_last_sale,
+               COALESCE(
+                   SUM(v.stock::NUMERIC * v.cost::NUMERIC)
+                       FILTER (WHERE v.cost > 0) OVER (),
+                   0
+               )::BIGINT AS total_value_at_cost,
+               COUNT(*) OVER () AS total_rows,
+               COUNT(*) FILTER (WHERE v.cost = 0) OVER () AS total_without_cost
            FROM product_variants v
            JOIN products p ON p.id = v.product_id
            WHERE v.is_active
@@ -671,12 +680,12 @@ pub async fn fetch_stale_products(
              )
            ORDER BY 5 DESC, v.id ASC
            LIMIT $5"#,
-        range.from,
-        range.to,
-        timezone,
-        category_id,
-        limit
     )
+    .bind(range.from)
+    .bind(range.to)
+    .bind(timezone)
+    .bind(category_id)
+    .bind(limit)
     .fetch_all(pool)
     .await?;
 
@@ -690,6 +699,9 @@ pub async fn fetch_stale_products(
             stock_value_at_cost: row.stock_value_at_cost,
             cost_missing: row.cost_missing,
             days_since_last_sale: row.days_since_last_sale,
+            total_value_at_cost: row.total_value_at_cost,
+            total_rows: row.total_rows,
+            total_without_cost: row.total_without_cost,
         })
         .collect())
 }

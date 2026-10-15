@@ -25,6 +25,8 @@ use crate::modules::inventory::{
 
 use crate::errors::app_error::AppError;
 
+const MAX_STOCK_MOVEMENT_QUANTITY: i32 = 1_000_000;
+
 // ============================================================
 // CATEGORÍAS
 // ============================================================
@@ -49,13 +51,18 @@ pub async fn create_category(pool: &PgPool, dto: CreateCategoryDto) -> Result<Ca
         ));
     }
 
-    repository::create_category(pool, dto).await.map_err(|e| {
-        if e.to_string().contains("unique") {
-            AppError::validation("Ya existe una categoría con ese nombre")
-        } else {
-            AppError::from(e)
-        }
-    })
+    repository::create_category(pool, dto)
+        .await
+        .map_err(|error| {
+            if error
+                .as_database_error()
+                .is_some_and(|database_error| database_error.is_unique_violation())
+            {
+                AppError::validation("Ya existe una categoría con ese nombre")
+            } else {
+                AppError::from(error)
+            }
+        })
 }
 
 pub async fn update_category(
@@ -138,9 +145,9 @@ pub async fn deactivate_product(pool: &PgPool, id: i32) -> Result<Product, AppEr
         UpdateProductDto {
             category_id: None,
             name: None,
-            description: None,
-            brand: None,
-            image_url: None,
+            description: crate::modules::inventory::dto::NullableField::Absent,
+            brand: crate::modules::inventory::dto::NullableField::Absent,
+            image_url: crate::modules::inventory::dto::NullableField::Absent,
             is_active: Some(false),
         },
     )
@@ -363,13 +370,33 @@ async fn record_stock_entry(
     Ok(variant)
 }
 
+async fn validate_stock_entry(pool: &PgPool, dto: &StockEntryDto) -> Result<(), AppError> {
+    if !(1..=MAX_STOCK_MOVEMENT_QUANTITY).contains(&dto.quantity) {
+        return Err(AppError::validation(&format!(
+            "La cantidad debe estar entre 1 y {MAX_STOCK_MOVEMENT_QUANTITY}"
+        )));
+    }
+    if let Some(unit_cost) = dto.unit_cost {
+        let decimals: i16 =
+            sqlx::query_scalar("SELECT currency_decimals FROM app_settings WHERE id = 1")
+                .fetch_one(pool)
+                .await
+                .map_err(AppError::from)?;
+        let step = if decimals == 0 { 100 } else { 1 };
+        if unit_cost < 0 || unit_cost % step != 0 {
+            return Err(AppError::validation(
+                "El costo unitario debe ser no negativo y respetar los decimales de la moneda",
+            ));
+        }
+    }
+    Ok(())
+}
+
 pub async fn register_stock_entry(
     pool: &PgPool,
     dto: StockEntryDto,
 ) -> Result<ProductVariant, AppError> {
-    if dto.quantity <= 0 {
-        return Err(AppError::validation("La cantidad debe ser mayor a cero"));
-    }
+    validate_stock_entry(pool, &dto).await?;
 
     // Verificar que la variante existe
     get_variant(pool, dto.variant_id).await?;
@@ -381,9 +408,7 @@ pub async fn register_initial_stock(
     pool: &PgPool,
     dto: StockEntryDto,
 ) -> Result<ProductVariant, AppError> {
-    if dto.quantity <= 0 {
-        return Err(AppError::validation("La cantidad debe ser mayor a cero"));
-    }
+    validate_stock_entry(pool, &dto).await?;
 
     get_variant(pool, dto.variant_id).await?;
 
@@ -394,9 +419,7 @@ pub async fn register_manual_entry(
     pool: &PgPool,
     dto: StockEntryDto,
 ) -> Result<ProductVariant, AppError> {
-    if dto.quantity <= 0 {
-        return Err(AppError::validation("La cantidad debe ser mayor a cero"));
-    }
+    validate_stock_entry(pool, &dto).await?;
 
     get_variant(pool, dto.variant_id).await?;
 
@@ -407,8 +430,10 @@ pub async fn register_manual_out(
     pool: &PgPool,
     dto: StockOutDto,
 ) -> Result<ProductVariant, AppError> {
-    if dto.quantity <= 0 {
-        return Err(AppError::validation("La cantidad debe ser mayor a cero"));
+    if !(1..=MAX_STOCK_MOVEMENT_QUANTITY).contains(&dto.quantity) {
+        return Err(AppError::validation(&format!(
+            "La cantidad debe estar entre 1 y {MAX_STOCK_MOVEMENT_QUANTITY}"
+        )));
     }
 
     validate_reason(dto.reason, &dto.notes)?;
@@ -649,8 +674,7 @@ pub async fn print_variant_labels(
     let bytes =
         super::label::build_labels(&data, copies).map_err(|error| AppError::validation(&error))?;
 
-    tokio::task::spawn_blocking(move || crate::modules::billing::printer::print_raw(&bytes))
+    crate::modules::billing::printer::print_raw(pool, &bytes)
         .await
-        .map_err(|error| AppError::internal(&format!("Falló la impresión: {}", error)))?
         .map_err(|error| AppError::internal(&error))
 }

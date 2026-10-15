@@ -62,17 +62,24 @@ pub async fn insert_lines(
     stocktake_id: i32,
     category_id: Option<i32>,
 ) -> Result<u64, sqlx::Error> {
-    let result = sqlx::query!(
-        "INSERT INTO stocktake_lines (stocktake_id, variant_id, expected_stock)
-         SELECT $1, v.id, v.stock
-         FROM product_variants v
-         JOIN products p ON p.id = v.product_id
-         WHERE v.is_active = TRUE
-           AND p.is_active = TRUE
-           AND ($2::INT IS NULL OR p.category_id = $2)",
-        stocktake_id,
-        category_id
+    let result = sqlx::query(
+        "WITH locked_variants AS (
+             SELECT v.id, v.stock
+             FROM product_variants v
+             JOIN products p ON p.id = v.product_id
+             WHERE v.is_active = TRUE
+               AND p.is_active = TRUE
+               AND ($2::INT IS NULL OR p.category_id = $2)
+             ORDER BY v.id
+             FOR UPDATE OF v
+         )
+         INSERT INTO stocktake_lines
+             (stocktake_id, variant_id, expected_stock, stock_at_count)
+         SELECT $1, id, stock, stock
+         FROM locked_variants",
     )
+    .bind(stocktake_id)
+    .bind(category_id)
     .execute(&mut *conn)
     .await?;
     Ok(result.rows_affected())
@@ -216,6 +223,26 @@ pub async fn set_count(
     Ok(result.rows_affected())
 }
 
+pub async fn increment_count(
+    conn: &mut PgConnection,
+    stocktake_id: i32,
+    variant_id: i32,
+) -> Result<Option<i32>, sqlx::Error> {
+    sqlx::query_scalar(
+        "UPDATE stocktake_lines
+         SET counted_stock = COALESCE(counted_stock, 0) + 1,
+             counted_at = NOW()
+         WHERE stocktake_id = $1
+           AND variant_id = $2
+           AND COALESCE(counted_stock, 0) < 2147483647
+         RETURNING counted_stock",
+    )
+    .bind(stocktake_id)
+    .bind(variant_id)
+    .fetch_optional(&mut *conn)
+    .await
+}
+
 pub async fn get_review_summary(
     conn: &mut PgConnection,
     stocktake_id: i32,
@@ -275,20 +302,16 @@ pub async fn get_review_lines(
 pub async fn get_counted_lines(
     conn: &mut PgConnection,
     stocktake_id: i32,
-) -> Result<Vec<(i32, i32)>, sqlx::Error> {
-    let rows = sqlx::query!(
-        r#"SELECT variant_id, counted_stock AS "counted_stock!"
+) -> Result<Vec<(i32, i32, i32)>, sqlx::Error> {
+    sqlx::query_as::<_, (i32, i32, i32)>(
+        r#"SELECT variant_id, counted_stock, stock_at_count
            FROM stocktake_lines
            WHERE stocktake_id = $1 AND counted_stock IS NOT NULL
            ORDER BY variant_id"#,
-        stocktake_id
     )
+    .bind(stocktake_id)
     .fetch_all(&mut *conn)
-    .await?;
-    Ok(rows
-        .into_iter()
-        .map(|row| (row.variant_id, row.counted_stock))
-        .collect())
+    .await
 }
 
 pub async fn lock_variant_stock(

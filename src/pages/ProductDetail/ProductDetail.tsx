@@ -39,6 +39,8 @@ const errorMessage = (error: unknown): string =>
       ? error.message
       : 'Error desconocido';
 
+const KARDEX_PAGE_SIZE = 50;
+
 export const ProductDetail: React.FC = () => {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
@@ -48,6 +50,8 @@ export const ProductDetail: React.FC = () => {
   const [variants, setVariants] = useState<ProductVariant[]>([]);
   const [movements, setMovements] = useState<MovementWithDetails[]>([]);
   const [movementsTotal, setMovementsTotal] = useState(0);
+  const [kardexPage, setKardexPage] = useState(1);
+  const [kardexTotalPages, setKardexTotalPages] = useState(1);
   const [toasts, setToasts] = useState<ToastData[]>([]);
   const [activeTab, setActiveTab] = useState<'variants' | 'kardex'>('variants');
   const [showCreateVar, setShowCreateVar] = useState(false);
@@ -76,16 +80,13 @@ export const ProductDetail: React.FC = () => {
 
       try {
         setLoading(true);
-        const [productRes, variantsRes, kardexRes] = await Promise.all([
+        const [productRes, variantsRes] = await Promise.all([
           getProduct(productId),
           listVariants(productId),
-          getKardex({ product_id: productId }),
         ]);
 
         setProduct(productRes);
         setVariants(variantsRes);
-        setMovements(kardexRes.data);
-        setMovementsTotal(kardexRes.total);
       } catch (error) {
         setNotFound(true);
         addToast('No se pudo cargar el producto', 'error');
@@ -97,15 +98,31 @@ export const ProductDetail: React.FC = () => {
     load();
   }, [productId, addToast]);
 
-  const refreshMovements = useCallback(async () => {
+  const loadKardex = useCallback(async (page: number) => {
     try {
-      const kardexRes = await getKardex({ product_id: productId });
+      const kardexRes = await getKardex({
+        product_id: productId,
+        page,
+        page_size: KARDEX_PAGE_SIZE,
+      });
       setMovements(kardexRes.data);
       setMovementsTotal(kardexRes.total);
+      setKardexTotalPages(Math.max(kardexRes.total_pages, 1));
+      if (page > kardexRes.total_pages) {
+        setKardexPage(Math.max(kardexRes.total_pages, 1));
+      }
     } catch (error) {
-      addToast('No se pudo actualizar el kardex', 'error');
+      addToast(`No se pudo cargar el kardex: ${errorMessage(error)}`, 'error');
     }
   }, [productId, addToast]);
+
+  useEffect(() => {
+    void loadKardex(kardexPage);
+  }, [loadKardex, kardexPage]);
+
+  const refreshMovements = useCallback(async () => {
+    await loadKardex(kardexPage);
+  }, [loadKardex, kardexPage]);
 
   const handleCreateVariant = async (dto: CreateVariantDto | UpdateVariantDto) => {
     if (Number.isNaN(productId)) return;
@@ -353,6 +370,29 @@ export const ProductDetail: React.FC = () => {
             <h2 className="section-title">Kardex de movimientos</h2>
           </div>
           <KardexTable movements={movements} />
+          {movementsTotal > KARDEX_PAGE_SIZE && (
+            <nav className="kardex-pagination" aria-label="Paginación del kardex">
+              <button
+                type="button"
+                className="btn btn-ghost"
+                disabled={kardexPage <= 1}
+                onClick={() => setKardexPage(page => Math.max(1, page - 1))}
+              >
+                Anterior
+              </button>
+              <span>
+                Página <strong>{kardexPage}</strong> de <strong>{kardexTotalPages}</strong>
+              </span>
+              <button
+                type="button"
+                className="btn btn-ghost"
+                disabled={kardexPage >= kardexTotalPages}
+                onClick={() => setKardexPage(page => Math.min(kardexTotalPages, page + 1))}
+              >
+                Siguiente
+              </button>
+            </nav>
+          )}
         </div>
       )}
 

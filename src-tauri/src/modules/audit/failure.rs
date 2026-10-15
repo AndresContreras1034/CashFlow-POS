@@ -25,22 +25,12 @@ pub struct FailureContext<'a> {
 /// "no encontrado" son respuestas esperadas del negocio.
 fn technical_details(error: &AppError) -> Option<(&'static str, String)> {
     match error {
-        AppError::Database(sqlx_error) => {
-            let message = match sqlx_error.as_database_error() {
-                Some(db) => format!(
-                    "Error de base de datos (código {}, constraint {})",
-                    db.code().as_deref().unwrap_or("?"),
-                    db.constraint().unwrap_or("-")
-                ),
-                None => format!("Error de base de datos: {sqlx_error}"),
-            };
-            Some(("database", message))
-        }
+        AppError::Database(_) => Some(("database", "Error interno de base de datos".to_string())),
         AppError::Internal(message) => Some((
             "internal",
             message.chars().take(MAX_MESSAGE_CHARS).collect(),
         )),
-        AppError::Validation(_) | AppError::NotFound(_) => None,
+        AppError::Validation(_) | AppError::Conflict(_) | AppError::NotFound(_) => None,
     }
 }
 
@@ -132,13 +122,16 @@ mod tests {
     #[test]
     fn business_rejections_are_not_audited() {
         assert!(technical_details(&AppError::validation("monto inválido")).is_none());
+        assert!(technical_details(&AppError::conflict("ya existe")).is_none());
         assert!(technical_details(&AppError::not_found("no existe")).is_none());
     }
 
     #[test]
     fn technical_errors_are_audited() {
-        let (kind, _) = technical_details(&AppError::Database(sqlx::Error::PoolTimedOut)).unwrap();
+        let (kind, message) =
+            technical_details(&AppError::Database(sqlx::Error::PoolTimedOut)).unwrap();
         assert_eq!(kind, "database");
+        assert_eq!(message, "Error interno de base de datos");
 
         let (kind, message) = technical_details(&AppError::internal("falló")).unwrap();
         assert_eq!(kind, "internal");

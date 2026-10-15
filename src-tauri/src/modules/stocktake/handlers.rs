@@ -69,6 +69,17 @@ pub async fn set_stocktake_count(
 }
 
 #[tauri::command]
+pub async fn increment_stocktake_count(
+    pool: State<'_, DbPool>,
+    stocktake_id: i32,
+    variant_id: i32,
+) -> Result<i32, String> {
+    service::increment_count(&pool, stocktake_id, variant_id)
+        .await
+        .map_err(|error| error.to_string())
+}
+
+#[tauri::command]
 pub async fn get_stocktake_review(
     pool: State<'_, DbPool>,
     stocktake_id: i32,

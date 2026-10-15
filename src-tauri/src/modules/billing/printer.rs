@@ -14,13 +14,6 @@
 //! puerto USB001 → driver Generic/Text Only) y saber el nombre EXACTO
 //! que le pusiste.
 
-/// Nombre exacto de la impresora tal como aparece en
-/// Configuración → Impresoras y escáneres.
-///
-/// TODO: mover esto a app_settings cuando haya tiempo, para no
-/// tener que recompilar si cambia el nombre o el equipo.
-pub const PRINTER_NAME: &str = "DIG58IIA";
-
 #[cfg(windows)]
 mod win {
     use std::ptr::null_mut;
@@ -104,19 +97,34 @@ mod win {
 }
 
 #[cfg(windows)]
-pub fn print_raw(bytes: &[u8]) -> Result<(), String> {
-    win::print_raw_to_printer(PRINTER_NAME, bytes)
+pub async fn print_raw(pool: &sqlx::PgPool, bytes: &[u8]) -> Result<(), String> {
+    let settings = crate::modules::settings::repository::get_settings(pool)
+        .await
+        .map_err(|error| format!("No se pudo leer el nombre de la impresora en Ajustes: {error}"))?
+        .ok_or_else(|| "No existe la configuración del negocio en Ajustes.".to_string())?;
+    let printer_name = settings
+        .printer_name
+        .filter(|name| !name.trim().is_empty())
+        .ok_or_else(|| {
+            "No hay una impresora configurada. Indica su nombre en Ajustes antes de imprimir."
+                .to_string()
+        })?;
+    let bytes = bytes.to_vec();
+
+    tokio::task::spawn_blocking(move || win::print_raw_to_printer(&printer_name, &bytes))
+        .await
+        .map_err(|error| format!("Falló el proceso de impresión: {error}"))?
 }
 
 #[cfg(not(windows))]
-pub fn print_raw(_bytes: &[u8]) -> Result<(), String> {
+pub async fn print_raw(_pool: &sqlx::PgPool, _bytes: &[u8]) -> Result<(), String> {
     Err("La impresión térmica solo está implementada para Windows por ahora.".into())
 }
 
 /// Ticket mínimo de prueba, útil para verificar que el nombre de impresora
 /// y el driver Generic/Text Only funcionan antes de probar con una venta real.
 #[allow(dead_code)]
-pub fn print_test_ticket() -> Result<(), String> {
+pub async fn print_test_ticket(pool: &sqlx::PgPool) -> Result<(), String> {
     let mut buf = Vec::new();
 
     buf.extend_from_slice(b"\x1B\x40"); // ESC @ — reset impresora
@@ -125,5 +133,5 @@ pub fn print_test_ticket() -> Result<(), String> {
     buf.extend_from_slice(b"Prueba de impresora\n\n");
     buf.extend_from_slice(b"\x1D\x56\x00"); // GS V 0 — corte total de papel
 
-    print_raw(&buf)
+    print_raw(pool, &buf).await
 }

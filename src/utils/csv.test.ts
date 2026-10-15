@@ -12,6 +12,16 @@ describe('toCsv', () => {
     expect(csv.charCodeAt(0)).toBe(0xFEFF);
     expect(csv).toBe("\uFEFFDato\r\n'=1+1");
   });
+
+  it('neutralizes tabs and carriage returns without altering numeric amounts or phone numbers', () => {
+    const csv = toCsv(
+      ['Monto', 'Teléfono', 'Tab', 'Retorno'],
+      [['-1234,56', '+573001234567', '\t=1+1', '\r@SUM(A1:A2)']],
+    );
+    expect(csv).toBe(
+      "\uFEFFMonto;Teléfono;Tab;Retorno\r\n-1234,56;+573001234567;\"'\t=1+1\";\"'\r@SUM(A1:A2)\"",
+    );
+  });
 });
 
 describe('formatCsvAmount', () => {
@@ -21,5 +31,9 @@ describe('formatCsvAmount', () => {
 
   it('formats minor units with two currency decimals and a comma separator', () => {
     expect(formatCsvAmount(123_456, 2)).toBe('1234,56');
+  });
+
+  it('preserves the sign of a negative amount', () => {
+    expect(formatCsvAmount(-123_456, 2)).toBe('-1234,56');
   });
 });

@@ -176,7 +176,7 @@ export function ProductsTab({
       rank_by: rankBy,
       limit: productLimit,
     };
-    const staleFilter: ReportFilter = { ...shared, category_id: categoryId };
+    const staleFilter: ReportFilter = { ...shared, category_id: categoryId, limit: productLimit };
 
     Promise.allSettled([
       getTopProducts(topFilter),
@@ -444,22 +444,22 @@ export function ProductsTab({
           emptyText="No hay productos con stock sin movimiento en este período."
         >
           {rows => {
-            const totalValue = rows.reduce(
-              (total, product) => total + BigInt(product.stock_value_at_cost),
-              0n,
-            );
-            const missingCostCount = rows.filter(product => product.cost_missing).length;
+            const totalValue = BigInt(rows[0].total_value_at_cost);
+            const missingCostCount = rows[0].total_without_cost;
             return (
               <>
                 <div className="reports-stale-summary">
                   <div>
-                    <span>Valor inmovilizado a costo</span>
+                    <span>Valor inmovilizado total a costo</span>
                     <strong>{money(Number(totalValue))}</strong>
                   </div>
                   <div>
-                    <span>Filas sin costo</span>
+                    <span>Variantes sin costo (total)</span>
                     <strong>{missingCostCount}</strong>
                   </div>
+                  <p className="reports-stale-warning" role="status">
+                    Mostrando {rows.length} de {rows[0].total_rows} variantes sin movimiento.
+                  </p>
                   {missingCostCount > 0 && (
                     <p className="reports-stale-warning" role="status">
                       El valor está subestimado porque hay productos sin costo registrado.

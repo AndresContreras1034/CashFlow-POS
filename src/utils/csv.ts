@@ -1,15 +1,25 @@
 export type CsvCell = string | number | null;
 
+function isNumericText(value: string): boolean {
+  return /^[+-]?\d+(?:[.,]\d+)?$/.test(value.trim());
+}
+
+function isInternationalPhone(value: string): boolean {
+  if (!/^\+\d(?:[\d ()-]*\d)?$/.test(value.trim())) return false;
+  const digits = value.replace(/\D/g, '');
+  return digits.length >= 7 && digits.length <= 15;
+}
+
 export function toCsv(headers: string[], rows: CsvCell[][]): string {
   const escapeCell = (value: CsvCell): string => {
     if (value === null) return '';
-    const text = typeof value === 'number'
-      ? String(value).replace('.', ',')
-      : /^[=+\-@]/.test(value)
-        ? `'${value}`
-        : value;
+    if (typeof value === 'number') return String(value).replace('.', ',');
+    const dangerousFormula = /^[ \t\r\n]*[=+\-@]/.test(value);
+    const text = dangerousFormula && !isNumericText(value) && !isInternationalPhone(value)
+      ? `'${value}`
+      : value;
     const escaped = text.replace(/"/g, '""');
-    return /[;"\r\n]/.test(escaped) ? `"${escaped}"` : escaped;
+    return /[;"\t\r\n]/.test(escaped) ? `"${escaped}"` : escaped;
   };
 
   return `\uFEFF${[headers, ...rows]

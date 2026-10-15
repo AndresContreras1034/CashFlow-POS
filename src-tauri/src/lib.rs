@@ -242,6 +242,7 @@ pub fn run() {
             list_stocktake_lines,
             find_stocktake_line_by_code,
             set_stocktake_count,
+            increment_stocktake_count,
             get_stocktake_review,
             apply_stocktake,
             cancel_stocktake,

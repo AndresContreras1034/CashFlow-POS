@@ -37,6 +37,9 @@ export const ImportInventoryModal: React.FC<Props> = ({ onClose, onImported, add
   const [executing, setExecuting] = useState(false);
   const [phase, setPhase] = useState<'idle' | 'backup' | 'import'>('idle');
   const [savingTemplate, setSavingTemplate] = useState(false);
+  const handleClose = () => {
+    if (!executing) onClose();
+  };
 
   const handlePickFile = async () => {
     setLoading(true);
@@ -112,7 +115,7 @@ export const ImportInventoryModal: React.FC<Props> = ({ onClose, onImported, add
   };
 
   return (
-    <Modal title="Importar inventario desde Excel" onClose={onClose}>
+    <Modal title="Importar inventario desde Excel" onClose={handleClose}>
       <div className="import-modal">
         <div className="import-actions">
           <button className="btn btn-ghost" onClick={handleTemplate} disabled={savingTemplate}>
@@ -180,7 +183,7 @@ export const ImportInventoryModal: React.FC<Props> = ({ onClose, onImported, add
             )}
 
             <div className="import-actions">
-              <button className="btn btn-ghost" onClick={onClose}>
+              <button className="btn btn-ghost" onClick={handleClose} disabled={executing}>
                 Cancelar
               </button>
               <button

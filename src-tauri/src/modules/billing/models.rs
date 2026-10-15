@@ -1,4 +1,4 @@
-use chrono::{DateTime, Utc};
+use chrono::NaiveDateTime;
 use serde::Serialize;
 
 use crate::modules::cash::models::CashSessionReport;
@@ -50,7 +50,7 @@ pub struct TicketData {
     // Datos de la venta
     pub sale_id: i32,
     pub ticket_number: String,
-    pub created_at: DateTime<Utc>,
+    pub created_at: NaiveDateTime,
     pub created_by: String,
     pub status: SaleStatus,
     pub courtesy_reason: Option<String>,

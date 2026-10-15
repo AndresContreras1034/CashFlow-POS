@@ -439,6 +439,15 @@ fn limit_rows(mut rows: Vec<ImportRowResult>) -> Vec<ImportRowResult> {
     rows
 }
 
+async fn lock_inventory_import(conn: &mut sqlx::PgConnection) -> Result<(), sqlx::Error> {
+    sqlx::query("SELECT pg_advisory_xact_lock($1, $2)")
+        .bind(1_983_721_i32)
+        .bind(34_i32)
+        .execute(&mut *conn)
+        .await?;
+    Ok(())
+}
+
 async fn run_import(
     pool: &PgPool,
     path: &str,
@@ -451,6 +460,12 @@ async fn run_import(
         .map_err(|e| AppError::internal(&format!("Falló la lectura del Excel: {}", e)))??;
 
     let mut tx = pool.begin().await.map_err(AppError::from)?;
+
+    if !dry_run {
+        lock_inventory_import(&mut tx)
+            .await
+            .map_err(AppError::from)?;
+    }
 
     let decimals: i16 =
         sqlx::query_scalar("SELECT currency_decimals FROM app_settings WHERE id = 1")
@@ -898,6 +913,32 @@ pub async fn execute_import(pool: &PgPool, path: &str) -> Result<ImportSummaryDt
 #[cfg(test)]
 mod tests {
     use super::*;
+    use sqlx::PgPool;
+
+    #[sqlx::test(migrations = "./migrations")]
+    async fn import_lock_serializes_transactions_until_commit(pool: PgPool) {
+        let mut first = pool.begin().await.unwrap();
+        let mut second = pool.begin().await.unwrap();
+        lock_inventory_import(&mut first).await.unwrap();
+
+        let acquired: bool = sqlx::query_scalar("SELECT pg_try_advisory_xact_lock($1, $2)")
+            .bind(1_983_721_i32)
+            .bind(34_i32)
+            .fetch_one(&mut *second)
+            .await
+            .unwrap();
+        assert!(!acquired);
+
+        first.rollback().await.unwrap();
+        let acquired: bool = sqlx::query_scalar("SELECT pg_try_advisory_xact_lock($1, $2)")
+            .bind(1_983_721_i32)
+            .bind(34_i32)
+            .fetch_one(&mut *second)
+            .await
+            .unwrap();
+        assert!(acquired);
+        second.commit().await.unwrap();
+    }
 
     fn valid_data_row() -> Vec<Data> {
         let mut row = vec![Data::Empty; IMPORT_HEADERS.len()];

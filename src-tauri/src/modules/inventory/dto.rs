@@ -1,5 +1,5 @@
 use chrono::NaiveDate;
-use serde::{Deserialize, Serialize};
+use serde::{Deserialize, Deserializer, Serialize};
 use serde_json::Value as JsonValue;
 
 use crate::modules::inventory::models::{MovementReason, StockStatus};
@@ -25,6 +25,36 @@ pub struct UpdateCategoryDto {
 // PRODUCTOS
 // ============================================================
 
+#[derive(Debug, Default)]
+pub enum NullableField<T> {
+    #[default]
+    Absent,
+    Null,
+    Value(T),
+}
+
+impl<'de, T: Deserialize<'de>> Deserialize<'de> for NullableField<T> {
+    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
+    where
+        D: Deserializer<'de>,
+    {
+        Ok(match Option::<T>::deserialize(deserializer)? {
+            Some(value) => Self::Value(value),
+            None => Self::Null,
+        })
+    }
+}
+
+impl<T> NullableField<T> {
+    pub fn into_update_value(self) -> (bool, Option<T>) {
+        match self {
+            Self::Absent => (false, None),
+            Self::Null => (true, None),
+            Self::Value(value) => (true, Some(value)),
+        }
+    }
+}
+
 #[derive(Debug, Deserialize)]
 pub struct CreateProductDto {
     pub category_id: i32,
@@ -38,9 +68,12 @@ pub struct CreateProductDto {
 pub struct UpdateProductDto {
     pub category_id: Option<i32>,
     pub name: Option<String>,
-    pub description: Option<String>,
-    pub brand: Option<String>,
-    pub image_url: Option<String>,
+    #[serde(default)]
+    pub description: NullableField<String>,
+    #[serde(default)]
+    pub brand: NullableField<String>,
+    #[serde(default)]
+    pub image_url: NullableField<String>,
     pub is_active: Option<bool>,
 }
 
@@ -64,8 +97,10 @@ pub struct CreateVariantDto {
 #[derive(Debug, Deserialize)]
 pub struct UpdateVariantDto {
     pub attributes: Option<JsonValue>,
-    pub sku: Option<String>,
-    pub barcode: Option<String>,
+    #[serde(default)]
+    pub sku: NullableField<String>,
+    #[serde(default)]
+    pub barcode: NullableField<String>,
     pub price: Option<i64>,
     pub cost: Option<i64>,
     pub stock_min: Option<i32>,
@@ -232,12 +267,13 @@ pub struct ProductStockStatsDto {
 }
 
 /// Datos mínimos para imprimir la etiqueta de una variante. Precio en centavos.
-#[derive(Debug)]
+#[derive(Debug, sqlx::FromRow)]
 pub struct LabelData {
     pub product_name: String,
     pub attributes: JsonValue,
     pub barcode: Option<String>,
     pub price: i64,
+    pub currency_decimals: i16,
 }
 
 /// Fila de variante para exportar a Excel. Importes en centavos.

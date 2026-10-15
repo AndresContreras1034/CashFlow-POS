@@ -1,6 +1,7 @@
 use super::barcode::ean13_check_digit;
 use super::dto::LabelData;
 use super::export::format_attributes;
+use crate::modules::billing::ticket::format_money;
 
 const COLS: usize = 32;
 pub const MAX_COPIES: u32 = 100;
@@ -71,18 +72,6 @@ fn wrap(text: &str, width: usize, max_lines: usize) -> Vec<String> {
     lines
 }
 
-fn format_price(cents: i64) -> String {
-    let pesos = (cents / 100).to_string();
-    let mut out = String::new();
-    for (i, ch) in pesos.chars().enumerate() {
-        if i > 0 && (pesos.len() - i).is_multiple_of(3) {
-            out.push('.');
-        }
-        out.push(ch);
-    }
-    format!("${}", out)
-}
-
 fn push_barcode(buf: &mut Vec<u8>, code: &str) -> Result<(), String> {
     let code = code.trim();
 
@@ -145,7 +134,7 @@ pub fn build_labels(data: &LabelData, copies: u32) -> Result<Vec<u8>, String> {
     }
 
     one.extend_from_slice(b"\x1D\x21\x11");
-    one.extend_from_slice(format_price(data.price).as_bytes());
+    one.extend_from_slice(format_money(data.price, data.currency_decimals as u8).as_bytes());
     one.push(b'\n');
     one.extend_from_slice(b"\x1D\x21\x00");
 
@@ -173,6 +162,7 @@ mod tests {
             attributes: json!({ "Volumen": "100ml" }),
             barcode: barcode.map(String::from),
             price: 2_800_000,
+            currency_decimals: 0,
         }
     }
 
@@ -195,10 +185,15 @@ mod tests {
     }
 
     #[test]
-    fn price_format() {
-        assert_eq!(format_price(2_800_000), "$28.000");
-        assert_eq!(format_price(123_456_789), "$1.234.567");
-        assert_eq!(format_price(0), "$0");
+    fn price_format_uses_currency_decimals() {
+        let mut label = data(Some("2000000000015"));
+        let no_decimals = build_labels(&label, 1).unwrap();
+        assert!(String::from_utf8_lossy(&no_decimals).contains("$ 28.000"));
+
+        label.currency_decimals = 2;
+        label.price = 2_800_050;
+        let two_decimals = build_labels(&label, 1).unwrap();
+        assert!(String::from_utf8_lossy(&two_decimals).contains("$ 28.000,50"));
     }
 
     #[test]

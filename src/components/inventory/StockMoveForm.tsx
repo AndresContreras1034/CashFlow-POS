@@ -63,13 +63,18 @@ export const StockMoveForm: React.FC<StockMoveFormProps> = ({
     if (mode !== 'adjustment') {
       if (!quantity.trim() || !Number.isInteger(qty) || qty <= 0) {
         errs.quantity = 'La cantidad debe ser un entero mayor a 0';
+      } else if (qty > 1_000_000) {
+        errs.quantity = 'La cantidad máxima por movimiento es 1.000.000';
       } else if (mode === 'out' && qty > variant.stock && !variant.allow_negative) {
         errs.quantity = `Stock insuficiente. Disponible: ${variant.stock}`;
       }
     }
 
-    if (mode === 'entry' && unitCost.trim() && parseMoneyInput(unitCost) === null) {
-      errs.unitCost = 'Ingresa un costo válido';
+    if (mode === 'entry' && unitCost.trim()) {
+      const parsedCost = parseMoneyInput(unitCost);
+      if (parsedCost === null || parsedCost < 0) {
+        errs.unitCost = 'Ingresa un costo válido no negativo';
+      }
     }
 
     if (mode === 'adjustment') {
@@ -199,6 +204,7 @@ export const StockMoveForm: React.FC<StockMoveFormProps> = ({
             className={`form-input ${errors.quantity ? 'form-input--error' : ''}`}
             type="number"
             min="1"
+            max={1_000_000}
             value={quantity}
             onChange={e => {
               setQuantity(e.target.value);

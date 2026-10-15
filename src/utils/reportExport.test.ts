@@ -93,6 +93,9 @@ const staleProduct: StaleProduct = {
   stock_value_at_cost: 60_000,
   cost_missing: false,
   days_since_last_sale: null,
+  total_value_at_cost: 60_000,
+  total_rows: 1,
+  total_without_cost: 0,
 };
 
 const valuation: InventoryValuation = {

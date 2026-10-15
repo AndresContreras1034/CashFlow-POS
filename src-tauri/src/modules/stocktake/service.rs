@@ -234,6 +234,34 @@ pub async fn set_count(
     tx.commit().await.map_err(AppError::from)
 }
 
+pub async fn increment_count(
+    pool: &PgPool,
+    stocktake_id: i32,
+    variant_id: i32,
+) -> Result<i32, AppError> {
+    let mut tx = pool.begin().await.map_err(AppError::from)?;
+    let status = repository::lock_stocktake_status(&mut tx, stocktake_id)
+        .await
+        .map_err(AppError::from)?
+        .ok_or_else(|| AppError::not_found("Toma de inventario no encontrada"))?;
+    if status != StocktakeStatus::Counting {
+        return Err(AppError::validation(
+            "Esta toma de inventario ya no admite conteos",
+        ));
+    }
+
+    let counted_stock = repository::increment_count(&mut tx, stocktake_id, variant_id)
+        .await
+        .map_err(AppError::from)?
+        .ok_or_else(|| {
+            AppError::validation(
+                "La variante no pertenece a esta toma o el conteo llegó al máximo permitido",
+            )
+        })?;
+    tx.commit().await.map_err(AppError::from)?;
+    Ok(counted_stock)
+}
+
 pub async fn get_review(pool: &PgPool, stocktake_id: i32) -> Result<StocktakeReviewDto, AppError> {
     let mut conn = pool.acquire().await.map_err(AppError::from)?;
     let stocktake = load(&mut conn, stocktake_id).await?;
@@ -283,11 +311,16 @@ pub async fn apply_stocktake(
     let mut surplus_units: i64 = 0;
     let mut shortage_units: i64 = 0;
 
-    for (variant_id, counted_stock) in lines {
+    for (variant_id, counted_stock, stock_at_count) in lines {
         let current_stock = repository::lock_variant_stock(&mut tx, variant_id)
             .await
             .map_err(AppError::from)?;
-        if current_stock == counted_stock {
+        let target_stock =
+            i64::from(current_stock) + (i64::from(counted_stock) - i64::from(stock_at_count));
+        let target_stock = i32::try_from(target_stock).map_err(|_| {
+            AppError::validation("El ajuste de conteo excede el límite permitido para el stock")
+        })?;
+        if current_stock == target_stock {
             unchanged += 1;
             continue;
         }
@@ -296,7 +329,7 @@ pub async fn apply_stocktake(
             &mut tx,
             StockAdjustmentDto {
                 variant_id,
-                actual_stock: counted_stock,
+                actual_stock: target_stock,
                 reason: Some(MovementReason::CountCorrection),
                 notes: Some(notes.clone()),
                 created_by: Some(created_by.to_string()),
@@ -304,7 +337,7 @@ pub async fn apply_stocktake(
         )
         .await
         .map_err(AppError::from)?;
-        let difference = counted_stock as i64 - current_stock as i64;
+        let difference = i64::from(target_stock) - i64::from(current_stock);
         if difference > 0 {
             surplus_units += difference;
         } else {

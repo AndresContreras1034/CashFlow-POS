@@ -191,6 +191,15 @@
 /* ── Section ── */
 .detail-section { display: flex; flex-direction: column; gap: 16px; }
 
+.kardex-pagination {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 16px;
+  color: var(--text-muted);
+  font-size: 13px;
+}
+
 .section-header {
   display: flex;
   align-items: center;

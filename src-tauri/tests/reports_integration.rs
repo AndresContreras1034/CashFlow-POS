@@ -1153,6 +1153,55 @@ async fn top_products_category_filter_limits_rows_and_scopes_shares(pool: PgPool
 }
 
 #[sqlx::test(migrations = "./migrations")]
+async fn stale_product_totals_include_rows_beyond_the_display_limit(pool: PgPool) {
+    let date = Utc::now().date_naive() + chrono::Duration::days(1);
+    let mut expected_value = 0_i64;
+    let mut expected_without_cost = 0_i64;
+
+    for index in 0..11 {
+        let cost = if index < 8 {
+            i64::from(index + 1) * 100
+        } else {
+            expected_without_cost += 1;
+            0
+        };
+        expected_value += cost;
+        seed_inventory_variant(
+            &pool,
+            &format!("stale-category-{index}"),
+            &format!("stale-product-{index}"),
+            1,
+            0,
+            cost,
+            1_000,
+            true,
+            true,
+        )
+        .await;
+    }
+
+    let stale = service::get_stale_products(
+        &pool,
+        ReportFilter {
+            date_from: date,
+            date_to: date,
+            granularity: None,
+            compare_previous: false,
+            category_id: None,
+            limit: Some(1),
+            rank_by: None,
+        },
+    )
+    .await
+    .unwrap();
+
+    assert_eq!(stale.len(), 1);
+    assert_eq!(stale[0].total_rows, 11);
+    assert_eq!(stale[0].total_value_at_cost, expected_value);
+    assert_eq!(stale[0].total_without_cost, expected_without_cost);
+}
+
+#[sqlx::test(migrations = "./migrations")]
 async fn inventory_valuation_is_a_current_active_stock_snapshot(pool: PgPool) {
     let (category_a, _, _) = seed_inventory_variant(
         &pool,
@@ -1190,11 +1239,11 @@ async fn inventory_valuation_is_a_current_active_stock_snapshot(pool: PgPool) {
         true,
     )
     .await;
-    seed_inventory_variant(
+    let (_, _, negative_variant) = seed_inventory_variant(
         &pool,
         "valuation-negative",
         "Negative stock",
-        -2,
+        0,
         0,
         300,
         500,
@@ -1202,6 +1251,11 @@ async fn inventory_valuation_is_a_current_active_stock_snapshot(pool: PgPool) {
         true,
     )
     .await;
+    sqlx::query("UPDATE product_variants SET stock = -2, allow_negative = TRUE WHERE id = $1")
+        .bind(negative_variant)
+        .execute(&pool)
+        .await
+        .unwrap();
     seed_inventory_variant(
         &pool,
         "valuation-inactive",

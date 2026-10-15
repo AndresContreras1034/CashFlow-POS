@@ -15,6 +15,7 @@ import {
   applyStocktake,
   cancelStocktake,
   findStocktakeLineByCode,
+  incrementStocktakeCount,
   getCurrentStocktake,
   getStocktakeReview,
   listStocktakeLines,
@@ -232,12 +233,7 @@ export const StocktakePage: React.FC = () => {
         setScanMsg({ text: `El código ${code} coincide con varias variantes`, ok: false });
       } else {
         const target = exactMatches[0];
-        if ((target.counted_stock ?? 0) >= 2_147_483_647) {
-          setScanMsg({ text: 'El conteo llegó al máximo permitido', ok: false });
-          return;
-        }
-        const nextCount = (target.counted_stock ?? 0) + 1;
-        await setStocktakeCount(sessionId, target.variant_id, nextCount);
+        const nextCount = await incrementStocktakeCount(sessionId, target.variant_id);
         setLines(current =>
           current.map(line =>
             line.variant_id === target.variant_id

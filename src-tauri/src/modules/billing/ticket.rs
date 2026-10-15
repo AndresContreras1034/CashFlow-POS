@@ -488,7 +488,7 @@ fn two_col(left: &str, right: &str) -> String {
 }
 
 /// Amounts are stored in hundredths. Zero-decimal currencies round to the nearest unit.
-fn format_money(cents: i64, decimals: u8) -> String {
+pub(crate) fn format_money(cents: i64, decimals: u8) -> String {
     let negative = cents < 0;
     let absolute = cents.unsigned_abs();
     let (units, fraction) = if decimals == 0 {
@@ -609,7 +609,7 @@ mod tests {
         CashSessionReport,
     };
     use crate::modules::sales::models::SaleStatus;
-    use chrono::{TimeZone, Utc};
+    use chrono::{NaiveDate, TimeZone, Utc};
 
     #[test]
     fn formats_money_using_currency_precision() {
@@ -640,7 +640,7 @@ mod tests {
             show_payment_method: false,
             sale_id: 1,
             ticket_number: "V-1".into(),
-            created_at: Utc.timestamp_opt(0, 0).single().unwrap(),
+            created_at: Utc.timestamp_opt(0, 0).single().unwrap().naive_utc(),
             created_by: "Operador".into(),
             status: SaleStatus::Completed,
             courtesy_reason: Some("Apoyo a cliente".into()),
@@ -693,7 +693,7 @@ mod tests {
             show_payment_method: true,
             sale_id: 2,
             ticket_number: "V-2".into(),
-            created_at: Utc.timestamp_opt(0, 0).single().unwrap(),
+            created_at: Utc.timestamp_opt(0, 0).single().unwrap().naive_utc(),
             created_by: "Operador".into(),
             status: SaleStatus::Completed,
             courtesy_reason: Some("Apoyo a cliente".into()),
@@ -739,7 +739,7 @@ mod tests {
             show_payment_method: true,
             sale_id: 3,
             ticket_number: "V-3".into(),
-            created_at: Utc.timestamp_opt(0, 0).single().unwrap(),
+            created_at: Utc.timestamp_opt(0, 0).single().unwrap().naive_utc(),
             created_by: "Operador".into(),
             status: SaleStatus::Completed,
             courtesy_reason: None,
@@ -840,7 +840,7 @@ mod tests {
             show_payment_method: false,
             sale_id: 4,
             ticket_number: "V-4".into(),
-            created_at: Utc.timestamp_opt(0, 0).single().unwrap(),
+            created_at: Utc.timestamp_opt(0, 0).single().unwrap().naive_utc(),
             created_by: "Operador".into(),
             status: SaleStatus::Completed,
             courtesy_reason: None,
@@ -855,6 +855,19 @@ mod tests {
             cash_received: None,
             change_given: None,
         }
+    }
+
+    #[test]
+    fn ticket_prints_local_wall_time_without_shifting_the_date() {
+        let mut data = totals_ticket(false);
+        data.created_at = NaiveDate::from_ymd_opt(2024, 12, 31)
+            .unwrap()
+            .and_hms_opt(20, 30, 0)
+            .unwrap();
+
+        let ticket = String::from_utf8(build_sale_ticket(&data)).unwrap();
+        assert!(ticket.contains("Fecha: 31/12/2024"));
+        assert!(ticket.contains("Hora: 08:30 PM"));
     }
 
     #[test]

@@ -48,15 +48,26 @@ fn field_list(changes: &Map<String, JsonValue>) -> String {
 use crate::modules::inventory::{
     dto::{
         CreateCategoryDto, CreateProductDto, CreateVariantDto, ExportVariantRow, InventoryValueDto,
-        KardexFilterDto, LabelData, LowStockItemDto, ProductFilterDto, ProductSortBy,
-        ProductStockStatsDto, SortDir, StockAdjustmentDto, StockEntryDto, StockOutDto,
-        UpdateCategoryDto, UpdateProductDto, UpdateVariantDto,
+        KardexFilterDto, LabelData, LowStockItemDto, NullableField, ProductFilterDto,
+        ProductSortBy, ProductStockStatsDto, SortDir, StockAdjustmentDto, StockEntryDto,
+        StockOutDto, UpdateCategoryDto, UpdateProductDto, UpdateVariantDto,
     },
     models::{
         Category, MovementReason, MovementType, MovementWithDetails, Product, ProductVariant,
         ProductWithCategory, VariantWithProduct,
     },
 };
+
+fn update_string(field: NullableField<String>) -> (bool, Option<String>) {
+    let (provided, value) = field.into_update_value();
+    (
+        provided,
+        value.and_then(|value| {
+            let value = value.trim();
+            (!value.is_empty()).then(|| value.to_string())
+        }),
+    )
+}
 
 pub const ACTIVE_INVENTORY_VARIANTS_CTE: &str = r#"
     WITH active_inventory_variants AS (
@@ -391,25 +402,30 @@ pub async fn update_product(
         return Ok(None);
     };
 
-    let after = sqlx::query_as!(
-        Product,
+    let (description_set, description) = update_string(dto.description);
+    let (brand_set, brand) = update_string(dto.brand);
+    let (image_url_set, image_url) = update_string(dto.image_url);
+    let after = sqlx::query_as::<_, Product>(
         "UPDATE products
          SET category_id = COALESCE($1, category_id),
              name        = COALESCE($2, name),
-             description = COALESCE($3, description),
-             brand       = COALESCE($4, brand),
-             image_url   = COALESCE($5, image_url),
-             is_active   = COALESCE($6, is_active)
-         WHERE id = $7
+             description = CASE WHEN $3 THEN $4 ELSE description END,
+             brand       = CASE WHEN $5 THEN $6 ELSE brand END,
+             image_url   = CASE WHEN $7 THEN $8 ELSE image_url END,
+             is_active   = COALESCE($9, is_active)
+         WHERE id = $10
          RETURNING *",
-        dto.category_id,
-        dto.name,
-        dto.description,
-        dto.brand,
-        dto.image_url,
-        dto.is_active,
-        id
     )
+    .bind(dto.category_id)
+    .bind(dto.name)
+    .bind(description_set)
+    .bind(description)
+    .bind(brand_set)
+    .bind(brand)
+    .bind(image_url_set)
+    .bind(image_url)
+    .bind(dto.is_active)
+    .bind(id)
     .fetch_one(&mut *tx)
     .await?;
 
@@ -495,18 +511,19 @@ pub async fn get_label_data(
     pool: &PgPool,
     variant_id: i32,
 ) -> Result<Option<LabelData>, sqlx::Error> {
-    sqlx::query_as!(
-        LabelData,
+    sqlx::query_as::<_, LabelData>(
         r#"SELECT
                p.name AS product_name,
                v.attributes,
                v.barcode,
-               v.price
+               v.price,
+               s.currency_decimals
            FROM product_variants v
            JOIN products p ON p.id = v.product_id
+           CROSS JOIN app_settings s
            WHERE v.id = $1"#,
-        variant_id
     )
+    .bind(variant_id)
     .fetch_optional(pool)
     .await
 }
@@ -674,29 +691,32 @@ pub async fn update_variant(
         return Ok(None);
     };
 
-    let after = sqlx::query_as!(
-        ProductVariant,
+    let (sku_set, sku) = update_string(dto.sku);
+    let (barcode_set, barcode) = update_string(dto.barcode);
+    let after = sqlx::query_as::<_, ProductVariant>(
         "UPDATE product_variants
          SET attributes     = COALESCE($1, attributes),
-             sku            = COALESCE($2, sku),
-             barcode        = COALESCE($3, barcode),
-             price          = COALESCE($4, price),
-             cost           = COALESCE($5, cost),
-             stock_min      = COALESCE($6, stock_min),
-             allow_negative = COALESCE($7, allow_negative),
-             is_active      = COALESCE($8, is_active)
-         WHERE id = $9
+             sku            = CASE WHEN $2 THEN $3 ELSE sku END,
+             barcode        = CASE WHEN $4 THEN $5 ELSE barcode END,
+             price          = COALESCE($6, price),
+             cost           = COALESCE($7, cost),
+             stock_min      = COALESCE($8, stock_min),
+             allow_negative = COALESCE($9, allow_negative),
+             is_active      = COALESCE($10, is_active)
+         WHERE id = $11
          RETURNING *",
-        dto.attributes,
-        dto.sku,
-        dto.barcode,
-        dto.price,
-        dto.cost,
-        dto.stock_min,
-        dto.allow_negative,
-        dto.is_active,
-        id
     )
+    .bind(dto.attributes)
+    .bind(sku_set)
+    .bind(sku)
+    .bind(barcode_set)
+    .bind(barcode)
+    .bind(dto.price)
+    .bind(dto.cost)
+    .bind(dto.stock_min)
+    .bind(dto.allow_negative)
+    .bind(dto.is_active)
+    .bind(id)
     .fetch_one(&mut *tx)
     .await?;
 
@@ -752,7 +772,9 @@ pub async fn apply_stock_entry(
     .fetch_one(&mut *conn)
     .await?;
 
-    let stock_after = stock_before + dto.quantity;
+    let stock_after = stock_before
+        .checked_add(dto.quantity)
+        .ok_or_else(|| sqlx::Error::Protocol("stock overflow on stock entry".into()))?;
 
     // 2. Actualizar stock
     let variant = sqlx::query_as!(
@@ -815,7 +837,9 @@ pub async fn apply_stock_out(
     .await?;
 
     let stock_before = row.stock;
-    let stock_after = stock_before - dto.quantity;
+    let stock_after = stock_before
+        .checked_sub(dto.quantity)
+        .ok_or_else(|| sqlx::Error::Protocol("stock overflow on stock out".into()))?;
 
     // 2. Validar stock negativo
     if stock_after < 0 && !row.allow_negative {
@@ -993,14 +1017,13 @@ pub async fn get_kardex(
     let page_size = filter.page_size.unwrap_or(50).clamp(1, 200);
     let offset = (page - 1) * page_size;
 
-    let rows = sqlx::query_as!(
-        MovementWithDetails,
+    let rows = sqlx::query_as::<_, MovementWithDetails>(
         r#"SELECT
                m.id, m.variant_id,
-               m.movement_type AS "movement_type: MovementType",
+               m.movement_type,
                m.quantity, m.stock_before, m.stock_after,
                m.unit_cost, m.sale_id, m.purchase_id,
-               m.reason AS "reason?: MovementReason",
+               m.reason,
                m.notes, m.created_by, m.created_at,
                p.name  AS product_name,
                v.attributes, v.sku, v.barcode
@@ -1012,16 +1035,16 @@ pub async fn get_kardex(
              AND ($3::TEXT IS NULL OR m.movement_type::TEXT = $3)
              AND ($4::DATE IS NULL OR m.created_at::DATE >= $4::DATE)
              AND ($5::DATE IS NULL OR m.created_at::DATE <= $5::DATE)
-           ORDER BY m.created_at DESC
+           ORDER BY m.created_at DESC, m.id DESC
            LIMIT $6 OFFSET $7"#,
-        filter.variant_id,
-        filter.product_id,
-        filter.movement_type,
-        filter.date_from,
-        filter.date_to,
-        page_size,
-        offset
     )
+    .bind(filter.variant_id)
+    .bind(filter.product_id)
+    .bind(filter.movement_type.as_deref())
+    .bind(filter.date_from)
+    .bind(filter.date_to)
+    .bind(page_size)
+    .bind(offset)
     .fetch_all(pool)
     .await?;
 

@@ -54,7 +54,7 @@ pub async fn update_settings(
              show_tax_breakdown          = COALESCE($20, show_tax_breakdown),
              show_discounts              = COALESCE($21, show_discounts),
              show_payment_method         = COALESCE($22, show_payment_method),
-             printer_name                = $23
+             printer_name                = COALESCE($23, printer_name)
          WHERE id = 1
          RETURNING *",
     )
