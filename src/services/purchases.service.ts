@@ -6,6 +6,8 @@ import type {
   AddItemsResult,
   AddRecommendedDto,
   CreatePurchaseListDto,
+  ReceiveListDto,
+  ReceiveResult,
   PurchasableIds,
   PurchasablePage,
   PurchaseItem,
@@ -38,6 +40,11 @@ export const setPurchaseListStatus = (
   id: number,
   dto: SetListStatusDto,
 ): Promise<PurchaseList> => invoke('set_purchase_list_status', { id, dto });
+
+export const receivePurchaseList = (
+  listId: number,
+  dto: ReceiveListDto,
+): Promise<ReceiveResult> => invoke('receive_purchase_list', { listId, dto });
 
 export const addPurchaseItems = (listId: number, dto: AddItemsDto): Promise<AddItemsResult> =>
   invoke('add_purchase_items', { listId, dto });

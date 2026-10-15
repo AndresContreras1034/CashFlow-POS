@@ -3,8 +3,10 @@ import type {
   PurchaseItem,
   PurchaseListDetail,
   PurchaseListSummary,
+  CostChange,
 } from '../../types/purchases';
 import { buildPrintModel, printDocumentTitle, type PrintModel } from '../../utils/purchasePrint';
+import { receiveMessage } from '../../utils/purchaseReceive';
 import type { RestockOverview, SupplierOverview } from '../../types/suppliers';
 import {
   addRecommendedToList,
@@ -39,6 +41,7 @@ import {
 import { todayInTimeZone } from '../../utils/debts';
 import { PurchaseItemPicker } from './PurchaseItemPicker';
 import { PurchasePrintJob } from './PurchasePrintJob';
+import { PurchaseReceiveDialog } from './PurchaseReceiveDialog';
 import { PurchaseLineRow, type ItemPatch } from './PurchaseLineRow';
 import './SuppliersBase.css';
 import './PurchasePanel.css';
@@ -48,6 +51,7 @@ interface PurchasePanelProps {
   onSelectList: (id: number | null) => void;
   timezone: string;
   businessName: string;
+  currencyDecimals: number;
   onAction: (action: ContactAction) => void;
   onCopy: (text: string, what: string) => void;
   onNotify: (message: string, type?: 'success' | 'error' | 'warning') => void;
@@ -64,6 +68,7 @@ export const PurchasePanel: React.FC<PurchasePanelProps> = ({
   onSelectList,
   timezone,
   businessName,
+  currencyDecimals,
   onAction,
   onCopy,
   onNotify,
@@ -95,6 +100,11 @@ export const PurchasePanel: React.FC<PurchasePanelProps> = ({
   const [pendingStatus, setPendingStatus] = useState<('draft' | 'ordered' | 'cancelled') | null>(null);
   const [statusBusy, setStatusBusy] = useState(false);
   const [printJob, setPrintJob] = useState<PurchasePrintJobState | null>(null);
+  const [receiving, setReceiving] = useState(false);
+  const [lastCostChanges, setLastCostChanges] = useState<{
+    listId: number;
+    changes: CostChange[];
+  } | null>(null);
   const [pickerOpen, setPickerOpen] = useState(false);
   const [sidebarOpen, setSidebarOpen] = useState(true);
   const [working, setWorking] = useState(false);
@@ -527,6 +537,14 @@ export const PurchasePanel: React.FC<PurchasePanelProps> = ({
                 </span>
               </div>
               <div className="purchase-status-actions">
+                {(detail.list.status === 'draft' || detail.list.status === 'ordered')
+                  && detail.items.length > 0 && (
+                  <button
+                    type="button"
+                    className="suppliers-btn suppliers-btn-primary"
+                    onClick={() => setReceiving(true)}
+                  >Registrar compra recibida</button>
+                )}
                 <button
                   type="button"
                   className="suppliers-btn"
@@ -572,6 +590,20 @@ export const PurchasePanel: React.FC<PurchasePanelProps> = ({
                 <span>{totals.itemsWithoutCost} sin costo</span>
               )}
             </div>
+
+            {lastCostChanges?.listId === detail.list.id && lastCostChanges.changes.length > 0 && (
+              <details className="purchase-receive-cost-changes">
+                <summary>Costos actualizados ({lastCostChanges.changes.length})</summary>
+                <ul>
+                  {lastCostChanges.changes.map(change => (
+                    <li key={change.variant_id}>
+                      <span>{change.product_name}</span>
+                      <span>{formatMoney(change.from)} → {formatMoney(change.to)}</span>
+                    </li>
+                  ))}
+                </ul>
+              </details>
+            )}
 
             {editable && (
               <section className="purchase-recommended" aria-label="Productos recomendados">
@@ -744,6 +776,22 @@ export const PurchasePanel: React.FC<PurchasePanelProps> = ({
             reloadSummaries();
           }}
           onNotify={onNotify}
+        />
+      )}
+      {receiving && detail && (
+        <PurchaseReceiveDialog
+          list={detail.list}
+          items={detail.items}
+          currencyDecimals={currencyDecimals}
+          onClose={() => setReceiving(false)}
+          onReceived={result => {
+            setLastCostChanges({ listId: detail.list.id, changes: result.cost_changes });
+            setReceiving(false);
+            onNotify(receiveMessage(result));
+            refreshDetail();
+            reloadSummaries();
+            setOverviewReload(token => token + 1);
+          }}
         />
       )}
       {printJob && (

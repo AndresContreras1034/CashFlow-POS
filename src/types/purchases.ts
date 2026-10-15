@@ -108,6 +108,35 @@ export interface UpdateItemDto {
   updated_by?: string | null;
 }
 
+export interface ReceiveLineDto {
+  item_id: number;
+  /** 0 = no llegó. */
+  quantity: number;
+  /** Costo unitario real; null = desconocido (el costo actual no cambia). */
+  unit_cost: number | null;
+}
+
+export interface ReceiveListDto {
+  lines: ReceiveLineDto[];
+  updated_by?: string | null;
+}
+
+export interface CostChange {
+  variant_id: number;
+  product_name: string;
+  from: number;
+  to: number;
+}
+
+export interface ReceiveResult {
+  list: PurchaseList;
+  received_lines: number;
+  skipped_lines: number;
+  units: number;
+  total_cost: number;
+  cost_changes: CostChange[];
+}
+
 export interface PurchaseListFilterDto {
   scope?: 'open' | 'all';
   search?: string;

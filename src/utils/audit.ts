@@ -93,6 +93,7 @@ const ACTION_LABELS: Record<string, string> = {
   'suppliers.purchase_list_update': 'Lista de compras actualizada',
   'suppliers.purchase_list_status': 'Estado de lista actualizado',
   'suppliers.purchase_list_add_items': 'Artículos agregados a lista',
+  'suppliers.purchase_list_receive': 'Compra recibida',
   'suppliers.purchase_item_update': 'Artículo de lista actualizado',
   'suppliers.purchase_item_remove': 'Artículo de lista eliminado',
   'backup.create': 'Generación',
@@ -134,6 +135,8 @@ const FIELD_LABELS: Record<string, string> = {
   // ventas
   subtotal: 'Subtotal', discount: 'Descuento', tax: 'Impuesto', total: 'Total',
   item_count: 'Líneas', units: 'Unidades', payments: 'Pagos',
+  lines_received: 'Líneas recibidas', lines_skipped: 'Líneas sin recibir',
+  total_cost: 'Costo total', cost_changes: 'Cambios de costo',
   customer_id: 'Cliente', cash_session_id: 'Turno de caja',
   // inventario
   category_id: 'Categoría', product_id: 'Producto', brand: 'Marca',
@@ -418,7 +421,7 @@ const MONEY_FIELDS: Record<string, readonly string[]> = {
   sales: ['subtotal', 'discount', 'tax', 'total', 'amount'],
   inventory: ['price', 'cost', 'unit_cost'],
   debts: ['original_amount', 'amount', 'balance_after'],
-  suppliers: ['last_cost', 'line_cost', 'variant_cost'],
+  suppliers: ['last_cost', 'line_cost', 'variant_cost', 'total_cost'],
 };
 
 /** Si el campo es un importe en centavos según el módulo. */

@@ -375,6 +375,7 @@ export default function Suppliers() {
             onSelectList={changeList}
             timezone={settings.timezone}
             businessName={settings.business_name}
+            currencyDecimals={settings.currency_decimals}
             onAction={action => void handleAction(action)}
             onCopy={(text, what) => void handleCopy(text, what)}
             onNotify={notify}

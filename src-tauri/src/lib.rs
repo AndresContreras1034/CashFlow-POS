@@ -394,6 +394,7 @@ pub fn run() {
             create_purchase_list,
             update_purchase_list,
             set_purchase_list_status,
+            receive_purchase_list,
             add_purchase_items,
             add_recommended_to_list,
             update_purchase_item,

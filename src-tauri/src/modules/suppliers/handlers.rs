@@ -13,6 +13,7 @@ use crate::modules::suppliers::purchase_lists::{
     PurchasablePage, PurchaseList, PurchaseListDetail, PurchaseListFilterDto, PurchaseListSummary,
     SetListStatusDto, UpdateItemDto, UpdatePurchaseListDto,
 };
+use crate::modules::suppliers::receive::{self, ReceiveListDto, ReceiveResult};
 use crate::modules::suppliers::{
     bulk::{self, BulkLinkResult, LinkableIds, LinkablePage},
     dto::{
@@ -370,6 +371,27 @@ pub async fn set_purchase_list_status(
         &pool,
         context,
         purchase_lists::set_purchase_list_status(&pool, id, dto).await,
+    )
+    .await
+}
+
+#[tauri::command]
+pub async fn receive_purchase_list(
+    pool: State<'_, DbPool>,
+    list_id: i32,
+    dto: ReceiveListDto,
+) -> Result<ReceiveResult, String> {
+    let context = FailureContext {
+        module: AuditModule::Suppliers,
+        action: "purchase_list_receive",
+        entity_type: Some("purchase_list"),
+        entity_id: Some(list_id.to_string()),
+        actor: declared_actor(&dto.updated_by),
+    };
+    finish(
+        &pool,
+        context,
+        receive::receive_purchase_list(&pool, list_id, dto).await,
     )
     .await
 }

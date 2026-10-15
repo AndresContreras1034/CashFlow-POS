@@ -5,6 +5,7 @@ pub mod links;
 pub mod models;
 pub mod payables;
 pub mod purchase_lists;
+pub mod receive;
 pub mod repository;
 pub mod restock;
 pub mod router;

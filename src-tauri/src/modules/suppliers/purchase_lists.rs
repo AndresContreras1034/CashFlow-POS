@@ -28,22 +28,22 @@ use crate::modules::suppliers::{
 pub const MAX_TITLE: usize = 150;
 pub const MAX_NOTES: usize = 2000;
 pub const MAX_ITEM_NOTE: usize = 500;
-pub const MAX_QTY: i32 = 100_000;
+pub(crate) const MAX_QTY: i32 = 100_000;
 pub const MAX_ITEMS_PER_LIST: i64 = 500;
 const AUDIT_IDS_LIMIT: usize = 100;
 
 #[derive(Debug, Clone, Serialize, Deserialize, sqlx::FromRow)]
-pub struct PurchaseList {
-    pub id: i32,
-    pub title: String,
-    pub notes: Option<String>,
-    pub status: String,
-    pub created_by: String,
-    pub created_at: DateTime<Utc>,
-    pub updated_at: DateTime<Utc>,
-    pub ordered_at: Option<DateTime<Utc>>,
-    pub received_at: Option<DateTime<Utc>>,
-    pub cancelled_at: Option<DateTime<Utc>>,
+pub(crate) struct PurchaseList {
+    pub(crate) id: i32,
+    pub(crate) title: String,
+    pub(crate) notes: Option<String>,
+    pub(crate) status: String,
+    pub(crate) created_by: String,
+    pub(crate) created_at: DateTime<Utc>,
+    pub(crate) updated_at: DateTime<Utc>,
+    pub(crate) ordered_at: Option<DateTime<Utc>>,
+    pub(crate) received_at: Option<DateTime<Utc>>,
+    pub(crate) cancelled_at: Option<DateTime<Utc>>,
 }
 
 #[derive(Debug, Clone, Serialize, sqlx::FromRow)]
@@ -302,7 +302,7 @@ pub fn line_cost(quantity: i32, unit_cost: i64) -> Result<Option<i64>, AppError>
         .ok_or_else(|| AppError::validation("El costo de la línea supera el máximo permitido"))
 }
 
-const LIST_COLS: &str = "id, title, notes, status, created_by, created_at, updated_at, \
+pub(crate) const LIST_COLS: &str = "id, title, notes, status, created_by, created_at, updated_at, \
                          ordered_at, received_at, cancelled_at";
 
 const ITEM_SELECT: &str = "SELECT i.id AS item_id, i.variant_id, p.id AS product_id,
@@ -353,7 +353,7 @@ fn to_item(row: ItemRow) -> Result<PurchaseItem, AppError> {
     })
 }
 
-fn list_event(
+pub(crate) fn list_event(
     actor: Option<String>,
     action: &str,
     list_id: i32,
@@ -377,7 +377,7 @@ fn list_event(
     }
 }
 
-async fn lock_list(conn: &mut PgConnection, id: i32) -> Result<PurchaseList, AppError> {
+pub(crate) async fn lock_list(conn: &mut PgConnection, id: i32) -> Result<PurchaseList, AppError> {
     sqlx::query_as::<_, PurchaseList>(&format!(
         "SELECT {LIST_COLS} FROM purchase_lists WHERE id = $1 FOR UPDATE"
     ))
