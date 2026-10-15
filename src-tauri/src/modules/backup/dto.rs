@@ -70,3 +70,40 @@ pub struct BackupEnvironment {
     /// Motivo por el que no se encontró un pg_dump utilizable.
     pub tools_error: Option<String>,
 }
+
+#[derive(Debug, Serialize)]
+pub struct CountItem {
+    pub label: String,
+    pub count: i64,
+}
+
+#[derive(Debug, Serialize)]
+pub struct ArchiveDetails {
+    pub dumped_server_version: Option<String>,
+    pub dumped_database: Option<String>,
+    pub archive_created_at: Option<String>,
+    pub last_migration: i64,
+    pub app_last_migration: i64,
+    pub business_name: Option<String>,
+    pub backup_counts: Vec<CountItem>,
+    pub current_counts: Vec<CountItem>,
+}
+
+#[derive(Debug, Serialize)]
+pub struct BackupInspection {
+    pub file_name: String,
+    pub size_bytes: u64,
+    pub encrypted: bool,
+    /// `true` mientras no se haya proporcionado la contraseña del archivo cifrado.
+    pub needs_password: bool,
+    pub details: Option<ArchiveDetails>,
+}
+
+#[derive(Debug, Serialize)]
+pub struct RestoreOutcome {
+    pub file_name: String,
+    pub pre_restore_file: Option<String>,
+    pub last_migration: i64,
+    pub warnings: Vec<String>,
+    pub restarting: bool,
+}

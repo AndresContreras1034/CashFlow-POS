@@ -89,6 +89,16 @@ fn command(program: &Path) -> Command {
     cmd
 }
 
+fn apply_env(cmd: &mut Command, conn: &ConnParams) {
+    cmd.env("PGCONNECT_TIMEOUT", "15");
+    if let Some(password) = &conn.password {
+        cmd.env("PGPASSWORD", password);
+    }
+    if let Some(mode) = &conn.ssl_mode {
+        cmd.env("PGSSLMODE", mode);
+    }
+}
+
 fn tail(bytes: &[u8]) -> String {
     let text = String::from_utf8_lossy(bytes);
     let text = text.trim();
@@ -245,13 +255,7 @@ pub async fn dump(
         .arg("--lock-wait-timeout=60000")
         .arg("--file")
         .arg(out_file);
-    cmd.env("PGCONNECT_TIMEOUT", "15");
-    if let Some(password) = &conn.password {
-        cmd.env("PGPASSWORD", password);
-    }
-    if let Some(mode) = &conn.ssl_mode {
-        cmd.env("PGSSLMODE", mode);
-    }
+    apply_env(&mut cmd, conn);
     cmd.stdout(Stdio::null()).stderr(Stdio::piped());
 
     let child = cmd
@@ -270,7 +274,10 @@ pub async fn dump(
         .map_err(|e| format!("pg_dump falló al ejecutarse: {e}"))?;
 
     if !output.status.success() {
-        return Err(format!("pg_dump terminó con error: {}", tail(&output.stderr)));
+        return Err(format!(
+            "pg_dump terminó con error: {}",
+            tail(&output.stderr)
+        ));
     }
     Ok(())
 }
@@ -297,6 +304,131 @@ pub async fn verify(tools: &PgTools, file: &Path, timeout: Duration) -> Result<(
         ));
     }
     Ok(())
+}
+
+#[derive(Debug, Default)]
+pub struct ArchiveHeader {
+    pub database: Option<String>,
+    pub server_version: Option<String>,
+    pub created_at: Option<String>,
+}
+
+impl ArchiveHeader {
+    pub fn server_major(&self) -> Option<u32> {
+        self.server_version.as_deref().and_then(parse_major)
+    }
+}
+
+/// Extrae los metadatos de cabecera que emite `pg_restore --list`.
+pub fn parse_header(listing: &str) -> ArchiveHeader {
+    let mut header = ArchiveHeader::default();
+    for line in listing.lines().take(60) {
+        let Some(rest) = line.strip_prefix(';') else {
+            continue;
+        };
+        let rest = rest.trim();
+        if let Some(value) = rest.strip_prefix("dbname:") {
+            header.database = Some(value.trim().to_string());
+        } else if let Some(value) = rest.strip_prefix("Dumped from database version:") {
+            header.server_version = Some(value.trim().to_string());
+        } else if let Some(value) = rest.strip_prefix("Archive created at") {
+            header.created_at = Some(value.trim().to_string());
+        }
+    }
+    header
+}
+
+/// Devuelve el listado completo o un error si el archivo no es un dump válido.
+pub async fn list(tools: &PgTools, file: &Path, timeout: Duration) -> Result<String, String> {
+    let mut cmd = command(&tools.pg_restore);
+    cmd.arg("--list").arg(file);
+    cmd.stdout(Stdio::piped()).stderr(Stdio::piped());
+
+    let child = cmd
+        .spawn()
+        .map_err(|e| format!("No se pudo iniciar pg_restore: {e}"))?;
+    let output = tokio::time::timeout(timeout, child.wait_with_output())
+        .await
+        .map_err(|_| "La lectura del backup tardó demasiado".to_string())?
+        .map_err(|e| format!("pg_restore falló al ejecutarse: {e}"))?;
+
+    if !output.status.success() {
+        return Err(format!(
+            "El archivo no es un backup válido de PostgreSQL: {}",
+            tail(&output.stderr)
+        ));
+    }
+    Ok(String::from_utf8_lossy(&output.stdout).into_owned())
+}
+
+/// Restaura el dump en una base ya creada, sin ownership ni privilegios externos.
+pub async fn restore(
+    tools: &PgTools,
+    conn: &ConnParams,
+    file: &Path,
+    clean: bool,
+    timeout: Duration,
+) -> Result<(), String> {
+    let mut cmd = command(&tools.pg_restore);
+    cmd.arg("--host")
+        .arg(&conn.host)
+        .arg("--port")
+        .arg(conn.port.to_string())
+        .arg("--username")
+        .arg(&conn.user)
+        .arg("--dbname")
+        .arg(&conn.database)
+        .arg("--no-password")
+        .arg("--no-owner")
+        .arg("--no-privileges")
+        .arg("--single-transaction")
+        .arg("--exit-on-error");
+    if clean {
+        cmd.arg("--clean").arg("--if-exists");
+    }
+    cmd.arg(file);
+    apply_env(&mut cmd, conn);
+    cmd.stdout(Stdio::null()).stderr(Stdio::piped());
+
+    let child = cmd
+        .spawn()
+        .map_err(|e| format!("No se pudo iniciar pg_restore: {e}"))?;
+    let output = tokio::time::timeout(timeout, child.wait_with_output())
+        .await
+        .map_err(|_| {
+            format!(
+                "pg_restore superó el tiempo máximo ({} min) y se canceló",
+                timeout.as_secs() / 60
+            )
+        })?
+        .map_err(|e| format!("pg_restore falló al ejecutarse: {e}"))?;
+
+    if !output.status.success() {
+        return Err(format!(
+            "pg_restore terminó con error: {}",
+            tail(&output.stderr)
+        ));
+    }
+    Ok(())
+}
+
+#[cfg(test)]
+mod archive_header_tests {
+    use super::*;
+
+    #[test]
+    fn parses_archive_header() {
+        let listing = ";\n; Archive created at 2026-10-13 17:02:03 -05\n;     dbname: pos_db\n\
+                       ;     Dumped from database version: 18.4\n;     Dumped by pg_dump version: 18.4\n\
+                       ;\n1234; 1259 16394 TABLE public sales postgres\n";
+        let header = parse_header(listing);
+        assert_eq!(header.database.as_deref(), Some("pos_db"));
+        assert_eq!(header.server_major(), Some(18));
+        assert_eq!(
+            header.created_at.as_deref(),
+            Some("2026-10-13 17:02:03 -05")
+        );
+    }
 }
 
 #[cfg(test)]

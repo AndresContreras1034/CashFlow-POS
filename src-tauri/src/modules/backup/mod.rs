@@ -8,6 +8,7 @@ pub mod models;
 pub mod notify;
 pub mod pg_tools;
 pub mod repository;
+pub mod restore;
 pub mod retention;
 pub mod router;
 pub mod scheduler;

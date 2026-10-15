@@ -2,12 +2,14 @@ import { invoke } from '@tauri-apps/api/core';
 import type {
   BackupDelivery,
   BackupEnvironment,
+  BackupInspection,
   BackupRecipient,
   BackupRecord,
   BackupSecretsStatus,
   BackupSettings,
   BackupStatus,
   EmailTestResult,
+  RestoreOutcome,
   UpdateBackupSettingsDto,
 } from '../types/backup';
 
@@ -59,3 +61,12 @@ export const sendBackupTestEmail = () =>
 
 export const listBackupDeliveries = (limit = 30) =>
   invoke<BackupDelivery[]>('list_backup_deliveries', { limit });
+
+export const inspectBackupFile = (path: string, password: string | null) =>
+  invoke<BackupInspection>('inspect_backup_file', { path, password });
+
+export const restoreBackup = (
+  path: string,
+  password: string | null,
+  actor: string | null,
+) => invoke<RestoreOutcome>('restore_backup', { path, password, actor });

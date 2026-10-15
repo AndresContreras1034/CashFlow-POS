@@ -1,4 +1,5 @@
 use std::path::{Path, PathBuf};
+use std::sync::atomic::{AtomicBool, Ordering};
 use std::time::{Duration, Instant};
 
 use chrono::{Local, NaiveTime, Utc};
@@ -24,12 +25,56 @@ use crate::modules::backup::{
 
 const DUMP_TIMEOUT: Duration = Duration::from_secs(30 * 60);
 const VERIFY_TIMEOUT: Duration = Duration::from_secs(5 * 60);
+const README_TEXT: &str = "\
+BACKUPS DE CASHFLOW POS
+=======================
+
+Esta carpeta contiene copias de seguridad de la base de datos (PostgreSQL).
+
+  cashflow_AAAA-MM-DD_HHMMSS.dump       Backup sin cifrar
+  cashflow_AAAA-MM-DD_HHMMSS.dump.enc   Backup cifrado (AES-256)
+  *.meta.json                           Datos informativos del backup
+
+RESTAURAR CON LA APLICACION (lo recomendado)
+  Ajustes > Backup > Restaurar desde un backup.
+  En un equipo nuevo, en la pantalla de licencia: Restaurar datos desde un backup.
+  Si el archivo es .dump.enc necesitas la contrasena de cifrado. SIN ELLA NO SE
+  PUEDE RECUPERAR. Guardala fuera de este equipo.
+
+RESTAURAR A MANO (si la aplicacion no arranca)
+  Solo para archivos .dump (sin cifrar). Un .dump.enc solo se abre con la aplicacion.
+  Desde una consola (CMD), con la ruta de PostgreSQL de tu version:
+
+    \"C:\\Program Files\\PostgreSQL\\18\\bin\\createdb.exe\" -U postgres pos_db_recuperada
+    \"C:\\Program Files\\PostgreSQL\\18\\bin\\pg_restore.exe\" -U postgres --no-owner --no-privileges -d pos_db_recuperada \"RUTA\\AL\\ARCHIVO.dump\"
+
+  Despues apunta DATABASE_URL del archivo .env a la base pos_db_recuperada.
+
+Los archivos cashflow_*.dump de esta carpeta los gestiona la aplicacion (rotacion
+automatica). No guardes aqui otros archivos con ese nombre.
+";
 
 /// Un solo backup a la vez (manual, programado o previo a otra acción).
 static BACKUP_LOCK: Mutex<()> = Mutex::const_new(());
+static RESTART_PENDING: AtomicBool = AtomicBool::new(false);
 
 pub fn is_running() -> bool {
     BACKUP_LOCK.try_lock().is_err()
+}
+
+pub fn restart_pending() -> bool {
+    RESTART_PENDING.load(Ordering::SeqCst)
+}
+
+pub fn mark_restart_pending() {
+    RESTART_PENDING.store(true, Ordering::SeqCst);
+}
+
+/// Toma el bloqueo único de backup/restauración.
+pub fn acquire() -> Result<tokio::sync::MutexGuard<'static, ()>, AppError> {
+    BACKUP_LOCK.try_lock().map_err(|_| {
+        AppError::validation("Hay un backup o una restauración en curso. Espera a que termine.")
+    })
 }
 
 fn clean(value: Option<String>) -> Option<String> {
@@ -42,7 +87,9 @@ pub async fn get_settings(pool: &PgPool) -> Result<BackupSettings, AppError> {
     repository::get_settings(pool)
         .await
         .map_err(AppError::from)?
-        .ok_or_else(|| AppError::internal("Ajustes de backup no inicializados. Revisa la migración 028."))
+        .ok_or_else(|| {
+            AppError::internal("Ajustes de backup no inicializados. Revisa la migración 028.")
+        })
 }
 
 fn effective_dir(settings: &BackupSettings, default_dir: &Path) -> PathBuf {
@@ -83,17 +130,23 @@ pub async fn update_settings(
 
     if let Some(n) = dto.keep_daily {
         if !(1..=90).contains(&n) {
-            return Err(AppError::validation("Los backups diarios deben estar entre 1 y 90"));
+            return Err(AppError::validation(
+                "Los backups diarios deben estar entre 1 y 90",
+            ));
         }
     }
     if let Some(n) = dto.keep_weekly {
         if !(0..=52).contains(&n) {
-            return Err(AppError::validation("Los backups semanales deben estar entre 0 y 52"));
+            return Err(AppError::validation(
+                "Los backups semanales deben estar entre 0 y 52",
+            ));
         }
     }
     if let Some(n) = dto.keep_monthly {
         if !(0..=60).contains(&n) {
-            return Err(AppError::validation("Los backups mensuales deben estar entre 0 y 60"));
+            return Err(AppError::validation(
+                "Los backups mensuales deben estar entre 0 y 60",
+            ));
         }
     }
 
@@ -119,9 +172,13 @@ pub async fn update_settings(
 
     let current = get_settings(pool).await?;
     let warn = dto.warn_after_days.unwrap_or(current.warn_after_days);
-    let critical = dto.critical_after_days.unwrap_or(current.critical_after_days);
+    let critical = dto
+        .critical_after_days
+        .unwrap_or(current.critical_after_days);
     if !(1..=30).contains(&warn) {
-        return Err(AppError::validation("El aviso debe estar entre 1 y 30 días"));
+        return Err(AppError::validation(
+            "El aviso debe estar entre 1 y 30 días",
+        ));
     }
     if critical <= warn || critical > 60 {
         return Err(AppError::validation(
@@ -131,22 +188,30 @@ pub async fn update_settings(
 
     if let Some(host) = &dto.smtp_host {
         if host.is_empty() {
-            return Err(AppError::validation("El servidor SMTP no puede estar vacío"));
+            return Err(AppError::validation(
+                "El servidor SMTP no puede estar vacío",
+            ));
         }
     }
     if let Some(port) = dto.smtp_port {
         if !(1..=65535).contains(&port) {
-            return Err(AppError::validation("El puerto SMTP debe estar entre 1 y 65535"));
+            return Err(AppError::validation(
+                "El puerto SMTP debe estar entre 1 y 65535",
+            ));
         }
     }
     if let Some(security) = &dto.smtp_security {
         if security != "tls" && security != "starttls" {
-            return Err(AppError::validation("La seguridad SMTP debe ser TLS o STARTTLS"));
+            return Err(AppError::validation(
+                "La seguridad SMTP debe ser TLS o STARTTLS",
+            ));
         }
     }
     if let Some(name) = &dto.smtp_from_name {
         if name.chars().count() > 100 {
-            return Err(AppError::validation("El nombre del remitente es demasiado largo"));
+            return Err(AppError::validation(
+                "El nombre del remitente es demasiado largo",
+            ));
         }
     }
     if let Some(user) = &dto.smtp_username {
@@ -163,7 +228,9 @@ pub async fn update_settings(
     }
     if dto.smtp_enabled.unwrap_or(current.smtp_enabled) {
         if dto.smtp_username.is_none() {
-            return Err(AppError::validation("Indica el correo remitente (la cuenta de Gmail)"));
+            return Err(AppError::validation(
+                "Indica el correo remitente (la cuenta de Gmail)",
+            ));
         }
         if !secrets::exists(Secret::SmtpPassword).map_err(AppError::Internal)? {
             return Err(AppError::validation(
@@ -175,7 +242,9 @@ pub async fn update_settings(
     repository::update_settings(pool, dto, schedule_time)
         .await
         .map_err(AppError::from)?
-        .ok_or_else(|| AppError::internal("Ajustes de backup no inicializados. Revisa la migración 028."))
+        .ok_or_else(|| {
+            AppError::internal("Ajustes de backup no inicializados. Revisa la migración 028.")
+        })
 }
 
 async fn probe_writable(dir: &Path) -> bool {
@@ -220,7 +289,10 @@ pub async fn check_environment(
     })
 }
 
-pub async fn list_history(pool: &PgPool, limit: Option<i64>) -> Result<Vec<BackupRecord>, AppError> {
+pub async fn list_history(
+    pool: &PgPool,
+    limit: Option<i64>,
+) -> Result<Vec<BackupRecord>, AppError> {
     repository::list_history(pool, limit.unwrap_or(50).clamp(1, 500))
         .await
         .map_err(AppError::from)
@@ -244,10 +316,58 @@ pub async fn run_backup(
     kind: BackupKind,
     actor: Option<String>,
 ) -> Result<BackupRecord, AppError> {
-    let _guard = BACKUP_LOCK
-        .try_lock()
-        .map_err(|_| AppError::validation("Ya hay un backup en curso. Espera a que termine."))?;
+    if restart_pending() {
+        return Err(AppError::validation(
+            "La aplicación se está reiniciando tras una restauración.",
+        ));
+    }
+    let _guard = acquire()?;
+    run_backup_inner(pool, default_dir, kind, actor).await
+}
 
+/// Backup previo a una importación masiva. Espera hasta 2 minutos si hay otro
+/// en curso. Si falla, el llamador debe CANCELAR la importación.
+pub async fn run_pre_import_backup(
+    pool: &PgPool,
+    default_dir: &Path,
+    actor: Option<String>,
+) -> Result<BackupRecord, AppError> {
+    if restart_pending() {
+        return Err(AppError::validation(
+            "La aplicación se está reiniciando tras una restauración.",
+        ));
+    }
+    let deadline = Instant::now() + Duration::from_secs(120);
+    let _guard = loop {
+        match BACKUP_LOCK.try_lock() {
+            Ok(guard) => break guard,
+            Err(_) if Instant::now() < deadline => {
+                tokio::time::sleep(Duration::from_secs(2)).await;
+            }
+            Err(_) => {
+                return Err(AppError::validation(
+                    "Hay otro backup en curso que tarda demasiado; la importación se canceló. \
+                     Inténtalo de nuevo en unos minutos.",
+                ));
+            }
+        }
+    };
+    run_backup_inner(pool, default_dir, BackupKind::PreImport, actor)
+        .await
+        .map_err(|e| {
+            AppError::Validation(format!(
+                "No se pudo crear el backup previo a la importación; la importación se canceló: {e}"
+            ))
+        })
+}
+
+/// Cuerpo del backup. El llamador ya tiene el bloqueo (`acquire`).
+pub(crate) async fn run_backup_inner(
+    pool: &PgPool,
+    default_dir: &Path,
+    kind: BackupKind,
+    actor: Option<String>,
+) -> Result<BackupRecord, AppError> {
     let audit_actor = clean(actor.clone());
     let created_by = clean(actor).unwrap_or_else(|| "system".to_string());
     let settings = get_settings(pool).await?;
@@ -296,6 +416,9 @@ pub async fn run_backup(
                 Ok(n) => tracing::info!(removed = n, "Rotación de backups aplicada"),
                 Err(e) => tracing::warn!(error = %e, "Falló la rotación de backups"),
             }
+            if let Err(e) = retention::apply_pre(pool).await {
+                tracing::warn!(error = %e, "Falló la rotación de backups previos");
+            }
             Ok(record)
         }
         Err(message) => {
@@ -331,10 +454,14 @@ async fn execute(
     kind: BackupKind,
 ) -> Result<Artifact, String> {
     tokio::fs::create_dir_all(dir).await.map_err(|e| {
-        format!("No se pudo crear la carpeta de backups ({}): {e}", dir.display())
+        format!(
+            "No se pudo crear la carpeta de backups ({}): {e}",
+            dir.display()
+        )
     })?;
     remove_stale_tmp(dir).await;
     remove_stale_tmp(&std::env::temp_dir()).await;
+    ensure_readme(dir).await;
 
     // Si el cifrado está activo y falta la contraseña, el backup FALLA:
     // nunca se hace en claro "por si acaso".
@@ -469,6 +596,19 @@ async fn remove_stale_tmp(dir: &Path) {
     }
 }
 
+async fn ensure_readme(dir: &Path) {
+    use tokio::io::AsyncWriteExt;
+    let path = dir.join("LEEME.txt");
+    if let Ok(mut file) = tokio::fs::OpenOptions::new()
+        .write(true)
+        .create_new(true)
+        .open(&path)
+        .await
+    {
+        let _ = file.write_all(README_TEXT.as_bytes()).await;
+    }
+}
+
 fn secrets_state() -> Result<SecretsStatus, AppError> {
     Ok(SecretsStatus {
         encryption_password_set: secrets::exists(Secret::EncryptionPassword)
@@ -494,7 +634,12 @@ pub async fn set_encryption_password(
                 ));
             }
             secrets::set(Secret::EncryptionPassword, &password).map_err(AppError::Internal)?;
-            events::config_change(pool, "Contraseña de cifrado de backups definida".to_string(), None).await;
+            events::config_change(
+                pool,
+                "Contraseña de cifrado de backups definida".to_string(),
+                None,
+            )
+            .await;
         }
         None => {
             if get_settings(pool).await?.encrypt_enabled {
@@ -503,7 +648,12 @@ pub async fn set_encryption_password(
                 ));
             }
             secrets::delete(Secret::EncryptionPassword).map_err(AppError::Internal)?;
-            events::config_change(pool, "Contraseña de cifrado de backups eliminada".to_string(), None).await;
+            events::config_change(
+                pool,
+                "Contraseña de cifrado de backups eliminada".to_string(),
+                None,
+            )
+            .await;
         }
     }
     secrets_state()
@@ -518,10 +668,17 @@ pub async fn set_smtp_password(
             // Google muestra la contraseña de aplicación con espacios.
             let cleaned: String = password.chars().filter(|c| !c.is_whitespace()).collect();
             if cleaned.is_empty() || cleaned.chars().count() > 128 {
-                return Err(AppError::validation("La contraseña de aplicación no es válida"));
+                return Err(AppError::validation(
+                    "La contraseña de aplicación no es válida",
+                ));
             }
             secrets::set(Secret::SmtpPassword, &cleaned).map_err(AppError::Internal)?;
-            events::config_change(pool, "Contraseña de correo de backups definida".to_string(), None).await;
+            events::config_change(
+                pool,
+                "Contraseña de correo de backups definida".to_string(),
+                None,
+            )
+            .await;
         }
         None => {
             if get_settings(pool).await?.smtp_enabled {
@@ -530,7 +687,12 @@ pub async fn set_smtp_password(
                 ));
             }
             secrets::delete(Secret::SmtpPassword).map_err(AppError::Internal)?;
-            events::config_change(pool, "Contraseña de correo de backups eliminada".to_string(), None).await;
+            events::config_change(
+                pool,
+                "Contraseña de correo de backups eliminada".to_string(),
+                None,
+            )
+            .await;
         }
     }
     secrets_state()
@@ -550,13 +712,17 @@ fn normalize_email(raw: &str) -> Result<String, AppError> {
 fn clean_name(value: Option<String>) -> Result<Option<String>, AppError> {
     let name = clean(value);
     if name.as_ref().is_some_and(|n| n.chars().count() > 100) {
-        return Err(AppError::validation("El nombre es demasiado largo (máximo 100)"));
+        return Err(AppError::validation(
+            "El nombre es demasiado largo (máximo 100)",
+        ));
     }
     Ok(name)
 }
 
 pub async fn list_recipients(pool: &PgPool) -> Result<Vec<BackupRecipient>, AppError> {
-    repository::list_recipients(pool).await.map_err(AppError::from)
+    repository::list_recipients(pool)
+        .await
+        .map_err(AppError::from)
 }
 
 pub async fn add_recipient(
@@ -580,7 +746,12 @@ pub async fn add_recipient(
         }
         AppError::from(e)
     })?;
-    events::config_change(pool, format!("Destinatario de backups añadido: {email}"), None).await;
+    events::config_change(
+        pool,
+        format!("Destinatario de backups añadido: {email}"),
+        None,
+    )
+    .await;
     Ok(recipient)
 }
 
@@ -601,7 +772,12 @@ pub async fn delete_recipient(pool: &PgPool, id: i32) -> Result<(), AppError> {
         .await
         .map_err(AppError::from)?
         .ok_or_else(|| AppError::not_found("Destinatario no encontrado"))?;
-    events::config_change(pool, format!("Destinatario de backups eliminado: {email}"), None).await;
+    events::config_change(
+        pool,
+        format!("Destinatario de backups eliminado: {email}"),
+        None,
+    )
+    .await;
     Ok(())
 }
 

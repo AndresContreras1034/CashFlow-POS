@@ -1,7 +1,9 @@
 //! Días sin backup, nivel de alerta y cálculo de horas programadas.
 //! Las horas programadas se interpretan en la hora local del PC.
 
-use chrono::{DateTime, Datelike, Duration, Local, NaiveDate, NaiveDateTime, NaiveTime, TimeZone, Utc};
+use chrono::{
+    DateTime, Datelike, Duration, Local, NaiveDate, NaiveDateTime, NaiveTime, TimeZone, Utc,
+};
 use serde::Serialize;
 use sqlx::PgPool;
 
@@ -102,14 +104,22 @@ pub async fn get(pool: &PgPool) -> Result<BackupStatus, AppError> {
     };
 
     Ok(BackupStatus {
-        level: compute_level(hours, settings.warn_after_days, settings.critical_after_days),
+        level: compute_level(
+            hours,
+            settings.warn_after_days,
+            settings.critical_after_days,
+        ),
         auto_enabled: settings.auto_enabled,
         running: service::is_running(),
         last_success_at: summary.last_success,
         hours_since_success: hours,
         days_since_success: hours.map(|h| h / 24),
         last_attempt_failed,
-        last_error: if last_attempt_failed { summary.last_error } else { None },
+        last_error: if last_attempt_failed {
+            summary.last_error
+        } else {
+            None
+        },
         failures_since_success: summary.failures_since_success,
         next_run_at,
         warn_after_days: settings.warn_after_days,

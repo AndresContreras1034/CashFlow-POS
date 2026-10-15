@@ -124,10 +124,7 @@ pub async fn history_summary(pool: &PgPool) -> Result<HistorySummary, sqlx::Erro
     .await
 }
 
-pub async fn insert_success(
-    pool: &PgPool,
-    data: SuccessData,
-) -> Result<BackupRecord, sqlx::Error> {
+pub async fn insert_success(pool: &PgPool, data: SuccessData) -> Result<BackupRecord, sqlx::Error> {
     sqlx::query_as::<_, BackupRecord>(
         "INSERT INTO backup_history
             (kind, status, started_at, duration_ms, file_name, file_path,
@@ -196,6 +193,19 @@ pub async fn list_rotatable(pool: &PgPool) -> Result<Vec<BackupRecord>, sqlx::Er
     .await
 }
 
+/// Backups previos a una restauración o importación, con archivo vigente.
+pub async fn list_pre_rotatable(pool: &PgPool) -> Result<Vec<BackupRecord>, sqlx::Error> {
+    sqlx::query_as::<_, BackupRecord>(
+        "SELECT * FROM backup_history
+         WHERE status = 'success'
+           AND file_deleted_at IS NULL
+           AND kind IN ('pre_restore', 'pre_import')
+         ORDER BY started_at DESC, id DESC",
+    )
+    .fetch_all(pool)
+    .await
+}
+
 pub async fn mark_file_deleted(pool: &PgPool, id: i32) -> Result<(), sqlx::Error> {
     sqlx::query(
         "UPDATE backup_history SET file_deleted_at = NOW()
@@ -250,11 +260,9 @@ pub async fn list_recipients(pool: &PgPool) -> Result<Vec<BackupRecipient>, sqlx
 }
 
 pub async fn active_recipients(pool: &PgPool) -> Result<Vec<BackupRecipient>, sqlx::Error> {
-    sqlx::query_as::<_, BackupRecipient>(
-        "SELECT * FROM backup_recipients WHERE active ORDER BY id",
-    )
-    .fetch_all(pool)
-    .await
+    sqlx::query_as::<_, BackupRecipient>("SELECT * FROM backup_recipients WHERE active ORDER BY id")
+        .fetch_all(pool)
+        .await
 }
 
 pub async fn insert_recipient(
@@ -331,7 +339,10 @@ pub async fn insert_delivery(
     Ok(())
 }
 
-pub async fn list_deliveries(pool: &PgPool, limit: i64) -> Result<Vec<BackupDelivery>, sqlx::Error> {
+pub async fn list_deliveries(
+    pool: &PgPool,
+    limit: i64,
+) -> Result<Vec<BackupDelivery>, sqlx::Error> {
     sqlx::query_as::<_, BackupDelivery>(
         "SELECT * FROM backup_deliveries ORDER BY created_at DESC, id DESC LIMIT $1",
     )

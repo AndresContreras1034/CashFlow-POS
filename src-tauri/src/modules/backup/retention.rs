@@ -6,7 +6,7 @@ use std::collections::HashSet;
 use std::hash::Hash;
 use std::path::PathBuf;
 
-use chrono::{Datelike, Local, NaiveDateTime};
+use chrono::{DateTime, Datelike, Duration, Local, NaiveDateTime, Utc};
 use sqlx::PgPool;
 
 use crate::modules::backup::{metadata, models::BackupSettings, repository};
@@ -41,6 +41,9 @@ fn keep_buckets<K: Eq + Hash>(
     }
 }
 
+pub const PRE_MIN_KEEP: usize = 2;
+pub const PRE_MAX_AGE_DAYS: i64 = 30;
+
 pub fn ids_to_delete(entries: &[Entry], policy: Policy) -> Vec<i32> {
     let mut sorted: Vec<&Entry> = entries.iter().collect();
     sorted.sort_by(|a, b| b.at.cmp(&a.at));
@@ -70,6 +73,20 @@ pub fn ids_to_delete(entries: &[Entry], policy: Policy) -> Vec<i32> {
         .iter()
         .filter(|e| !keep.contains(&e.id))
         .map(|e| e.id)
+        .collect()
+}
+
+pub fn pre_ids_to_delete(entries: &[(i32, DateTime<Utc>)], now: DateTime<Utc>) -> Vec<i32> {
+    let mut sorted: Vec<&(i32, DateTime<Utc>)> = entries.iter().collect();
+    sorted.sort_by(|a, b| b.1.cmp(&a.1));
+
+    sorted
+        .into_iter()
+        .enumerate()
+        .filter(|(index, entry)| {
+            *index >= PRE_MIN_KEEP && now - entry.1 > Duration::days(PRE_MAX_AGE_DAYS)
+        })
+        .map(|(_, entry)| entry.0)
         .collect()
 }
 
@@ -103,12 +120,31 @@ pub async fn apply(pool: &PgPool, settings: &BackupSettings) -> Result<usize, sq
     Ok(removed)
 }
 
+pub async fn apply_pre(pool: &PgPool) -> Result<usize, sqlx::Error> {
+    let candidates = repository::list_pre_rotatable(pool).await?;
+    let entries: Vec<(i32, DateTime<Utc>)> =
+        candidates.iter().map(|record| (record.id, record.started_at)).collect();
+
+    let mut removed = 0;
+    for id in pre_ids_to_delete(&entries, Utc::now()) {
+        let Some(record) = candidates.iter().find(|candidate| candidate.id == id) else {
+            continue;
+        };
+        if delete_files(record.file_name.as_deref(), record.file_path.as_deref()).await {
+            repository::mark_file_deleted(pool, id).await?;
+            removed += 1;
+        }
+    }
+    Ok(removed)
+}
+
 async fn delete_files(name: Option<&str>, path: Option<&str>) -> bool {
     let (Some(name), Some(path)) = (name, path) else {
         return true;
     };
     // Defensa: solo se borran archivos con el patrón que genera este módulo.
-    if !(name.starts_with("cashflow_") && (name.ends_with(".dump") || name.ends_with(".dump.enc"))) {
+    if !(name.starts_with("cashflow_") && (name.ends_with(".dump") || name.ends_with(".dump.enc")))
+    {
         tracing::warn!(file = name, "Rotación: nombre inesperado, no se borra");
         return false;
     }
@@ -137,6 +173,10 @@ mod tests {
             .unwrap()
     }
 
+    fn ago(days: i64) -> DateTime<Utc> {
+        Utc::now() - Duration::days(days)
+    }
+
     fn entry(id: i32, month: u32, day: u32, hour: u32) -> Entry {
         Entry {
             id,
@@ -147,7 +187,14 @@ mod tests {
     #[test]
     fn keeps_last_n_days_only() {
         let entries: Vec<Entry> = (1..=10).map(|d| entry(d as i32, 10, d, 21)).collect();
-        let doomed = ids_to_delete(&entries, Policy { daily: 3, weekly: 0, monthly: 0 });
+        let doomed = ids_to_delete(
+            &entries,
+            Policy {
+                daily: 3,
+                weekly: 0,
+                monthly: 0,
+            },
+        );
         assert_eq!(doomed.len(), 7);
         assert!(!doomed.contains(&10) && !doomed.contains(&9) && !doomed.contains(&8));
     }
@@ -155,7 +202,14 @@ mod tests {
     #[test]
     fn keeps_latest_of_each_day() {
         let entries = vec![entry(1, 10, 8, 9), entry(2, 10, 8, 21), entry(3, 10, 9, 21)];
-        let doomed = ids_to_delete(&entries, Policy { daily: 2, weekly: 0, monthly: 0 });
+        let doomed = ids_to_delete(
+            &entries,
+            Policy {
+                daily: 2,
+                weekly: 0,
+                monthly: 0,
+            },
+        );
         assert_eq!(doomed, vec![1]);
     }
 
@@ -167,14 +221,48 @@ mod tests {
             entry(3, 10, 12, 21),
             entry(4, 10, 13, 21),
         ];
-        let doomed = ids_to_delete(&entries, Policy { daily: 1, weekly: 0, monthly: 6 });
+        let doomed = ids_to_delete(
+            &entries,
+            Policy {
+                daily: 1,
+                weekly: 0,
+                monthly: 6,
+            },
+        );
         assert_eq!(doomed, vec![3]);
     }
 
     #[test]
     fn newest_is_never_deleted() {
         let entries = vec![entry(1, 10, 1, 9), entry(2, 10, 2, 9)];
-        let doomed = ids_to_delete(&entries, Policy { daily: 1, weekly: 0, monthly: 0 });
+        let doomed = ids_to_delete(
+            &entries,
+            Policy {
+                daily: 1,
+                weekly: 0,
+                monthly: 0,
+            },
+        );
         assert!(!doomed.contains(&2));
+    }
+
+    #[test]
+    fn pre_backups_keep_two_newest_and_recent_ones() {
+        let entries = vec![(1, ago(60)), (2, ago(40)), (3, ago(5)), (4, ago(1))];
+        let mut doomed = pre_ids_to_delete(&entries, Utc::now());
+        doomed.sort();
+        assert_eq!(doomed, vec![1, 2]);
+    }
+
+    #[test]
+    fn pre_backups_never_drop_below_two() {
+        let entries = vec![(1, ago(90)), (2, ago(60))];
+        assert!(pre_ids_to_delete(&entries, Utc::now()).is_empty());
+    }
+
+    #[test]
+    fn recent_pre_backups_are_kept_even_if_many() {
+        let entries = vec![(1, ago(1)), (2, ago(2)), (3, ago(3)), (4, ago(4))];
+        assert!(pre_ids_to_delete(&entries, Utc::now()).is_empty());
     }
 }

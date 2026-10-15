@@ -48,6 +48,9 @@ async fn run(app: AppHandle, pool: PgPool) {
 }
 
 async fn tick(app: &AppHandle, pool: &PgPool) -> Result<(), AppError> {
+    if service::restart_pending() || service::is_running() {
+        return Ok(());
+    }
     notify::retry_pending(pool).await;
 
     let settings = service::get_settings(pool).await?;
@@ -56,7 +59,8 @@ async fn tick(app: &AppHandle, pool: &PgPool) -> Result<(), AppError> {
     }
 
     let now_local = Local::now().naive_local();
-    let Some(due_naive) = status::last_due(now_local, settings.schedule_time, settings.schedule_days)
+    let Some(due_naive) =
+        status::last_due(now_local, settings.schedule_time, settings.schedule_days)
     else {
         return Ok(());
     };
@@ -72,8 +76,11 @@ async fn tick(app: &AppHandle, pool: &PgPool) -> Result<(), AppError> {
     let hours = summary
         .last_success
         .map(|at| (Utc::now() - at).num_hours().max(0));
-    let critical = status::compute_level(hours, settings.warn_after_days, settings.critical_after_days)
-        == AlertLevel::Critical;
+    let critical = status::compute_level(
+        hours,
+        settings.warn_after_days,
+        settings.critical_after_days,
+    ) == AlertLevel::Critical;
 
     if covered && !critical {
         return Ok(());
@@ -96,7 +103,11 @@ async fn tick(app: &AppHandle, pool: &PgPool) -> Result<(), AppError> {
     };
 
     let dir = default_backup_dir(app).map_err(AppError::Internal)?;
-    tracing::info!(kind = kind.as_str(), critical, "Iniciando backup automático");
+    tracing::info!(
+        kind = kind.as_str(),
+        critical,
+        "Iniciando backup automático"
+    );
 
     match service::run_backup(pool, &dir, kind, None).await {
         Ok(_) => {}

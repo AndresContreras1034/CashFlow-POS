@@ -1,4 +1,4 @@
-use tauri::State;
+use tauri::{AppHandle, State};
 
 use crate::db::DbPool;
 use crate::modules::inventory::{dto::ExportSummaryDto, export};
@@ -294,9 +294,16 @@ pub async fn preview_import_inventory(
 
 #[tauri::command]
 pub async fn execute_import_inventory(
+    app: AppHandle,
     pool: State<'_, DbPool>,
     file_path: String,
+    actor: Option<String>,
 ) -> Result<ImportSummaryDto, String> {
+    let default_dir = crate::modules::backup::handlers::default_backup_dir(&app)?;
+    crate::modules::backup::service::run_pre_import_backup(&pool, &default_dir, actor)
+        .await
+        .map_err(|e| e.to_string())?;
+
     import::execute_import(&pool, &file_path)
         .await
         .map_err(|e| e.to_string())

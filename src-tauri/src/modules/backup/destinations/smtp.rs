@@ -39,7 +39,10 @@ pub fn mailbox(name: Option<&str>, address: &str) -> Result<Mailbox, String> {
         .trim()
         .parse()
         .map_err(|_| format!("Correo no válido: {}", address.trim()))?;
-    let name = name.map(str::trim).filter(|n| !n.is_empty()).map(str::to_string);
+    let name = name
+        .map(str::trim)
+        .filter(|n| !n.is_empty())
+        .map(str::to_string);
     Ok(Mailbox::new(name, address))
 }
 
@@ -75,7 +78,9 @@ pub async fn send(
             builder.multipart(
                 MultiPart::mixed()
                     .singlepart(SinglePart::plain(body.to_string()))
-                    .singlepart(Attachment::new(name.to_string()).body(bytes.to_vec(), content_type)),
+                    .singlepart(
+                        Attachment::new(name.to_string()).body(bytes.to_vec(), content_type),
+                    ),
             )
         }
         None => builder.body(body.to_string()),

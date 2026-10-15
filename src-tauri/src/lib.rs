@@ -33,7 +33,12 @@ fn show_fatal_dialog(title: &str, message: &str) {
     let text = to_wide(message);
     let cap = to_wide(title);
     unsafe {
-        MessageBoxW(null_mut(), text.as_ptr(), cap.as_ptr(), MB_OK | MB_ICONERROR);
+        MessageBoxW(
+            null_mut(),
+            text.as_ptr(),
+            cap.as_ptr(),
+            MB_OK | MB_ICONERROR,
+        );
     }
 }
 
@@ -373,6 +378,8 @@ pub fn run() {
             delete_backup_recipient,
             send_backup_test_email,
             list_backup_deliveries,
+            inspect_backup_file,
+            restore_backup,
             // Developer Mode
             set_developer_mode,
             get_developer_status,

@@ -1,0 +1,60 @@
+.restore-modal {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.restore-modal-file,
+.restore-modal-password {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.restore-modal-file > span {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.restore-modal-password .form-input {
+  flex: 1;
+}
+
+.restore-modal-metadata {
+  margin: 0;
+  padding-left: 18px;
+  color: var(--text-secondary);
+  font-size: 13px;
+  line-height: 1.7;
+  overflow-wrap: anywhere;
+}
+
+.restore-modal-table-wrap {
+  overflow-x: auto;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+}
+
+.restore-modal-table {
+  margin: 0;
+}
+
+.restore-modal-error {
+  padding: 10px 12px;
+  border: 1px solid var(--danger);
+  border-radius: var(--radius-sm);
+  background: var(--danger-dim);
+  color: var(--danger);
+  font-size: 13px;
+  overflow-wrap: anywhere;
+}
+
+@container app-content (max-width: 520px) {
+  .restore-modal-file,
+  .restore-modal-password {
+    align-items: stretch;
+    flex-direction: column;
+  }
+}

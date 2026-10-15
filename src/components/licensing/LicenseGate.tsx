@@ -1,7 +1,8 @@
-import React, { useCallback, useEffect, useState } from 'react';
+import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { open } from '@tauri-apps/plugin-dialog';
 import type { LicenseStatusDto } from '../../types';
 import { activateLicense, getLicenseStatus } from '../../services/licensing.service';
+import { RestoreModal } from '../backup/RestoreModal';
 import './LicenseGate.css';
 
 interface LicenseGateProps {
@@ -19,8 +20,11 @@ export const LicenseGate: React.FC<LicenseGateProps> = ({ children }) => {
   const [status, setStatus] = useState<LicenseStatusDto | null>(null);
   const [loading, setLoading] = useState(true);
   const [busy, setBusy] = useState(false);
+  const [restoreOpen, setRestoreOpen] = useState(false);
   const [error, setError] = useState('');
   const [notice, setNotice] = useState('');
+  const restoreOpenRef = useRef(false);
+  restoreOpenRef.current = restoreOpen;
 
   const refreshStatus = useCallback(async () => {
     try {
@@ -38,7 +42,9 @@ export const LicenseGate: React.FC<LicenseGateProps> = ({ children }) => {
 
   useEffect(() => {
     void refreshStatus();
-    const timer = window.setInterval(() => void refreshStatus(), 30_000);
+    const timer = window.setInterval(() => {
+      if (!restoreOpenRef.current) void refreshStatus();
+    }, 30_000);
     return () => window.clearInterval(timer);
   }, [refreshStatus]);
 
@@ -134,11 +140,25 @@ export const LicenseGate: React.FC<LicenseGateProps> = ({ children }) => {
           {busy ? 'Validando…' : 'Importar archivo de licencia'}
         </button>
 
+        <button
+          type="button"
+          className="license-copy"
+          onClick={() => setRestoreOpen(true)}
+          disabled={busy}
+        >
+          Restaurar datos desde un backup
+        </button>
+        <span className="license-help">
+          ¿Cambiaste de equipo? Restaura primero tus datos. La licencia se importa después; no
+          viaja en el backup.
+        </span>
+
         <p className="license-source-note">
           El acceso al código fuente se entrega conforme al acuerdo de compra o alquiler;
           la activación de esta instalación no sustituye esa entrega.
         </p>
       </section>
+      {restoreOpen && <RestoreModal onClose={() => setRestoreOpen(false)} />}
     </main>
   );
 };

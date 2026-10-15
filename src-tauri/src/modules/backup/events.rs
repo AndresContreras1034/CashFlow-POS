@@ -49,7 +49,12 @@ async fn write(pool: &PgPool, event: NewAuditEvent) {
     }
 }
 
-pub async fn success(pool: &PgPool, kind: BackupKind, record: &BackupRecord, actor: Option<String>) {
+pub async fn success(
+    pool: &PgPool,
+    kind: BackupKind,
+    record: &BackupRecord,
+    actor: Option<String>,
+) {
     let file = record.file_name.clone().unwrap_or_default();
     let size = record.size_bytes.unwrap_or(0);
     write(
@@ -98,6 +103,27 @@ pub async fn failure(pool: &PgPool, kind: BackupKind, message: &str, actor: Opti
             summary: format!("Backup {} fallido", kind_label(kind)),
             changes: None,
             metadata: Some(json!({ "kind": kind.as_str() })),
+            error_message: Some(message.to_string()),
+        },
+    )
+    .await;
+}
+
+pub async fn restore_failure(pool: &PgPool, message: &str, actor: Option<String>) {
+    write(
+        pool,
+        NewAuditEvent {
+            correlation_id: Some(Uuid::new_v4()),
+            category: AuditCategory::Error,
+            module: AuditModule::Backup,
+            action: "restore".to_string(),
+            outcome: AuditOutcome::Failure,
+            actor,
+            entity_type: Some("backup".to_string()),
+            entity_id: None,
+            summary: "Restauración de backup fallida".to_string(),
+            changes: None,
+            metadata: None,
             error_message: Some(message.to_string()),
         },
     )

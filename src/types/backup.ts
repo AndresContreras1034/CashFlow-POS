@@ -125,3 +125,35 @@ export interface BackupEnvironment {
   pg_dump_version: string | null;
   tools_error: string | null;
 }
+
+export interface CountItem {
+  label: string;
+  count: number;
+}
+
+export interface ArchiveDetails {
+  dumped_server_version: string | null;
+  dumped_database: string | null;
+  archive_created_at: string | null;
+  last_migration: number;
+  app_last_migration: number;
+  business_name: string | null;
+  backup_counts: CountItem[];
+  current_counts: CountItem[];
+}
+
+export interface BackupInspection {
+  file_name: string;
+  size_bytes: number;
+  encrypted: boolean;
+  needs_password: boolean;
+  details: ArchiveDetails | null;
+}
+
+export interface RestoreOutcome {
+  file_name: string;
+  pre_restore_file: string | null;
+  last_migration: number;
+  warnings: string[];
+  restarting: boolean;
+}

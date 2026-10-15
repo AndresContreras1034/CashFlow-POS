@@ -7,10 +7,16 @@
   border: 1px solid rgba(128, 128, 128, 0.3);
   border-radius: 8px;
   background: transparent;
-  color: inherit;
+  color: #D0D5DD;
   font-size: 0.75rem;
+  font-family: inherit;
   cursor: pointer;
   text-align: left;
+}
+
+.backup-badge-btn:hover {
+  background: rgba(255, 255, 255, 0.08);
+  color: #FFFFFF;
 }
 
 .backup-badge-dot {

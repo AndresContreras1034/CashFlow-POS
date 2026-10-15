@@ -125,9 +125,10 @@ export const previewImportInventory = (
   invoke('preview_import_inventory', { filePath });
 
 export const executeImportInventory = (
-  filePath: string
+  filePath: string,
+  actor: string | null = null
 ): Promise<ImportSummaryDto> =>
-  invoke('execute_import_inventory', { filePath });
+  invoke('execute_import_inventory', { filePath, actor });
 
 export const exportInventory = (filePath: string): Promise<ExportSummaryDto> =>
   invoke('export_inventory', { filePath });

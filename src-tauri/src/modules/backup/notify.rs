@@ -37,7 +37,8 @@ async fn build_ctx(pool: &PgPool, settings: &BackupSettings) -> Result<Ctx, Stri
         .ok_or("Falta el correo remitente (la cuenta de Gmail)")?;
     let password = secrets::get(Secret::SmtpPassword)?
         .ok_or("Falta la contraseña de aplicación del correo")?;
-    let port = u16::try_from(settings.smtp_port).map_err(|_| "Puerto SMTP no válido".to_string())?;
+    let port =
+        u16::try_from(settings.smtp_port).map_err(|_| "Puerto SMTP no válido".to_string())?;
 
     let transport = smtp::transport(&SmtpConfig {
         host: settings.smtp_host.clone(),
@@ -51,7 +52,11 @@ async fn build_ctx(pool: &PgPool, settings: &BackupSettings) -> Result<Ctx, Stri
         .await
         .unwrap_or_else(|_| "CashFlow POS".to_string());
 
-    Ok(Ctx { transport, from, business })
+    Ok(Ctx {
+        transport,
+        from,
+        business,
+    })
 }
 
 async fn record_failed(
@@ -62,7 +67,8 @@ async fn record_failed(
     error: &str,
 ) {
     for r in recipients {
-        let _ = repository::insert_delivery(pool, backup_id, notice, &r.email, false, Some(error)).await;
+        let _ = repository::insert_delivery(pool, backup_id, notice, &r.email, false, Some(error))
+            .await;
     }
 }
 
@@ -77,7 +83,15 @@ async fn deliver(
     body: &str,
     attachment: Option<(&str, &[u8])>,
 ) -> Result<(), String> {
-    let result = smtp::send(&ctx.transport, &ctx.from, &to.email, subject, body, attachment).await;
+    let result = smtp::send(
+        &ctx.transport,
+        &ctx.from,
+        &to.email,
+        subject,
+        body,
+        attachment,
+    )
+    .await;
     if let Err(e) = repository::insert_delivery(
         pool,
         backup_id,
@@ -147,7 +161,11 @@ async fn send_success(
         None
     };
 
-    let when = record.finished_at.with_timezone(&Local).format("%d/%m/%Y %H:%M").to_string();
+    let when = record
+        .finished_at
+        .with_timezone(&Local)
+        .format("%d/%m/%Y %H:%M")
+        .to_string();
     let subject = format!("[CashFlow POS] Backup correcto - {} - {when}", ctx.business);
     let location = record
         .file_path
@@ -175,18 +193,39 @@ async fn send_success(
              Para restaurarlo necesitarás la contraseña de cifrado (no viaja en este correo).\n",
             business = ctx.business,
             size_text = format_size(size),
-            encrypted = if record.encrypted { "Sí (AES-256-GCM)" } else { "No" },
+            encrypted = if record.encrypted {
+                "Sí (AES-256-GCM)"
+            } else {
+                "No"
+            },
             sha = record.sha256.as_deref().unwrap_or("-"),
-            note = attach_note(attachment.is_some(), r.send_attachment, record.encrypted, size),
+            note = attach_note(
+                attachment.is_some(),
+                r.send_attachment,
+                record.encrypted,
+                size
+            ),
         );
-        let _ = deliver(pool, &ctx, Some(record.id), "success", r, &subject, &body, attachment).await;
+        let _ = deliver(
+            pool,
+            &ctx,
+            Some(record.id),
+            "success",
+            r,
+            &subject,
+            &body,
+            attachment,
+        )
+        .await;
     }
     Ok(())
 }
 
 pub async fn after_success(pool: &PgPool, record: &BackupRecord) {
     let _guard = EMAIL_LOCK.lock().await;
-    let Ok(settings) = service::get_settings(pool).await else { return };
+    let Ok(settings) = service::get_settings(pool).await else {
+        return;
+    };
     if !settings.smtp_enabled {
         return;
     }
@@ -204,7 +243,9 @@ pub async fn after_success(pool: &PgPool, record: &BackupRecord) {
 
 pub async fn after_failure(pool: &PgPool, record: &BackupRecord) {
     let _guard = EMAIL_LOCK.lock().await;
-    let Ok(settings) = service::get_settings(pool).await else { return };
+    let Ok(settings) = service::get_settings(pool).await else {
+        return;
+    };
     if !settings.smtp_enabled || !settings.email_on_failure {
         return;
     }
@@ -214,7 +255,9 @@ pub async fn after_failure(pool: &PgPool, record: &BackupRecord) {
     {
         return;
     }
-    let Ok(recipients) = repository::active_recipients(pool).await else { return };
+    let Ok(recipients) = repository::active_recipients(pool).await else {
+        return;
+    };
     if recipients.is_empty() {
         return;
     }
@@ -227,7 +270,11 @@ pub async fn after_failure(pool: &PgPool, record: &BackupRecord) {
         }
     };
 
-    let when = record.finished_at.with_timezone(&Local).format("%d/%m/%Y %H:%M").to_string();
+    let when = record
+        .finished_at
+        .with_timezone(&Local)
+        .format("%d/%m/%Y %H:%M")
+        .to_string();
     let subject = format!("[CashFlow POS] Backup FALLIDO - {} - {when}", ctx.business);
     let body = format!(
         "El backup automático de CashFlow POS NO se pudo completar.\n\n\
@@ -238,13 +285,25 @@ pub async fn after_failure(pool: &PgPool, record: &BackupRecord) {
         record.error_message.as_deref().unwrap_or("(sin detalle)"),
     );
     for r in &recipients {
-        let _ = deliver(pool, &ctx, Some(record.id), "failure", r, &subject, &body, None).await;
+        let _ = deliver(
+            pool,
+            &ctx,
+            Some(record.id),
+            "failure",
+            r,
+            &subject,
+            &body,
+            None,
+        )
+        .await;
     }
 }
 
 /// Lo llama el scheduler cada minuto; casi siempre sale en la primera consulta.
 pub async fn retry_pending(pool: &PgPool) {
-    let Ok(settings) = service::get_settings(pool).await else { return };
+    let Ok(settings) = service::get_settings(pool).await else {
+        return;
+    };
     if !settings.smtp_enabled {
         return;
     }
@@ -252,7 +311,9 @@ pub async fn retry_pending(pool: &PgPool) {
     let Ok(Some(record)) = repository::latest_success_within(pool, RETRY_WINDOW_HOURS).await else {
         return;
     };
-    let Ok(pending) = repository::recipients_needing_retry(pool, record.id).await else { return };
+    let Ok(pending) = repository::recipients_needing_retry(pool, record.id).await else {
+        return;
+    };
     if pending.is_empty() {
         return;
     }
@@ -265,8 +326,12 @@ pub async fn retry_pending(pool: &PgPool) {
 /// Usa los ajustes GUARDADOS (no los del formulario sin guardar).
 pub async fn send_test(pool: &PgPool) -> Result<Vec<EmailTestResult>, String> {
     let _guard = EMAIL_LOCK.lock().await;
-    let settings = service::get_settings(pool).await.map_err(|e| e.to_string())?;
-    let recipients = repository::active_recipients(pool).await.map_err(|e| e.to_string())?;
+    let settings = service::get_settings(pool)
+        .await
+        .map_err(|e| e.to_string())?;
+    let recipients = repository::active_recipients(pool)
+        .await
+        .map_err(|e| e.to_string())?;
     if recipients.is_empty() {
         return Err("Añade al menos un destinatario activo".to_string());
     }

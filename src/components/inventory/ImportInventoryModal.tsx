@@ -1,7 +1,9 @@
 import React, { useState } from 'react';
 import { open, save } from '@tauri-apps/plugin-dialog';
 import { Modal } from '../ui/Modal';
+import { notifyBackupChanged } from '../../hooks/useBackupStatus';
 import { ImportSummaryDto } from '../../types';
+import { getOperatorOrNull } from '../../utils/preferences';
 import {
   previewImportInventory,
   executeImportInventory,
@@ -33,6 +35,7 @@ export const ImportInventoryModal: React.FC<Props> = ({ onClose, onImported, add
   const [summary, setSummary] = useState<ImportSummaryDto | null>(null);
   const [loading, setLoading] = useState(false);
   const [executing, setExecuting] = useState(false);
+  const [phase, setPhase] = useState<'idle' | 'backup' | 'import'>('idle');
   const [savingTemplate, setSavingTemplate] = useState(false);
 
   const handlePickFile = async () => {
@@ -76,8 +79,16 @@ export const ImportInventoryModal: React.FC<Props> = ({ onClose, onImported, add
   const handleConfirm = async () => {
     if (!filePath) return;
     setExecuting(true);
+    setPhase('backup');
     try {
-      const res = await executeImportInventory(filePath);
+      const timer = window.setTimeout(() => setPhase('import'), 4_000);
+      let res;
+      try {
+        res = await executeImportInventory(filePath, getOperatorOrNull());
+      } finally {
+        window.clearTimeout(timer);
+      }
+
       if (!res.can_execute) {
         setSummary(res);
         addToast('No se importó nada: el archivo tiene errores', 'error');
@@ -90,11 +101,13 @@ export const ImportInventoryModal: React.FC<Props> = ({ onClose, onImported, add
         'success'
       );
       onImported();
+      notifyBackupChanged();
       onClose();
     } catch (error) {
       addToast(`Error al importar: ${errorMessage(error)}`, 'error');
     } finally {
       setExecuting(false);
+      setPhase('idle');
     }
   };
 
@@ -175,9 +188,19 @@ export const ImportInventoryModal: React.FC<Props> = ({ onClose, onImported, add
                 disabled={!summary.can_execute || executing}
                 onClick={handleConfirm}
               >
-                {executing ? 'Importando...' : `Confirmar importación (${summary.new_variants} variantes)`}
+                {executing
+                  ? phase === 'backup'
+                    ? 'Haciendo backup de seguridad…'
+                    : 'Importando…'
+                  : `Confirmar importación (${summary.new_variants} variantes)`}
               </button>
             </div>
+
+            {executing && (
+              <p className="import-blocked-note">
+                Se guarda una copia de seguridad antes de importar. No cierres la aplicación.
+              </p>
+            )}
 
             {!summary.can_execute && (
               <p className="import-blocked-note">

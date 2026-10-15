@@ -6,11 +6,11 @@ use crate::db::DbPool;
 use crate::errors::app_error::AppError;
 use crate::modules::backup::{
     dto::{
-        BackupEnvironment, CreateRecipientDto, EmailTestResult, SecretsStatus,
-        UpdateBackupSettingsDto, UpdateRecipientDto,
+        BackupEnvironment, BackupInspection, CreateRecipientDto, EmailTestResult, RestoreOutcome,
+        SecretsStatus, UpdateBackupSettingsDto, UpdateRecipientDto,
     },
     models::{BackupDelivery, BackupKind, BackupRecipient, BackupRecord, BackupSettings},
-    notify, service,
+    notify, restore, service,
     status::{self, BackupStatus},
 };
 
@@ -109,8 +109,12 @@ pub async fn set_backup_smtp_password(
 }
 
 #[tauri::command]
-pub async fn list_backup_recipients(pool: State<'_, DbPool>) -> Result<Vec<BackupRecipient>, String> {
-    service::list_recipients(&pool).await.map_err(|e: AppError| e.to_string())
+pub async fn list_backup_recipients(
+    pool: State<'_, DbPool>,
+) -> Result<Vec<BackupRecipient>, String> {
+    service::list_recipients(&pool)
+        .await
+        .map_err(|e: AppError| e.to_string())
 }
 
 #[tauri::command]
@@ -118,7 +122,9 @@ pub async fn add_backup_recipient(
     pool: State<'_, DbPool>,
     dto: CreateRecipientDto,
 ) -> Result<BackupRecipient, String> {
-    service::add_recipient(&pool, dto).await.map_err(|e: AppError| e.to_string())
+    service::add_recipient(&pool, dto)
+        .await
+        .map_err(|e: AppError| e.to_string())
 }
 
 #[tauri::command]
@@ -127,16 +133,22 @@ pub async fn update_backup_recipient(
     id: i32,
     dto: UpdateRecipientDto,
 ) -> Result<BackupRecipient, String> {
-    service::update_recipient(&pool, id, dto).await.map_err(|e: AppError| e.to_string())
+    service::update_recipient(&pool, id, dto)
+        .await
+        .map_err(|e: AppError| e.to_string())
 }
 
 #[tauri::command]
 pub async fn delete_backup_recipient(pool: State<'_, DbPool>, id: i32) -> Result<(), String> {
-    service::delete_recipient(&pool, id).await.map_err(|e: AppError| e.to_string())
+    service::delete_recipient(&pool, id)
+        .await
+        .map_err(|e: AppError| e.to_string())
 }
 
 #[tauri::command]
-pub async fn send_backup_test_email(pool: State<'_, DbPool>) -> Result<Vec<EmailTestResult>, String> {
+pub async fn send_backup_test_email(
+    pool: State<'_, DbPool>,
+) -> Result<Vec<EmailTestResult>, String> {
     notify::send_test(&pool).await
 }
 
@@ -145,5 +157,32 @@ pub async fn list_backup_deliveries(
     pool: State<'_, DbPool>,
     limit: Option<i64>,
 ) -> Result<Vec<BackupDelivery>, String> {
-    service::list_deliveries(&pool, limit).await.map_err(|e: AppError| e.to_string())
+    service::list_deliveries(&pool, limit)
+        .await
+        .map_err(|e: AppError| e.to_string())
+}
+
+#[tauri::command]
+pub async fn inspect_backup_file(
+    pool: State<'_, DbPool>,
+    path: String,
+    password: Option<String>,
+) -> Result<BackupInspection, String> {
+    restore::inspect(&pool, PathBuf::from(path), password)
+        .await
+        .map_err(|e: AppError| e.to_string())
+}
+
+#[tauri::command]
+pub async fn restore_backup(
+    app: AppHandle,
+    pool: State<'_, DbPool>,
+    path: String,
+    password: Option<String>,
+    actor: Option<String>,
+) -> Result<RestoreOutcome, String> {
+    let default_dir = default_backup_dir(&app)?;
+    restore::restore(app, pool.inner().clone(), default_dir, PathBuf::from(path), password, actor)
+    .await
+    .map_err(|e: AppError| e.to_string())
 }

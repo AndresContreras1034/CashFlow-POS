@@ -29,6 +29,7 @@ import { notifyBackupChanged } from '../../hooks/useBackupStatus';
 import { getOperatorOrNull } from '../../utils/preferences';
 import { BackupHistoryList } from './BackupHistoryList';
 import { BackupRecipients } from './BackupRecipients';
+import { RestoreModal } from './RestoreModal';
 import { SecretField } from './SecretField';
 
 interface Props {
@@ -94,6 +95,7 @@ export const BackupSettingsForm: React.FC<Props> = ({ onToast }) => {
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [running, setRunning] = useState(false);
+  const [restoreOpen, setRestoreOpen] = useState(false);
 
   const refreshEnv = useCallback(async () => {
     try {
@@ -583,9 +585,29 @@ export const BackupSettingsForm: React.FC<Props> = ({ onToast }) => {
       </section>
 
       <section className="settings-section">
+        <h2 className="settings-section-title">Restaurar</h2>
+        <p className="settings-hint">
+          Vuelve a un punto anterior usando un archivo de backup (de la carpeta, de un USB o el
+          adjunto de un correo). Si está cifrado necesitarás la contraseña con la que se hizo.
+        </p>
+        <div>
+          <button
+            type="button"
+            className="btn btn-ghost"
+            onClick={() => setRestoreOpen(true)}
+            disabled={running}
+          >
+            Restaurar desde un backup…
+          </button>
+        </div>
+      </section>
+
+      <section className="settings-section">
         <h2 className="settings-section-title">Historial</h2>
         <BackupHistoryList records={history} />
       </section>
+
+      {restoreOpen && <RestoreModal onClose={() => setRestoreOpen(false)} />}
     </>
   );
 };

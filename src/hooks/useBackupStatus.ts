@@ -6,10 +6,18 @@ import type { BackupStatus } from '../types/backup';
 export const BACKUP_CHANGED_EVENT = 'backup:changed';
 export const notifyBackupChanged = () => window.dispatchEvent(new Event(BACKUP_CHANGED_EVENT));
 
+let polling = true;
+
+/** Evita consultas mientras la base se cambia por una restauración. */
+export const setBackupPolling = (enabled: boolean) => {
+  polling = enabled;
+};
+
 export function useBackupStatus(intervalMs = 30_000) {
   const [status, setStatus] = useState<BackupStatus | null>(null);
 
   const refresh = useCallback(async () => {
+    if (!polling) return;
     try {
       setStatus(await getBackupStatus());
     } catch (error) {
