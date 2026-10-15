@@ -3,6 +3,7 @@ import { useSearchParams } from 'react-router-dom';
 import { SupplierDetail } from '../../components/suppliers/SupplierDetail';
 import { SupplierForm } from '../../components/suppliers/SupplierForm';
 import { SupplierCallPanel } from '../../components/suppliers/SupplierCallPanel';
+import { PurchasePanel } from '../../components/suppliers/PurchasePanel';
 import { SupplierCsvButton } from '../../components/suppliers/SupplierCsvButton';
 import {
   SuppliersSummaryCards,
@@ -36,7 +37,7 @@ import './Suppliers.css';
 
 const PAGE_SIZE = 20;
 type ActiveFilter = 'active' | 'inactive' | 'all';
-type SupplierView = 'directory' | 'call';
+type SupplierView = 'directory' | 'call' | 'purchases';
 
 type Dialog =
   | { kind: 'none' }
@@ -51,7 +52,14 @@ type Dialog =
 
 export default function Suppliers() {
   const [searchParams, setSearchParams] = useSearchParams();
-  const view: SupplierView = searchParams.get('view') === 'call' ? 'call' : 'directory';
+  const viewParam = searchParams.get('view');
+  const view: SupplierView = viewParam === 'call' || viewParam === 'purchases'
+    ? viewParam
+    : 'directory';
+  const parsedListId = Number(searchParams.get('list'));
+  const activeListId = Number.isSafeInteger(parsedListId) && parsedListId > 0
+    ? parsedListId
+    : null;
   const { settings } = useSettings();
   const [searchInput, setSearchInput] = useState('');
   const search = useDebounce(searchInput.trim(), 400);
@@ -93,6 +101,15 @@ export default function Suppliers() {
     });
   }, [setSearchParams]);
 
+  const changeList = useCallback((id: number | null) => {
+    setSearchParams(current => {
+      const next = new URLSearchParams(current);
+      if (id === null) next.delete('list');
+      else next.set('list', String(id));
+      return next;
+    });
+  }, [setSearchParams]);
+
   const openCallPanel = useCallback((onlyUrgent: boolean) => {
     setInitialOnlyUrgent(onlyUrgent);
     setCallPanelOpenToken(token => token + 1);
@@ -102,11 +119,14 @@ export default function Suppliers() {
   const handleViewTabKeyDown = useCallback((event: KeyboardEvent<HTMLDivElement>) => {
     let nextView: SupplierView | null = null;
     if (event.key === 'ArrowRight' || event.key === 'ArrowLeft') {
-      nextView = view === 'directory' ? 'call' : 'directory';
+      const views: SupplierView[] = ['directory', 'call', 'purchases'];
+      const index = views.indexOf(view);
+      const offset = event.key === 'ArrowRight' ? 1 : -1;
+      nextView = views[(index + offset + views.length) % views.length];
     } else if (event.key === 'Home') {
       nextView = 'directory';
     } else if (event.key === 'End') {
-      nextView = 'call';
+      nextView = 'purchases';
     }
     if (!nextView) return;
     event.preventDefault();
@@ -330,9 +350,37 @@ export default function Suppliers() {
         >
           Para llamar
         </button>
+        <button
+          type="button"
+          role="tab"
+          id="suppliers-view-purchases"
+          aria-selected={view === 'purchases'}
+          aria-controls="suppliers-view-panel"
+          tabIndex={view === 'purchases' ? 0 : -1}
+          className="suppliers-view-tab"
+          onClick={() => changeView('purchases')}
+        >
+          Compras
+        </button>
       </div>
 
-      {view === 'call' ? (
+      {view === 'purchases' ? (
+        <div
+          id="suppliers-view-panel"
+          role="tabpanel"
+          aria-labelledby="suppliers-view-purchases"
+        >
+          <PurchasePanel
+            listId={activeListId}
+            onSelectList={changeList}
+            timezone={settings.timezone}
+            businessName={settings.business_name}
+            onAction={action => void handleAction(action)}
+            onCopy={(text, what) => void handleCopy(text, what)}
+            onNotify={notify}
+          />
+        </div>
+      ) : view === 'call' ? (
         <div
           id="suppliers-view-panel"
           role="tabpanel"

@@ -81,7 +81,7 @@ export const isAllowedContactUrl = (url: string): boolean =>
 
 export const buildRestockOrderMessage = (
   supplierName: string | null,
-  items: RestockItem[],
+  items: readonly Pick<RestockItem, 'product_name' | 'attributes' | 'suggested_qty'>[],
   businessName: string,
 ): string => {
   const greeting = supplierName ? `Hola ${supplierName},` : 'Hola,';

@@ -2,6 +2,8 @@ import { describe, expect, it } from 'vitest';
 import type { PurchaseItem } from '../types/purchases';
 import type { RestockGroup, RestockItem } from '../types/suppliers';
 import {
+  addedMessage,
+  buildSupplierOptions,
   defaultListTitle,
   groupBySupplier,
   isEditable,
@@ -11,7 +13,9 @@ import {
   purchaseStatusBadgeClass,
   purchaseTotals,
   replaceItem,
+  resolveQuantityCommit,
   statusActions,
+  toPickable,
 } from './purchaseList';
 
 const supplier = (id: number, name: string) => ({
@@ -192,5 +196,61 @@ describe('messageItems', () => {
       attributes: { color: 'Rojo' },
       suggested_qty: 6,
     });
+  });
+});
+
+describe('resolveQuantityCommit', () => {
+  it('distingue inválido, sin cambios y guardar', () => {
+    expect(resolveQuantityCommit('abc', 5)).toEqual({ kind: 'invalid' });
+    expect(resolveQuantityCommit('0', 5)).toEqual({ kind: 'invalid' });
+    expect(resolveQuantityCommit(' 5 ', 5)).toEqual({ kind: 'unchanged' });
+    expect(resolveQuantityCommit('8', 5)).toEqual({ kind: 'save', value: 8 });
+  });
+});
+
+describe('buildSupplierOptions', () => {
+  const suppliers = [
+    { id: 2, name: 'Zeta', is_active: true },
+    { id: 1, name: 'Alfa', is_active: true },
+    { id: 3, name: 'Cerrado', is_active: false },
+  ];
+  it('lista solo los activos, por nombre', () => {
+    expect(buildSupplierOptions(null, suppliers).map(option => option.id)).toEqual([1, 2]);
+  });
+  it('conserva el proveedor actual aunque esté desactivado', () => {
+    const options = buildSupplierOptions(supplier(3, 'Cerrado'), suppliers);
+    expect(options[0]).toEqual({ id: 3, name: 'Cerrado', inactive: true });
+    expect(options.map(option => option.id)).toEqual([3, 1, 2]);
+  });
+  it('no duplica al actual si ya es activo', () => {
+    expect(buildSupplierOptions(supplier(1, 'Alfa'), suppliers).map(option => option.id))
+      .toEqual([1, 2]);
+  });
+});
+
+describe('toPickable', () => {
+  it('usa «ya en la lista» como «ya enlazado»', () => {
+    const picked = toPickable({
+      variant_id: 1, product_id: 1, product_name: 'Aretes', brand: null, attributes: {},
+      sku: null, barcode: null, category_name: 'Cat', stock: 1, stock_min: 1,
+      variant_cost: 0, in_list: true,
+    });
+    expect(picked.linked_here).toBe(true);
+    expect(picked.supplier_count).toBe(0);
+  });
+});
+
+describe('addedMessage', () => {
+  it('muestra los agregados y los que ya estaban en la lista', () => {
+    expect(addedMessage({ requested: 1, added: 1, already_in_list: 0 }))
+      .toBe('1 producto agregado');
+    expect(addedMessage({ requested: 4, added: 3, already_in_list: 1 }))
+      .toBe('3 productos agregados · 1 ya estaban en la lista');
+    expect(addedMessage({ requested: 1, added: 0, already_in_list: 1 }))
+      .toBe('Ese producto ya estaba en la lista');
+    expect(addedMessage({ requested: 2, added: 0, already_in_list: 2 }))
+      .toBe('Esos 2 productos ya estaban en la lista');
+    expect(addedMessage({ requested: 0, added: 0, already_in_list: 0 }))
+      .toBe('No había productos para agregar');
   });
 });

@@ -1,10 +1,12 @@
 import type {
+  AddItemsResult,
   PurchaseItem,
   PurchaseItemSource,
   PurchaseListStatus,
   PurchaseSupplier,
+  PurchasableVariant,
 } from '../types/purchases';
-import type { RestockOverview } from '../types/suppliers';
+import type { LinkableVariant, RestockOverview, Supplier } from '../types/suppliers';
 import { formatDay } from './debts';
 
 export const PURCHASE_STATUS_LABELS: Record<PurchaseListStatus, string> = {
@@ -191,3 +193,63 @@ export const messageItems = (group: Pick<PurchaseGroup, 'items'>) =>
     attributes: item.attributes,
     suggested_qty: item.quantity,
   }));
+
+export const toPickable = (variant: PurchasableVariant): LinkableVariant => ({
+  variant_id: variant.variant_id,
+  product_id: variant.product_id,
+  product_name: variant.product_name,
+  brand: variant.brand,
+  attributes: variant.attributes,
+  sku: variant.sku,
+  barcode: variant.barcode,
+  category_name: variant.category_name,
+  stock: variant.stock,
+  stock_min: variant.stock_min,
+  variant_cost: variant.variant_cost,
+  linked_here: variant.in_list,
+  supplier_count: 0,
+});
+
+export type QuantityCommit =
+  | { kind: 'invalid' }
+  | { kind: 'unchanged' }
+  | { kind: 'save'; value: number };
+
+export const resolveQuantityCommit = (raw: string, current: number): QuantityCommit => {
+  const parsed = parseQuantity(raw);
+  if (parsed === null) return { kind: 'invalid' };
+  return parsed === current ? { kind: 'unchanged' } : { kind: 'save', value: parsed };
+};
+
+export interface SupplierOption {
+  id: number;
+  name: string;
+  inactive: boolean;
+}
+
+export const buildSupplierOptions = (
+  current: PurchaseSupplier | null,
+  suppliers: readonly Pick<Supplier, 'id' | 'name' | 'is_active'>[],
+): SupplierOption[] => {
+  const options = suppliers
+    .filter(supplier => supplier.is_active)
+    .map(supplier => ({ id: supplier.id, name: supplier.name, inactive: false }))
+    .sort((a, b) => a.name.localeCompare(b.name, 'es'));
+  if (current && !options.some(option => option.id === current.id)) {
+    options.unshift({ id: current.id, name: current.name, inactive: true });
+  }
+  return options;
+};
+
+export const addedMessage = (result: AddItemsResult): string => {
+  if (result.added === 0) {
+    if (result.already_in_list === 0) return 'No había productos para agregar';
+    return result.already_in_list === 1
+      ? 'Ese producto ya estaba en la lista'
+      : `Esos ${result.already_in_list} productos ya estaban en la lista`;
+  }
+  const added = `${result.added} ${result.added === 1 ? 'producto agregado' : 'productos agregados'}`;
+  return result.already_in_list > 0
+    ? `${added} · ${result.already_in_list} ya estaban en la lista`
+    : added;
+};

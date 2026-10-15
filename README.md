@@ -28,8 +28,9 @@ signing, update, or release process, so those are not described as complete here
 - Sales with line items, payments, taxes, discounts, and sales history.
 - Cash sessions, opening balances, cash movements, closing, and reconciliation data.
 - Customer records and debt/payment management.
-- Supplier directory, product/category links, restock suggestions, contact workflows,
-  supplier payables, and CSV exports.
+- Supplier directory, product/category links, restock suggestions, saved purchase lists
+  with editable quantities and supplier assignment, supplier contact workflows, supplier
+  payables, and CSV exports.
 - Business reports for sales, inventory, and payables.
 - Thermal ticket and product-label printing through ESC/POS-related Windows code.
 - Business, currency, tax, timezone, ticket, theme, shortcut, and local operator settings.
@@ -107,7 +108,7 @@ application initializes its connection pool and runs pending migrations during s
 | `developer` | In-memory diagnostics, startup health, and technical event feed | Implemented |
 | `customers` | Customer records and lookup | Implemented |
 | `debts` | Debt records, payments, and reporting support | Implemented |
-| `suppliers` | Supplier directory, catalog links, restocking, and payables | Implemented |
+| `suppliers` | Supplier directory, catalog links, restocking, purchase lists, and payables | Implemented |
 | `reports` | Sales, inventory, and payables reports | Implemented |
 
 ## Technology Stack

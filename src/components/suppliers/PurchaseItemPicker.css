@@ -1,0 +1,194 @@
+.purchase-picker {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.purchase-picker-controls {
+  display: grid;
+  grid-template-columns: minmax(180px, 1fr) minmax(160px, 0.7fr);
+  gap: 10px;
+}
+
+.purchase-picker-toolbar,
+.purchase-picker-selection-head,
+.purchase-picker-actions,
+.purchase-picker-pagination {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+}
+
+.purchase-picker-toolbar,
+.purchase-picker-pagination {
+  color: var(--text-secondary);
+  font-size: 12.5px;
+}
+
+.purchase-picker-table-wrap {
+  max-height: 360px;
+  overflow: auto;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  background: var(--bg-surface);
+}
+
+.purchase-picker-table {
+  width: 100%;
+  border-collapse: collapse;
+  text-align: left;
+  font-size: 12.5px;
+}
+
+.purchase-picker-table th,
+.purchase-picker-table td {
+  padding: 8px 10px;
+  border-bottom: 1px solid var(--border-subtle);
+  vertical-align: middle;
+}
+
+.purchase-picker-table th {
+  position: sticky;
+  top: 0;
+  z-index: 1;
+  background: var(--bg-elevated);
+  color: var(--text-secondary);
+  font-size: 10.5px;
+  letter-spacing: 0.03em;
+  text-transform: uppercase;
+  white-space: nowrap;
+}
+
+.purchase-picker-table td:first-child {
+  text-align: center;
+}
+
+.purchase-picker-page-select {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  color: var(--text-secondary);
+  font-size: 12px;
+  text-transform: none;
+}
+
+.purchase-picker-sub {
+  display: block;
+  margin-top: 2px;
+  color: var(--text-muted);
+  font-size: 11px;
+}
+
+.purchase-picker-muted,
+.purchase-picker-notice {
+  margin: 0;
+  color: var(--text-muted);
+  font-size: 13px;
+}
+
+.purchase-picker-error,
+.purchase-picker-confirm {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 9px;
+  padding: 9px 11px;
+  border: 1px solid var(--danger);
+  border-radius: var(--radius-sm);
+  background: var(--danger-dim);
+  color: var(--danger);
+  font-size: 12.5px;
+}
+
+.purchase-picker-selection {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  padding-top: 12px;
+  border-top: 1px solid var(--border);
+}
+
+.purchase-picker-selection-head {
+  justify-content: flex-start;
+  color: var(--text-primary);
+  font-size: 13px;
+}
+
+.purchase-picker-chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.purchase-picker-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  max-width: 220px;
+  padding: 4px 8px;
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  background: var(--bg-elevated);
+  color: var(--text-secondary);
+  font-size: 11.5px;
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+
+.purchase-picker-chip button {
+  flex: 0 0 auto;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  color: var(--text-muted);
+  cursor: pointer;
+  font-size: 16px;
+  line-height: 1;
+}
+
+.purchase-picker-chip button:hover {
+  color: var(--danger);
+}
+
+.purchase-picker-actions {
+  justify-content: flex-end;
+}
+
+.purchase-picker-pagination {
+  justify-content: center;
+}
+
+.purchase-picker-sr-only {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  border: 0;
+}
+
+.purchase-picker button:focus-visible,
+.purchase-picker input:focus-visible,
+.purchase-picker select:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
+
+@media (max-width: 760px) {
+  .purchase-picker-controls {
+    grid-template-columns: 1fr;
+  }
+
+  .purchase-picker-table-wrap {
+    overflow-x: auto;
+  }
+
+  .purchase-picker-table {
+    min-width: 720px;
+  }
+}
