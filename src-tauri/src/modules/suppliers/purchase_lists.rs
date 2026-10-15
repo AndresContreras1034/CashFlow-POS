@@ -905,16 +905,17 @@ pub async fn update_purchase_item(
     let note = optional_text(dto.note, "La nota", MAX_ITEM_NOTE)?;
     let mut tx = pool.begin().await.map_err(AppError::from)?;
 
-    let list_id: i32 = sqlx::query_scalar("SELECT list_id FROM purchase_list_items WHERE id = $1")
-        .bind(item_id)
-        .fetch_optional(&mut *tx)
-        .await
-        .map_err(AppError::from)?
-        .ok_or_else(|| AppError::not_found("Línea no encontrada"))?;
+    let (list_id, current_supplier): (i32, Option<i32>) =
+        sqlx::query_as("SELECT list_id, supplier_id FROM purchase_list_items WHERE id = $1")
+            .bind(item_id)
+            .fetch_optional(&mut *tx)
+            .await
+            .map_err(AppError::from)?
+            .ok_or_else(|| AppError::not_found("Línea no encontrada"))?;
     let list = lock_list(&mut tx, list_id).await?;
     require_draft(&list)?;
 
-    if let Some(supplier_id) = dto.supplier_id {
+    if let Some(supplier_id) = dto.supplier_id.filter(|id| Some(*id) != current_supplier) {
         let active: Option<bool> =
             sqlx::query_scalar("SELECT is_active FROM suppliers WHERE id = $1")
                 .bind(supplier_id)
