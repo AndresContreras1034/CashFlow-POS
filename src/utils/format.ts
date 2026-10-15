@@ -100,10 +100,46 @@ export const formatDateShort = (iso: string): string => {
 };
 
 /** Atributos JSON → "Talla: M · Color: Rojo" */
-export const formatAttributes = (attrs: Record<string, unknown>): string => {
-  return Object.entries(attrs)
-    .map(([k, v]) => `${capitalize(k)}: ${String(v)}`)
+export const formatAttributes = (attrs: unknown): string => {
+  if (attrs == null) return '';
+
+  if (typeof attrs === 'string') return attrs.trim();
+
+  if (Array.isArray(attrs)) {
+    return attrs
+      .map(value => formatAttributes(value))
+      .filter(Boolean)
+      .join(' · ');
+  }
+
+  if (typeof attrs !== 'object') {
+    return String(attrs);
+  }
+
+  return Object.entries(attrs as Record<string, unknown>)
+    .filter(([, value]) => value !== null && value !== undefined)
+    .map(([key, value]) => `${capitalize(key)}: ${formatAttributeValue(value)}`)
+    .filter(part => part !== '' && !part.endsWith(': '))
     .join(' · ');
+};
+
+const formatAttributeValue = (value: unknown): string => {
+  if (value === null || value === undefined) return '';
+  if (typeof value === 'string') return value;
+  if (typeof value === 'number' || typeof value === 'boolean' || typeof value === 'bigint') {
+    return String(value);
+  }
+  if (Array.isArray(value)) {
+    return value.map(item => formatAttributeValue(item)).filter(Boolean).join(', ');
+  }
+  if (typeof value === 'object') {
+    try {
+      return JSON.stringify(value);
+    } catch {
+      return Object.prototype.toString.call(value);
+    }
+  }
+  return String(value);
 };
 
 /** Tipo de movimiento → etiqueta legible */

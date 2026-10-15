@@ -8,6 +8,7 @@ import {
   buildSuppliersCsv,
   supplierExportFileName,
 } from './supplierExport';
+import { formatAttributes } from './format';
 
 const supplier = (patch = {}): SupplierOverview =>
   ({
@@ -154,6 +155,18 @@ describe('CSV final', () => {
     const csv = toCsv(table.headers, table.rows);
     expect(csv.startsWith('\uFEFFProveedor;Teléfono;')).toBe(true);
     expect(csv.split('\r\n')).toHaveLength(2);
+  });
+});
+
+describe('formatAttributes', () => {
+  it('maneja valores nulos, vacíos y mixtos sin romper la exportación', () => {
+    expect(formatAttributes(null)).toBe('');
+    expect(formatAttributes({ color: 'Rojo', size: null, qty: 3, notes: undefined })).toBe(
+      'Color: Rojo · Qty: 3',
+    );
+    expect(formatAttributes({ details: { code: 'A1', weight: 2 } })).toBe(
+      'Details: {"code":"A1","weight":2}',
+    );
   });
 });
 
