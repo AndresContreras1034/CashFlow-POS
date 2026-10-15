@@ -55,7 +55,28 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     );
   }
 
-  if (!settings) return null;
+  if (!settings) {
+    return (
+      <main
+        role="status"
+        aria-live="polite"
+        style={{
+          minHeight: '100vh',
+          display: 'grid',
+          placeItems: 'center',
+          color: 'var(--text-primary)',
+          fontFamily: 'var(--font-sans)',
+        }}
+      >
+        <div>
+          <strong>CashFlow POS</strong>
+          <p style={{ marginTop: 8, color: 'var(--text-secondary)' }}>
+            Cargando configuración…
+          </p>
+        </div>
+      </main>
+    );
+  }
 
   return (
     <AppContext.Provider value={{ settings, refreshSettings, applySettings }}>

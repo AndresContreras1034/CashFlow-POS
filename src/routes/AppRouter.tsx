@@ -23,42 +23,42 @@ export const AppRouter: React.FC = () => (
     <LicenseGate>
       <AppLayout>
         <Routes>
-        <Route path="/" element={<Navigate to="/inventory" replace />} />
+          <Route path="/" element={<Navigate to="/inventory" replace />} />
 
-        {/* Inventario */}
-        <Route path="/inventory" element={<Inventory />} />
-        <Route path="/inventory/:id" element={<ProductDetail />} />
-        <Route path="/stocktake" element={<StocktakePage />} />
+          {/* Inventario */}
+          <Route path="/inventory" element={<Inventory />} />
+          <Route path="/inventory/:id" element={<ProductDetail />} />
+          <Route path="/stocktake" element={<StocktakePage />} />
 
-        {/* Ventas */}
-        <Route path="/sales" element={<Sales />} />
+          {/* Ventas */}
+          <Route path="/sales" element={<Sales />} />
 
-        {/* Historial de ventas */}
-        <Route path="/sales-history" element={<SalesHistory />} />
+          {/* Historial de ventas */}
+          <Route path="/sales-history" element={<SalesHistory />} />
 
-        {/* Caja */}
-        <Route path="/cash" element={<Cash />} />
+          {/* Caja */}
+          <Route path="/cash" element={<Cash />} />
 
-        {/* Clientes */}
-        <Route path="/customers" element={<Customers />} />
+          {/* Clientes */}
+          <Route path="/customers" element={<Customers />} />
 
-        {/* Deudas */}
-        <Route path="/debts" element={<Debts />} />
+          {/* Deudas */}
+          <Route path="/debts" element={<Debts />} />
 
-        {/* Proveedores */}
-        <Route path="/suppliers" element={<Suppliers />} />
+          {/* Proveedores */}
+          <Route path="/suppliers" element={<Suppliers />} />
 
-        {/* Reportes */}
-        <Route path="/reports" element={<Reports />} />
+          {/* Reportes */}
+          <Route path="/reports" element={<Reports />} />
 
-        {/* Auditoría */}
-        <Route path="/audit" element={<Audit />} />
+          {/* Auditoría */}
+          <Route path="/audit" element={<Audit />} />
 
-        {/* Developer Mode */}
-        <Route path="/developer" element={<Developer />} />
+          {/* Developer Mode */}
+          <Route path="/developer" element={<Developer />} />
 
-        {/* Configuración */}
-        <Route path="/settings" element={<Settings />} />
+          {/* Configuración */}
+          <Route path="/settings" element={<Settings />} />
         </Routes>
         <TourHelpButton />
       </AppLayout>

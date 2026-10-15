@@ -25,6 +25,12 @@ use modules::stocktake::router::*;
 use modules::suppliers::router::*;
 use tauri::Manager;
 
+#[tauri::command]
+fn show_main_window(window: tauri::WebviewWindow) -> Result<(), String> {
+    window.show().map_err(|error| error.to_string())?;
+    window.set_focus().map_err(|error| error.to_string())
+}
+
 #[cfg(windows)]
 fn show_fatal_dialog(title: &str, message: &str) {
     use std::ptr::null_mut;
@@ -148,10 +154,6 @@ pub fn run() {
                 return Ok(());
             }
 
-            if let Some(window) = handle.get_webview_window("main") {
-                window.show().ok();
-            }
-
             modules::backup::scheduler::spawn(handle.clone(), scheduler_pool);
 
             tauri::async_runtime::spawn(async move {
@@ -183,6 +185,7 @@ pub fn run() {
         // Comandos Tauri
         // =====================================================
         .invoke_handler(tauri::generate_handler![
+            show_main_window,
             // =================================================
             // Categories
             // =================================================
