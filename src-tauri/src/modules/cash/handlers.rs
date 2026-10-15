@@ -1,5 +1,5 @@
-use tauri::State;
 use sqlx::PgPool;
+use tauri::State;
 
 use crate::db::DbPool;
 use crate::errors::app_error::AppError;

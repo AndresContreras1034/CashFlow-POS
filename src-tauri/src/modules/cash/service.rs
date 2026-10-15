@@ -45,14 +45,12 @@ pub async fn get_session_report(
         .await
         .map_err(AppError::from)?;
 
-    let status = sqlx::query_scalar::<_, String>(
-        "SELECT status FROM cash_sessions WHERE id = $1",
-    )
-    .bind(id)
-    .fetch_optional(&mut *tx)
-    .await
-    .map_err(AppError::from)?
-    .ok_or_else(|| AppError::not_found("Turno de caja no encontrado"))?;
+    let status = sqlx::query_scalar::<_, String>("SELECT status FROM cash_sessions WHERE id = $1")
+        .bind(id)
+        .fetch_optional(&mut *tx)
+        .await
+        .map_err(AppError::from)?
+        .ok_or_else(|| AppError::not_found("Turno de caja no encontrado"))?;
 
     if status == "open" {
         let report = repository::build_session_report(&mut tx, id, "X")

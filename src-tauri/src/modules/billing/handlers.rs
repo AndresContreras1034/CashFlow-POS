@@ -110,13 +110,11 @@ async fn fetch_ticket_data(pool: &PgPool, sale_id: i32) -> Result<TicketData, St
     .map_err(|e| format!("Error consultando los pagos de la venta: {e}"))?;
 
     let customer_name = if let Some(customer_id) = sale.customer_id {
-        sqlx::query_scalar::<_, String>(
-            r#"SELECT name FROM customers WHERE id = $1 AND is_active"#,
-        )
-        .bind(customer_id)
-        .fetch_optional(pool)
-        .await
-        .map_err(|e| format!("Error consultando el cliente del ticket: {e}"))?
+        sqlx::query_scalar::<_, String>(r#"SELECT name FROM customers WHERE id = $1 AND is_active"#)
+            .bind(customer_id)
+            .fetch_optional(pool)
+            .await
+            .map_err(|e| format!("Error consultando el cliente del ticket: {e}"))?
     } else {
         None
     };

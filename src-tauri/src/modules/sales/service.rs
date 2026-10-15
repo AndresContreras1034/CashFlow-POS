@@ -53,12 +53,12 @@ pub async fn create_sale(pool: &PgPool, dto: CreateSaleDto) -> Result<SaleDetail
             CreateSaleError::PaymentMismatch => {
                 AppError::validation("El total de los pagos no coincide con el total de la venta")
             }
-            CreateSaleError::CashReceivedWithoutCash => AppError::validation(
-                "El efectivo recibido requiere una venta con pago en efectivo",
-            ),
-            CreateSaleError::CashReceivedTooLow => AppError::validation(
-                "El efectivo recibido no puede ser menor al pago en efectivo",
-            ),
+            CreateSaleError::CashReceivedWithoutCash => {
+                AppError::validation("El efectivo recibido requiere una venta con pago en efectivo")
+            }
+            CreateSaleError::CashReceivedTooLow => {
+                AppError::validation("El efectivo recibido no puede ser menor al pago en efectivo")
+            }
             CreateSaleError::CashReceivedPrecision => AppError::validation(
                 "El efectivo recibido no admite fracciones con la moneda configurada",
             ),
@@ -116,7 +116,10 @@ pub async fn void_sale(
     id: i32,
     mut dto: VoidSaleDto,
 ) -> Result<SaleDetail, AppError> {
-    if !matches!(dto.target_status, SaleStatus::Cancelled | SaleStatus::Refunded) {
+    if !matches!(
+        dto.target_status,
+        SaleStatus::Cancelled | SaleStatus::Refunded
+    ) {
         return Err(AppError::validation(
             "El estado destino debe ser anulación o devolución",
         ));
@@ -147,11 +150,9 @@ pub async fn list_sales(
     pool: &PgPool,
     filter: SaleFilterDto,
 ) -> Result<SaleListResponse, AppError> {
-    if filter
-        .payment_method
-        .as_deref()
-        .map_or(false, |method| !matches!(method, "cash" | "card" | "transfer"))
-    {
+    if filter.payment_method.as_deref().map_or(false, |method| {
+        !matches!(method, "cash" | "card" | "transfer")
+    }) {
         return Err(AppError::validation(
             "El método de pago debe ser cash, card o transfer",
         ));

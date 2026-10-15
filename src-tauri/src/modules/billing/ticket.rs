@@ -238,11 +238,7 @@ pub fn report_lines(data: &CashReportTicketData) -> Vec<String> {
             report_pair(&mut lines, "Hora cierre:", closed_at);
         }
     }
-    report_pair(
-        &mut lines,
-        "Generado:",
-        &report.generated_at_local,
-    );
+    report_pair(&mut lines, "Generado:", &report.generated_at_local);
 
     lines.push("EFECTIVO".to_string());
     report_money_pair(
@@ -370,9 +366,7 @@ pub fn report_lines(data: &CashReportTicketData) -> Vec<String> {
         report.voids.refunded_total,
         data.currency_decimals,
     );
-    lines.extend(report_wrap(
-        "Tarjeta y transf. no entran al efectivo",
-    ));
+    lines.extend(report_wrap("Tarjeta y transf. no entran al efectivo"));
 
     lines
 }
@@ -606,8 +600,8 @@ fn double_size_off(buf: &mut Vec<u8>) {
 #[cfg(test)]
 mod tests {
     use super::{
-        build_cash_report_ticket, build_sale_ticket, build_sale_ticket_with_copy,
-        format_item_line, format_money, report_lines,
+        build_cash_report_ticket, build_sale_ticket, build_sale_ticket_with_copy, format_item_line,
+        format_money, report_lines,
     };
     use crate::modules::billing::models::{CashReportTicketData, TicketData, TicketLine};
     use crate::modules::cash::models::{
@@ -893,7 +887,8 @@ mod tests {
                 schema_version: 1,
                 kind: kind.into(),
                 session_id: 12,
-                opened_by: "Operador con un nombre excepcionalmente largo para probar el ancho".into(),
+                opened_by: "Operador con un nombre excepcionalmente largo para probar el ancho"
+                    .into(),
                 closed_by: Some("Cajero".into()),
                 opened_at_local: "10/10/2026 08:30".into(),
                 closed_at_local: Some("10/10/2026 17:45".into()),

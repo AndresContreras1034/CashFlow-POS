@@ -1,6 +1,6 @@
 use serde_json::json;
-use std::collections::HashMap;
 use sqlx::PgPool;
+use std::collections::HashMap;
 use uuid::Uuid;
 
 use crate::modules::audit::{
@@ -278,8 +278,7 @@ pub async fn create_sale(pool: &PgPool, dto: CreateSaleDto) -> Result<SaleDetail
         if !dto.payments.is_empty() {
             return Err(CreateSaleError::CourtesyHasPayments);
         }
-        let reason = requested_courtesy_reason
-            .ok_or(CreateSaleError::CourtesyReasonRequired)?;
+        let reason = requested_courtesy_reason.ok_or(CreateSaleError::CourtesyReasonRequired)?;
         if reason.chars().count() > 200 {
             return Err(CreateSaleError::CourtesyReasonTooLong);
         }
@@ -579,13 +578,12 @@ pub async fn void_sale(
 ) -> Result<SaleDetail, VoidSaleError> {
     let mut tx = pool.begin().await?;
 
-    let status = sqlx::query_scalar::<_, SaleStatus>(
-        "SELECT status FROM sales WHERE id = $1 FOR UPDATE",
-    )
-    .bind(id)
-    .fetch_optional(&mut *tx)
-    .await?
-    .ok_or(VoidSaleError::NotFound)?;
+    let status =
+        sqlx::query_scalar::<_, SaleStatus>("SELECT status FROM sales WHERE id = $1 FOR UPDATE")
+            .bind(id)
+            .fetch_optional(&mut *tx)
+            .await?
+            .ok_or(VoidSaleError::NotFound)?;
     if status != SaleStatus::Completed {
         return Err(VoidSaleError::NotCompleted(status));
     }
@@ -690,7 +688,10 @@ pub async fn void_sale(
         SaleStatus::Refunded => "refund",
         SaleStatus::Completed => unreachable!("service validates target status"),
     };
-    let units = items.iter().map(|item| i64::from(item.quantity)).sum::<i64>();
+    let units = items
+        .iter()
+        .map(|item| i64::from(item.quantity))
+        .sum::<i64>();
     audit_repo::insert_event(
         &mut *tx,
         NewAuditEvent {
@@ -733,12 +734,13 @@ pub async fn assign_customer(
     let actor = declared_actor(&dto.performed_by);
     let mut tx = pool.begin().await?;
 
-    let previous: Option<i32> =
-        sqlx::query_scalar::<_, Option<i32>>("SELECT customer_id FROM sales WHERE id = $1 FOR UPDATE")
-            .bind(id)
-            .fetch_optional(&mut *tx)
-            .await?
-            .ok_or(AssignCustomerError::SaleNotFound)?;
+    let previous: Option<i32> = sqlx::query_scalar::<_, Option<i32>>(
+        "SELECT customer_id FROM sales WHERE id = $1 FOR UPDATE",
+    )
+    .bind(id)
+    .fetch_optional(&mut *tx)
+    .await?
+    .ok_or(AssignCustomerError::SaleNotFound)?;
 
     let mut new_name: Option<String> = None;
     if let Some(customer_id) = dto.customer_id {

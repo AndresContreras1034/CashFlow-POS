@@ -1,8 +1,8 @@
 use chrono::{DateTime, Utc};
 use serde::Serialize;
 
-use crate::modules::sales::models::{PaymentMethod, SaleStatus};
 use crate::modules::cash::models::CashSessionReport;
+use crate::modules::sales::models::{PaymentMethod, SaleStatus};
 
 /// Una línea de producto en el ticket, ya con el nombre resuelto
 /// (SaleItem solo trae variant_id — para el ticket necesitamos texto legible).

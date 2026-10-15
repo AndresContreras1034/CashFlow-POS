@@ -7,9 +7,9 @@ use crate::{
     modules::reports::{
         dto::{
             AgingBucket, CategorySales, CustomerSalesSplit, DashboardKpis, HeatmapCell,
-            InventoryTurnover, InventoryValuation, PayablesSummary, PaymentMethodStat, ReportFilter,
-            StaleProduct, StockAlert, TimeSeriesPoint, TopCreditor, TopCustomer, TopProduct,
-            UpcomingDue,
+            InventoryTurnover, InventoryValuation, PayablesSummary, PaymentMethodStat,
+            ReportFilter, StaleProduct, StockAlert, TimeSeriesPoint, TopCreditor, TopCustomer,
+            TopProduct, UpcomingDue,
         },
         service,
     },

@@ -244,13 +244,11 @@ pub async fn close_session(
             report.cash.expected_amount
         ))));
     }
-    sqlx::query(
-        "INSERT INTO cash_session_reports (session_id, report) VALUES ($1, $2)",
-    )
-    .bind(id)
-    .bind(sqlx::types::Json(report))
-    .execute(&mut *tx)
-    .await?;
+    sqlx::query("INSERT INTO cash_session_reports (session_id, report) VALUES ($1, $2)")
+        .bind(id)
+        .bind(sqlx::types::Json(report))
+        .execute(&mut *tx)
+        .await?;
 
     audit_repo::insert_event(
         &mut *tx,
