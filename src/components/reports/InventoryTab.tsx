@@ -28,6 +28,7 @@ import {
   formatDaysOfCover,
   formatTurnover,
   formatVariantAttributes,
+  inventoryDaysReasonLabel,
   stockStatusLabel,
 } from '../../utils/reportFormat';
 import { buildInventoryCsv } from '../../utils/reportExport';
@@ -437,9 +438,12 @@ export function InventoryTab({
                   <span>Días de inventario</span>
                   <strong>
                     {value.days_of_inventory === null
-                      ? '—'
+                      ? 'Sin datos suficientes'
                       : `${number(value.days_of_inventory)} días`}
                   </strong>
+                  {value.days_of_inventory_reason && (
+                    <small>{inventoryDaysReasonLabel(value.days_of_inventory_reason)}</small>
+                  )}
                 </div>
                 <div className="reports-inventory-kpi">
                   <span>Rotación</span>

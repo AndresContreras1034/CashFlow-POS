@@ -1,5 +1,22 @@
 import { describe, expect, it } from 'vitest';
-import { formatCsvAmount, toCsv } from './csv';
+import { formatCsvAmount, neutralizeCell, toCsv } from './csv';
+
+describe('neutralizeCell', () => {
+  it.each([
+    ['-1234,56', '-1234,56'],
+    ['1234,56', '1234,56'],
+    ['=1+1', "'=1+1"],
+    ['@SUM(A1)', "'@SUM(A1)"],
+    ['\t=1+1', "'\t=1+1"],
+    ['\r=1+1', "'\r=1+1"],
+    ['  =1+1', "'  =1+1"],
+    ['-cmd', "'-cmd"],
+    ['+573001234567', '+573001234567'],
+    ['Perfume Rosa', 'Perfume Rosa'],
+  ])('neutralizes %j', (input, expected) => {
+    expect(neutralizeCell(input)).toBe(expected);
+  });
+});
 
 describe('toCsv', () => {
   it('escapes quotes, separators and line breaks, and renders null as empty', () => {

@@ -7,6 +7,7 @@ import {
   formatBps,
   formatDaysOfCover,
   formatDaysSinceSale,
+  inventoryDaysReasonLabel,
   formatDueDays,
   formatTurnover,
   formatVariantAttributes,
@@ -70,6 +71,19 @@ describe('report formatting helpers', () => {
     expect(formatDaysOfCover(12)).toBe('12 días');
     expect(stockStatusLabel('out_of_stock')).toBe('Agotado');
     expect(stockStatusLabel('low')).toBe('Bajo');
+  });
+
+  it('explains why inventory days are not available', () => {
+    expect(inventoryDaysReasonLabel('range_too_short')).toBe(
+      'El rango debe cubrir al menos 28 días',
+    );
+    expect(inventoryDaysReasonLabel('no_cogs')).toBe('No hay costo de ventas en el período');
+    expect(inventoryDaysReasonLabel('low_cost_coverage')).toBe(
+      'Menos del 80 % de las unidades vendidas tiene costo',
+    );
+    expect(inventoryDaysReasonLabel('implausible_result')).toBe(
+      'El resultado supera el máximo plausible de 3.650 días',
+    );
   });
 
   it('formats debt due days and labels with the debt catalog wording', () => {

@@ -1153,12 +1153,14 @@ async fn top_products_category_filter_limits_rows_and_scopes_shares(pool: PgPool
 }
 
 #[sqlx::test(migrations = "./migrations")]
-async fn stale_product_totals_include_rows_beyond_the_display_limit(pool: PgPool) {
+async fn stale_product_totals_include_all_rows_without_being_limited_to_the_display_page(
+    pool: PgPool,
+) {
     let date = Utc::now().date_naive() + chrono::Duration::days(1);
     let mut expected_value = 0_i64;
     let mut expected_without_cost = 0_i64;
 
-    for index in 0..11 {
+    for index in 0..15 {
         let cost = if index < 8 {
             i64::from(index + 1) * 100
         } else {
@@ -1188,15 +1190,15 @@ async fn stale_product_totals_include_rows_beyond_the_display_limit(pool: PgPool
             granularity: None,
             compare_previous: false,
             category_id: None,
-            limit: Some(1),
+            limit: Some(10),
             rank_by: None,
         },
     )
     .await
     .unwrap();
 
-    assert_eq!(stale.len(), 1);
-    assert_eq!(stale[0].total_rows, 11);
+    assert_eq!(stale.len(), 10);
+    assert_eq!(stale[0].total_rows, 15);
     assert_eq!(stale[0].total_value_at_cost, expected_value);
     assert_eq!(stale[0].total_without_cost, expected_without_cost);
 }
@@ -1457,7 +1459,11 @@ async fn inventory_turnover_uses_local_dates_and_excludes_uncosted_and_courtesy(
     assert_eq!(one_day.cogs, 600);
     assert_eq!(one_day.inventory_value_at_cost, 2_000);
     assert_eq!(one_day.turnover_bps, Some(3_000));
-    assert_eq!(one_day.days_of_inventory, Some(3));
+    assert_eq!(one_day.days_of_inventory, None);
+    assert_eq!(
+        one_day.days_of_inventory_reason,
+        Some(pos_lib::modules::reports::inventory_days::InsufficientReason::RangeTooShort),
+    );
     assert_eq!(one_day.range_days, 1);
     assert_eq!(one_day.uncosted_items, 1);
 
@@ -1469,12 +1475,16 @@ async fn inventory_turnover_uses_local_dates_and_excludes_uncosted_and_courtesy(
     assert_eq!(thirty_days.days_of_inventory, Some(60));
     assert_eq!(thirty_days.range_days, 30);
 
-    let no_cogs = service::get_inventory_turnover(&pool, make_filter("2026-10-08", "2026-10-08"))
+    let no_cogs = service::get_inventory_turnover(&pool, make_filter("2026-09-01", "2026-09-28"))
         .await
         .unwrap();
     assert_eq!(no_cogs.cogs, 0);
     assert_eq!(no_cogs.turnover_bps, Some(0));
     assert_eq!(no_cogs.days_of_inventory, None);
+    assert_eq!(
+        no_cogs.days_of_inventory_reason,
+        Some(pos_lib::modules::reports::inventory_days::InsufficientReason::NoCogs),
+    );
 
     sqlx::query("UPDATE product_variants SET stock = 0 WHERE id = $1")
         .bind(variant_id)

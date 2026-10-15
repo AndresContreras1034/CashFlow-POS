@@ -101,6 +101,7 @@ use crate::{
             InventoryTurnover, InventoryValuation, PaymentMethodStat, RankBy, SalesKpis,
             StaleProduct, StockAlert, TimeSeriesPoint, TopCustomer, TopProduct,
         },
+        reports::inventory_days::{inventory_days, DaysInput, InventoryDays},
         sales::models::PaymentMethod,
     },
     types::money::divide_to_currency,
@@ -221,6 +222,8 @@ struct CategoryValuationRow {
 struct TurnoverCogsRow {
     cogs: i64,
     uncosted_items: i64,
+    units_sold: i64,
+    units_uncosted: i64,
 }
 
 #[derive(sqlx::FromRow)]
@@ -635,50 +638,67 @@ pub async fn fetch_stale_products(
     limit: i64,
 ) -> Result<Vec<StaleProduct>, sqlx::Error> {
     let rows = sqlx::query_as::<_, StaleProductRow>(
-        r#"SELECT
-               v.id AS variant_id,
-               p.name AS product_name,
-               v.attributes,
-               v.stock,
-               (v.stock::NUMERIC * v.cost::NUMERIC)::BIGINT AS stock_value_at_cost,
-               (v.cost = 0) AS cost_missing,
-               (
-                   $2::DATE - (
-                       SELECT MAX((prior.created_at AT TIME ZONE $3)::DATE)
-                       FROM sales prior
-                       WHERE prior.status = 'completed'
-                         AND prior.created_at < ($1::DATE::TIMESTAMP AT TIME ZONE $3)
-                         AND EXISTS (
-                             SELECT 1 FROM sale_items prior_item
-                             WHERE prior_item.sale_id = prior.id
-                               AND prior_item.variant_id = v.id
-                         )
-                   )
-               )::BIGINT AS days_since_last_sale,
-               COALESCE(
-                   SUM(v.stock::NUMERIC * v.cost::NUMERIC)
-                       FILTER (WHERE v.cost > 0) OVER (),
-                   0
-               )::BIGINT AS total_value_at_cost,
-               COUNT(*) OVER () AS total_rows,
-               COUNT(*) FILTER (WHERE v.cost = 0) OVER () AS total_without_cost
-           FROM product_variants v
-           JOIN products p ON p.id = v.product_id
-           WHERE v.is_active
-             AND p.is_active
-             AND v.stock > 0
-             AND ($4::INT IS NULL OR p.category_id = $4)
-             AND v.created_at < ($1::DATE::TIMESTAMP AT TIME ZONE $3)
-             AND NOT EXISTS (
-                 SELECT 1
-                 FROM sales in_range
-                 JOIN sale_items range_item ON range_item.sale_id = in_range.id
-                 WHERE in_range.status = 'completed'
-                   AND range_item.variant_id = v.id
-                   AND in_range.created_at >= ($1::DATE::TIMESTAMP AT TIME ZONE $3)
-                   AND in_range.created_at < (($2::DATE + 1)::TIMESTAMP AT TIME ZONE $3)
-             )
-           ORDER BY 5 DESC, v.id ASC
+        r#"WITH stale_products AS (
+               SELECT
+                   v.id AS variant_id,
+                   p.name AS product_name,
+                   v.attributes,
+                   v.stock,
+                   v.cost,
+                   (v.stock::NUMERIC * v.cost::NUMERIC)::BIGINT AS stock_value_at_cost,
+                   (v.cost = 0) AS cost_missing,
+                   (
+                       $2::DATE - (
+                           SELECT MAX((prior.created_at AT TIME ZONE $3)::DATE)
+                           FROM sales prior
+                           WHERE prior.status = 'completed'
+                             AND prior.created_at < ($1::DATE::TIMESTAMP AT TIME ZONE $3)
+                             AND EXISTS (
+                                 SELECT 1 FROM sale_items prior_item
+                                 WHERE prior_item.sale_id = prior.id
+                                   AND prior_item.variant_id = v.id
+                             )
+                       )
+                   )::BIGINT AS days_since_last_sale
+               FROM product_variants v
+               JOIN products p ON p.id = v.product_id
+               WHERE v.is_active
+                 AND p.is_active
+                 AND v.stock > 0
+                 AND ($4::INT IS NULL OR p.category_id = $4)
+                 AND v.created_at < ($1::DATE::TIMESTAMP AT TIME ZONE $3)
+                 AND NOT EXISTS (
+                     SELECT 1
+                     FROM sales in_range
+                     JOIN sale_items range_item ON range_item.sale_id = in_range.id
+                     WHERE in_range.status = 'completed'
+                       AND range_item.variant_id = v.id
+                       AND in_range.created_at >= ($1::DATE::TIMESTAMP AT TIME ZONE $3)
+                       AND in_range.created_at < (($2::DATE + 1)::TIMESTAMP AT TIME ZONE $3)
+                 )
+           ),
+           stale_totals AS (
+               SELECT
+                   COALESCE(SUM(stock::NUMERIC * cost::NUMERIC)
+                       FILTER (WHERE cost > 0), 0)::BIGINT AS total_value_at_cost,
+                   COUNT(*)::BIGINT AS total_rows,
+                   COUNT(*) FILTER (WHERE cost = 0)::BIGINT AS total_without_cost
+               FROM stale_products
+           )
+           SELECT
+               stale_products.variant_id,
+               stale_products.product_name,
+               stale_products.attributes,
+               stale_products.stock,
+               stale_products.stock_value_at_cost,
+               stale_products.cost_missing,
+               stale_products.days_since_last_sale,
+               stale_totals.total_value_at_cost,
+               stale_totals.total_rows,
+               stale_totals.total_without_cost
+           FROM stale_products
+           CROSS JOIN stale_totals
+           ORDER BY stale_products.stock_value_at_cost DESC, stale_products.variant_id ASC
            LIMIT $5"#,
     )
     .bind(range.from)
@@ -808,7 +828,10 @@ pub async fn fetch_inventory_turnover(
         SELECT
             COALESCE(SUM(si.unit_cost::NUMERIC * si.quantity::NUMERIC)
                 FILTER (WHERE si.unit_cost IS NOT NULL), 0)::BIGINT AS cogs,
-            COUNT(*) FILTER (WHERE si.unit_cost IS NULL)::BIGINT AS uncosted_items
+            COUNT(*) FILTER (WHERE si.unit_cost IS NULL)::BIGINT AS uncosted_items,
+            COALESCE(SUM(si.quantity::BIGINT), 0)::BIGINT AS units_sold,
+            COALESCE(SUM(si.quantity::BIGINT)
+                FILTER (WHERE si.unit_cost IS NULL), 0)::BIGINT AS units_uncosted
         FROM sales s
         JOIN sale_items si ON si.sale_id = s.id
         -- Historical COGS must remain visible after a sold product is deactivated.
@@ -830,18 +853,24 @@ pub async fn fetch_inventory_turnover(
 
     let turnover_bps = (inventory_value > 0)
         .then(|| round_ratio_to_i32(cogs.cogs as i128 * 10_000, inventory_value as i128));
-    let days_of_inventory = (cogs.cogs > 0).then(|| {
-        round_ratio_to_i64(
-            inventory_value as i128 * range_days as i128,
-            cogs.cogs as i128,
-        )
+    let days_result = inventory_days(&DaysInput {
+        inventory_value_cents: inventory_value,
+        cogs_cents: cogs.cogs,
+        range_days,
+        units_sold: cogs.units_sold,
+        units_uncosted: cogs.units_uncosted,
     });
+    let (days_of_inventory, days_of_inventory_reason) = match days_result {
+        InventoryDays::Value(days) => (Some(days), None),
+        InventoryDays::Insufficient(reason) => (None, Some(reason)),
+    };
 
     Ok(InventoryTurnover {
         cogs: cogs.cogs,
         inventory_value_at_cost: inventory_value,
         turnover_bps,
         days_of_inventory,
+        days_of_inventory_reason,
         range_days,
         uncosted_items: cogs.uncosted_items,
     })
@@ -932,13 +961,6 @@ pub async fn fetch_stock_alerts(
             suggested_reorder: row.suggested_reorder,
         })
         .collect())
-}
-
-fn round_ratio_to_i64(numerator: i128, denominator: i128) -> i64 {
-    let magnitude = numerator.abs();
-    let rounded = (magnitude + denominator / 2) / denominator;
-    let signed = if numerator < 0 { -rounded } else { rounded };
-    signed.clamp(i64::MIN as i128, i64::MAX as i128) as i64
 }
 
 fn round_ratio_to_i32(numerator: i128, denominator: i128) -> i32 {

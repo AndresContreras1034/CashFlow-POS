@@ -122,6 +122,7 @@ const turnover: InventoryTurnover = {
   inventory_value_at_cost: 60_000,
   turnover_bps: 10_000,
   days_of_inventory: 11,
+  days_of_inventory_reason: null,
   range_days: 11,
   uncosted_items: 0,
 };

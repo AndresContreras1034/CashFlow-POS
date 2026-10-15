@@ -3,6 +3,7 @@ import type {
   DebtCategory,
   DebtUrgency,
   HeatmapCell,
+  InventoryDaysReason,
   StockStatus,
 } from '../types/reports';
 import { formatAttributes } from './format';
@@ -70,6 +71,16 @@ export function formatTurnover(bps: number | null): string {
 export function formatDaysOfCover(days: number | null): string {
   if (days === null) return 'Sin ventas';
   return `${new Intl.NumberFormat('es-CO').format(days)} ${days === 1 ? 'día' : 'días'}`;
+}
+
+export function inventoryDaysReasonLabel(reason: InventoryDaysReason): string {
+  const labels: Record<InventoryDaysReason, string> = {
+    range_too_short: 'El rango debe cubrir al menos 28 días',
+    no_cogs: 'No hay costo de ventas en el período',
+    low_cost_coverage: 'Menos del 80 % de las unidades vendidas tiene costo',
+    implausible_result: 'El resultado supera el máximo plausible de 3.650 días',
+  };
+  return labels[reason];
 }
 
 export function stockStatusLabel(status: StockStatus): string {

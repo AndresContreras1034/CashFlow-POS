@@ -192,6 +192,7 @@ pub struct InventoryTurnover {
     pub inventory_value_at_cost: i64,
     pub turnover_bps: Option<i32>,
     pub days_of_inventory: Option<i64>,
+    pub days_of_inventory_reason: Option<super::inventory_days::InsufficientReason>,
     pub range_days: i64,
     pub uncosted_items: i64,
 }

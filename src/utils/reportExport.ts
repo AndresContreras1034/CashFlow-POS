@@ -183,6 +183,7 @@ export function buildInventoryCsv(
     ['Inventario actual a costo', amount(data.turnover.inventory_value_at_cost, decimals)],
     ['Rotación (bps)', data.turnover.turnover_bps],
     ['Días de inventario', data.turnover.days_of_inventory],
+    ['Motivo de días no disponibles', data.turnover.days_of_inventory_reason],
     ['Días del rango', data.turnover.range_days],
     ['Ítems sin costo', data.turnover.uncosted_items],
     [],

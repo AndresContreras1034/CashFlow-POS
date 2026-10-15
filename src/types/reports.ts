@@ -143,9 +143,16 @@ export interface InventoryTurnover {
   inventory_value_at_cost: number;
   turnover_bps: number | null;
   days_of_inventory: number | null;
+  days_of_inventory_reason: InventoryDaysReason | null;
   range_days: number;
   uncosted_items: number;
 }
+
+export type InventoryDaysReason =
+  | 'range_too_short'
+  | 'no_cogs'
+  | 'low_cost_coverage'
+  | 'implausible_result';
 
 export type StockStatus = 'low' | 'out_of_stock';
 

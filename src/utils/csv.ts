@@ -1,8 +1,7 @@
 export type CsvCell = string | number | null;
 
-function isNumericText(value: string): boolean {
-  return /^[+-]?\d+(?:[.,]\d+)?$/.test(value.trim());
-}
+const NUMERIC_AMOUNT = /^-?\d+(?:[.,]\d+)?$/;
+const DANGEROUS = /^([\t\r]|\s*[=+\-@])/;
 
 function isInternationalPhone(value: string): boolean {
   if (!/^\+\d(?:[\d ()-]*\d)?$/.test(value.trim())) return false;
@@ -10,14 +9,16 @@ function isInternationalPhone(value: string): boolean {
   return digits.length >= 7 && digits.length <= 15;
 }
 
+export function neutralizeCell(value: string): string {
+  if (NUMERIC_AMOUNT.test(value)) return value;
+  return DANGEROUS.test(value) && !isInternationalPhone(value) ? `'${value}` : value;
+}
+
 export function toCsv(headers: string[], rows: CsvCell[][]): string {
   const escapeCell = (value: CsvCell): string => {
     if (value === null) return '';
     if (typeof value === 'number') return String(value).replace('.', ',');
-    const dangerousFormula = /^[ \t\r\n]*[=+\-@]/.test(value);
-    const text = dangerousFormula && !isNumericText(value) && !isInternationalPhone(value)
-      ? `'${value}`
-      : value;
+    const text = neutralizeCell(value);
     const escaped = text.replace(/"/g, '""');
     return /[;"\t\r\n]/.test(escaped) ? `"${escaped}"` : escaped;
   };
