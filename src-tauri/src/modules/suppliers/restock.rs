@@ -19,7 +19,7 @@ pub const DEFAULT_LEAD_TIME_THRESHOLD: i32 = 3;
 /// CTE compartida: desempata el proveedor asignado a cada variante.
 /// Orden de desempate: preferido > compra más reciente > menor costo > menor id.
 /// alternative_suppliers expone la cantidad de OTROS proveedores activos enlazados.
-pub const ASSIGNED_SUPPLIERS_CTE: &str = r#"
+pub(crate) const ASSIGNED_SUPPLIERS_CTE: &str = r#"
 assigned_suppliers AS (
     SELECT DISTINCT ON (sv.variant_id)
         sv.variant_id,

@@ -341,6 +341,20 @@ pub fn run() {
             get_supplier_restock,
             get_supplier_payables,
             // =================================================
+            // Purchase lists
+            // =================================================
+            list_purchase_lists,
+            get_purchase_list,
+            create_purchase_list,
+            update_purchase_list,
+            set_purchase_list_status,
+            add_purchase_items,
+            add_recommended_to_list,
+            update_purchase_item,
+            remove_purchase_item,
+            search_purchasable_variants,
+            list_purchasable_variant_ids,
+            // =================================================
             // Backup
             // =================================================
             get_backup_settings,

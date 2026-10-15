@@ -89,7 +89,14 @@ const ACTION_LABELS: Record<string, string> = {
   'suppliers.link_variant': 'Variante vinculada',
   'suppliers.update_variant': 'Vínculo de variante actualizado',
   'suppliers.unlink_variant': 'Variante desvinculada',
+  'suppliers.purchase_list_create': 'Lista de compras creada',
+  'suppliers.purchase_list_update': 'Lista de compras actualizada',
+  'suppliers.purchase_list_status': 'Estado de lista actualizado',
+  'suppliers.purchase_list_add_items': 'Artículos agregados a lista',
+  'suppliers.purchase_item_update': 'Artículo de lista actualizado',
+  'suppliers.purchase_item_remove': 'Artículo de lista eliminado',
   'backup.create': 'Generación',
+  'backup.restore': 'Restauración',
   'backup.update': 'Configuración',
 };
 
@@ -109,6 +116,8 @@ const ENTITY_TYPE_LABELS: Record<string, string> = {
   customer: 'Cliente',
   supplier: 'Proveedor',
   supplier_variant: 'Variante del proveedor',
+  purchase_list: 'Lista de compras',
+  purchase_list_item: 'Artículo de lista',
   backup: 'Backup',
   backup_settings: 'Ajustes de backup',
 };
@@ -165,6 +174,9 @@ const FIELD_LABELS: Record<string, string> = {
   visit_days: 'Días de visita', priority: 'Prioridad',
   supplier_sku: 'SKU del proveedor', last_cost: 'Último costo',
   is_preferred: 'Preferido', variant_id: 'Variante', categories: 'Categorías',
+  title: 'Título', supplier_id: 'Proveedor',
+  line_cost: 'Costo de línea', variant_cost: 'Costo de variante',
+  suggested_qty: 'Cantidad sugerida',
   // error
   error_kind: 'Tipo de error',
 };
@@ -406,7 +418,7 @@ const MONEY_FIELDS: Record<string, readonly string[]> = {
   sales: ['subtotal', 'discount', 'tax', 'total', 'amount'],
   inventory: ['price', 'cost', 'unit_cost'],
   debts: ['original_amount', 'amount', 'balance_after'],
-  suppliers: ['last_cost'],
+  suppliers: ['last_cost', 'line_cost', 'variant_cost'],
 };
 
 /** Si el campo es un importe en centavos según el módulo. */

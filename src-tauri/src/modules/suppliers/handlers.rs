@@ -8,6 +8,11 @@ use crate::modules::audit::{
     models::AuditModule,
 };
 use crate::modules::suppliers::payables::{self, SupplierPayables};
+use crate::modules::suppliers::purchase_lists::{
+    self, AddItemsDto, AddItemsResult, AddRecommendedDto, CreatePurchaseListDto, PurchasableIds,
+    PurchasablePage, PurchaseList, PurchaseListDetail, PurchaseListFilterDto, PurchaseListSummary,
+    SetListStatusDto, UpdateItemDto, UpdatePurchaseListDto,
+};
 use crate::modules::suppliers::{
     bulk::{self, BulkLinkResult, LinkableIds, LinkablePage},
     dto::{
@@ -283,6 +288,190 @@ pub async fn get_supplier_payables(
     supplier_id: i32,
 ) -> Result<SupplierPayables, String> {
     payables::get_supplier_payables(&pool, supplier_id)
+        .await
+        .map_err(|error: AppError| error.to_string())
+}
+
+#[tauri::command]
+pub async fn list_purchase_lists(
+    pool: State<'_, DbPool>,
+    filter: PurchaseListFilterDto,
+) -> Result<PaginatedResponse<PurchaseListSummary>, String> {
+    purchase_lists::list_purchase_lists(&pool, filter)
+        .await
+        .map_err(|error: AppError| error.to_string())
+}
+
+#[tauri::command]
+pub async fn get_purchase_list(
+    pool: State<'_, DbPool>,
+    id: i32,
+) -> Result<PurchaseListDetail, String> {
+    purchase_lists::get_purchase_list(&pool, id)
+        .await
+        .map_err(|error: AppError| error.to_string())
+}
+
+#[tauri::command]
+pub async fn create_purchase_list(
+    pool: State<'_, DbPool>,
+    dto: CreatePurchaseListDto,
+) -> Result<PurchaseList, String> {
+    let context = FailureContext {
+        module: AuditModule::Suppliers,
+        action: "purchase_list_create",
+        entity_type: Some("purchase_list"),
+        entity_id: None,
+        actor: declared_actor(&dto.created_by),
+    };
+    finish(
+        &pool,
+        context,
+        purchase_lists::create_purchase_list(&pool, dto).await,
+    )
+    .await
+}
+
+#[tauri::command]
+pub async fn update_purchase_list(
+    pool: State<'_, DbPool>,
+    id: i32,
+    dto: UpdatePurchaseListDto,
+) -> Result<PurchaseList, String> {
+    let context = FailureContext {
+        module: AuditModule::Suppliers,
+        action: "purchase_list_update",
+        entity_type: Some("purchase_list"),
+        entity_id: Some(id.to_string()),
+        actor: declared_actor(&dto.updated_by),
+    };
+    finish(
+        &pool,
+        context,
+        purchase_lists::update_purchase_list(&pool, id, dto).await,
+    )
+    .await
+}
+
+#[tauri::command]
+pub async fn set_purchase_list_status(
+    pool: State<'_, DbPool>,
+    id: i32,
+    dto: SetListStatusDto,
+) -> Result<PurchaseList, String> {
+    let context = FailureContext {
+        module: AuditModule::Suppliers,
+        action: "purchase_list_status",
+        entity_type: Some("purchase_list"),
+        entity_id: Some(id.to_string()),
+        actor: declared_actor(&dto.updated_by),
+    };
+    finish(
+        &pool,
+        context,
+        purchase_lists::set_purchase_list_status(&pool, id, dto).await,
+    )
+    .await
+}
+
+#[tauri::command]
+pub async fn add_purchase_items(
+    pool: State<'_, DbPool>,
+    list_id: i32,
+    dto: AddItemsDto,
+) -> Result<AddItemsResult, String> {
+    let context = FailureContext {
+        module: AuditModule::Suppliers,
+        action: "purchase_list_add_items",
+        entity_type: Some("purchase_list"),
+        entity_id: Some(list_id.to_string()),
+        actor: declared_actor(&dto.updated_by),
+    };
+    finish(
+        &pool,
+        context,
+        purchase_lists::add_purchase_items(&pool, list_id, dto).await,
+    )
+    .await
+}
+
+#[tauri::command]
+pub async fn add_recommended_to_list(
+    pool: State<'_, DbPool>,
+    list_id: i32,
+    dto: AddRecommendedDto,
+) -> Result<AddItemsResult, String> {
+    let context = FailureContext {
+        module: AuditModule::Suppliers,
+        action: "purchase_list_add_items",
+        entity_type: Some("purchase_list"),
+        entity_id: Some(list_id.to_string()),
+        actor: declared_actor(&dto.updated_by),
+    };
+    finish(
+        &pool,
+        context,
+        purchase_lists::add_recommended_to_list(&pool, list_id, dto).await,
+    )
+    .await
+}
+
+#[tauri::command]
+pub async fn update_purchase_item(
+    pool: State<'_, DbPool>,
+    item_id: i32,
+    dto: UpdateItemDto,
+) -> Result<purchase_lists::PurchaseItem, String> {
+    let context = FailureContext {
+        module: AuditModule::Suppliers,
+        action: "purchase_item_update",
+        entity_type: Some("purchase_list_item"),
+        entity_id: Some(item_id.to_string()),
+        actor: declared_actor(&dto.updated_by),
+    };
+    finish(
+        &pool,
+        context,
+        purchase_lists::update_purchase_item(&pool, item_id, dto).await,
+    )
+    .await
+}
+
+#[tauri::command]
+pub async fn remove_purchase_item(pool: State<'_, DbPool>, item_id: i32) -> Result<(), String> {
+    let context = FailureContext {
+        module: AuditModule::Suppliers,
+        action: "purchase_item_remove",
+        entity_type: Some("purchase_list_item"),
+        entity_id: Some(item_id.to_string()),
+        actor: None,
+    };
+    finish(
+        &pool,
+        context,
+        purchase_lists::remove_purchase_item(&pool, item_id).await,
+    )
+    .await
+}
+
+#[tauri::command]
+pub async fn search_purchasable_variants(
+    pool: State<'_, DbPool>,
+    list_id: i32,
+    filter: LinkableFilterDto,
+) -> Result<PurchasablePage, String> {
+    purchase_lists::search_purchasable_variants(&pool, list_id, filter)
+        .await
+        .map_err(|error: AppError| error.to_string())
+}
+
+#[tauri::command]
+pub async fn list_purchasable_variant_ids(
+    pool: State<'_, DbPool>,
+    list_id: i32,
+    filter: LinkableFilterDto,
+) -> Result<PurchasableIds, String> {
+    purchase_lists::list_purchasable_variant_ids(&pool, list_id, filter)
         .await
         .map_err(|error: AppError| error.to_string())
 }

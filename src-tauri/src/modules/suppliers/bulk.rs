@@ -61,12 +61,12 @@ pub struct BulkLinkResult {
 }
 
 #[derive(Debug, Clone)]
-struct ValidLinkable {
-    search: Option<String>,
-    category_id: Option<i32>,
-    only_unassigned: bool,
-    page: i64,
-    page_size: i64,
+pub(crate) struct ValidLinkable {
+    pub(crate) search: Option<String>,
+    pub(crate) category_id: Option<i32>,
+    pub(crate) only_unassigned: bool,
+    pub(crate) page: i64,
+    pub(crate) page_size: i64,
 }
 
 pub fn normalize_ids(ids: Vec<i32>) -> Result<Vec<i32>, AppError> {
@@ -86,7 +86,9 @@ pub fn normalize_ids(ids: Vec<i32>) -> Result<Vec<i32>, AppError> {
     Ok(unique)
 }
 
-fn validate_linkable_filter(filter: LinkableFilterDto) -> Result<ValidLinkable, AppError> {
+pub(crate) fn validate_linkable_filter(
+    filter: LinkableFilterDto,
+) -> Result<ValidLinkable, AppError> {
     let search = filter
         .search
         .map(|text| text.trim().to_string())
@@ -122,7 +124,7 @@ fn validate_linkable_filter(filter: LinkableFilterDto) -> Result<ValidLinkable, 
     })
 }
 
-fn like_pattern(text: &str) -> String {
+pub(crate) fn like_pattern(text: &str) -> String {
     let escaped = text
         .replace('\\', "\\\\")
         .replace('%', "\\%")
