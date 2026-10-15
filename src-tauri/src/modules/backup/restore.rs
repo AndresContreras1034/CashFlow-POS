@@ -24,13 +24,14 @@ use crate::modules::backup::{
     pg_tools::{self, ArchiveHeader, ConnParams, PgTools},
     repository,
     secrets::{self, Secret},
-    service,
+    service, temp,
 };
 
 const RESTORE_TIMEOUT: Duration = Duration::from_secs(30 * 60);
 const LIST_TIMEOUT: Duration = Duration::from_secs(5 * 60);
 const KEEP_OLD_DATABASES: usize = 2;
 const MAX_LIVE_NAME_LEN: usize = 26;
+const STALE_DATABASE_AFTER_SECS: i64 = 60 * 60;
 const COUNTED: [(&str, &str); 4] = [
     ("Ventas", "sales"),
     ("Productos", "products"),
@@ -60,6 +61,251 @@ fn safe_live_ident(name: &str) -> Result<String, String> {
         ));
     }
     safe_ident(name)
+}
+
+fn temporary_database_name(live: &str, purpose: &str, created_at: i64) -> Result<String, String> {
+    safe_ident(&format!(
+        "{live}_{purpose}_{created_at}_{}",
+        &Uuid::new_v4().simple().to_string()[..8]
+    ))
+}
+
+fn temporary_database_created_at(live: &str, name: &str) -> Option<i64> {
+    let suffix = name
+        .strip_prefix(&format!("{live}_restoring_"))
+        .or_else(|| name.strip_prefix(&format!("{live}_verify_")))?;
+    let (created_at, identifier) = suffix.split_once('_')?;
+    if identifier.len() != 8
+        || !identifier
+            .chars()
+            .all(|character| character.is_ascii_hexdigit())
+    {
+        return None;
+    }
+    created_at.parse().ok()
+}
+
+fn legacy_temporary_database(live: &str, name: &str) -> bool {
+    if name == format!("{live}_restoring") {
+        return true;
+    }
+    name.strip_prefix(&format!("{live}_verify_"))
+        .is_some_and(|identifier| {
+            identifier.len() == 8
+                && identifier
+                    .chars()
+                    .all(|character| character.is_ascii_hexdigit())
+        })
+}
+
+fn temporary_database_marker_created_at(marker: Option<&str>) -> Option<i64> {
+    marker?
+        .strip_prefix("cashflow_temp_created_at=")?
+        .parse()
+        .ok()
+}
+
+fn pre_restore_candidate(live: &str, name: &str) -> bool {
+    let Some(suffix) = name.strip_prefix(&format!("{live}_pre_restore_")) else {
+        return false;
+    };
+    let parts: Vec<_> = suffix.split('_').collect();
+    parts.len() == 3
+        && parts[0].len() == 8
+        && parts[0].chars().all(|character| character.is_ascii_digit())
+        && parts[1].len() == 6
+        && parts[1].chars().all(|character| character.is_ascii_digit())
+        && parts[2].len() == 8
+        && parts[2]
+            .chars()
+            .all(|character| character.is_ascii_hexdigit())
+}
+
+async fn recover_missing_live_database(
+    admin: &mut PgConnection,
+    live: &str,
+) -> Result<Option<String>, String> {
+    let databases: Vec<String> =
+        sqlx::query_scalar("SELECT datname::text FROM pg_database ORDER BY datname")
+            .fetch_all(&mut *admin)
+            .await
+            .map_err(|error| format!("No se pudieron consultar las bases de datos: {error}"))?;
+    if databases.iter().any(|name| name == live) {
+        return Ok(None);
+    }
+    let Some(old) = databases
+        .iter()
+        .filter(|name| pre_restore_candidate(live, name))
+        .max()
+    else {
+        return Ok(None);
+    };
+    let old = safe_ident(old)?;
+    exec(
+        admin,
+        format!("ALTER DATABASE \"{old}\" RENAME TO \"{live}\""),
+    )
+    .await
+    .map_err(|error| format!("No se pudo recuperar «{live}» desde «{old}»: {error}"))?;
+    exec(
+        admin,
+        format!("ALTER DATABASE \"{live}\" WITH ALLOW_CONNECTIONS true"),
+    )
+    .await
+    .map_err(|error| {
+        format!("Se recuperó «{live}», pero no se pudieron habilitar sus conexiones: {error}")
+    })?;
+    Ok(Some(old))
+}
+
+async fn cleanup_stale_databases(
+    admin: &mut PgConnection,
+    live: &str,
+) -> Result<Vec<String>, String> {
+    let databases: Vec<String> =
+        sqlx::query_scalar("SELECT datname::text FROM pg_database ORDER BY datname")
+            .fetch_all(&mut *admin)
+            .await
+            .map_err(|error| format!("No se pudieron consultar las bases temporales: {error}"))?;
+    let cutoff = Utc::now().timestamp() - STALE_DATABASE_AFTER_SECS;
+    let mut warnings = Vec::new();
+
+    for name in databases {
+        if temporary_database_created_at(live, &name).is_none()
+            && !legacy_temporary_database(live, &name)
+        {
+            continue;
+        }
+        let marker: Option<String> = sqlx::query_scalar(
+            "SELECT shobj_description(oid, 'pg_database')
+             FROM pg_database WHERE datname = $1",
+        )
+        .bind(&name)
+        .fetch_optional(&mut *admin)
+        .await
+        .map_err(|error| format!("No se pudo consultar la antigüedad de «{name}»: {error}"))?
+        .flatten();
+        let created_at = temporary_database_marker_created_at(marker.as_deref());
+        let Some(created_at) = created_at else {
+            if marker.is_none() && legacy_temporary_database(live, &name) {
+                let now = Utc::now().timestamp();
+                exec(
+                    admin,
+                    format!(
+                        "COMMENT ON DATABASE \"{}\" IS 'cashflow_temp_created_at={now}'",
+                        safe_ident(&name)?
+                    ),
+                )
+                .await
+                .map_err(|error| {
+                    format!("No se pudo registrar la antigüedad de «{name}»: {error}")
+                })?;
+                warnings.push(format!(
+                    "Se encontró la base temporal antigua «{name}» sin fecha verificable. \
+                     Se conservará durante al menos una hora y luego se limpiará si no está en uso."
+                ));
+                continue;
+            }
+            tracing::warn!(
+                database = %name,
+                "Se conservó una base temporal sin marca de creación verificable"
+            );
+            warnings.push(format!(
+                "Se encontró la base temporal «{name}» sin una marca de creación verificable; \
+                 se conservó sin eliminarla."
+            ));
+            continue;
+        };
+        if created_at > cutoff {
+            continue;
+        }
+        let active: bool = sqlx::query_scalar(
+            "SELECT EXISTS(
+                SELECT 1 FROM pg_stat_activity
+                WHERE datname = $1 AND pid <> pg_backend_pid()
+            )",
+        )
+        .bind(&name)
+        .fetch_one(&mut *admin)
+        .await
+        .map_err(|error| {
+            format!("No se pudo comprobar si la base temporal «{name}» está en uso: {error}")
+        })?;
+        if active {
+            continue;
+        }
+        let name = safe_ident(&name)?;
+        exec(
+            admin,
+            format!("DROP DATABASE IF EXISTS \"{name}\" WITH (FORCE)"),
+        )
+        .await
+        .map_err(|error| {
+            format!("No se pudo eliminar la base temporal obsoleta «{name}»: {error}")
+        })?;
+    }
+    Ok(warnings)
+}
+
+pub async fn recover_startup_state() -> Vec<String> {
+    let mut warnings = Vec::new();
+    let conn = match ConnParams::from_env() {
+        Ok(conn) => conn,
+        Err(error) => {
+            warnings.push(error);
+            return warnings;
+        }
+    };
+    let live = match safe_live_ident(&conn.database) {
+        Ok(live) => live,
+        Err(error) => {
+            warnings.push(error);
+            return warnings;
+        }
+    };
+
+    match open_admin(&conn).await {
+        Ok(mut admin) => {
+            match recover_missing_live_database(&mut admin, &live).await {
+                Ok(Some(old)) => warnings.push(format!(
+                    "La base «{live}» no existía. Se recuperó automáticamente desde «{old}»; \
+                     verifica tus datos antes de continuar."
+                )),
+                Ok(None) => {
+                    let live_exists: Result<bool, sqlx::Error> = sqlx::query_scalar(
+                        "SELECT EXISTS(SELECT 1 FROM pg_database WHERE datname = $1)",
+                    )
+                    .bind(&live)
+                    .fetch_one(&mut admin)
+                    .await;
+                    match live_exists {
+                        Ok(true) => {}
+                        Ok(false) => warnings.push(format!(
+                            "No existe la base «{live}» y no se encontró una base \
+                             pre_restore recuperable."
+                        )),
+                        Err(error) => warnings.push(format!(
+                            "No se pudo comprobar si existe la base «{live}»: {error}"
+                        )),
+                    }
+                }
+                Err(error) => warnings.push(error),
+            }
+
+            match cleanup_stale_databases(&mut admin, &live).await {
+                Ok(cleanup_warnings) => warnings.extend(cleanup_warnings),
+                Err(error) => warnings.push(error),
+            }
+        }
+        Err(error) => warnings.push(format!(
+            "No se pudieron revisar los residuos de restauración: {error}"
+        )),
+    }
+
+    if let Err(error) = temp::cleanup_stale().await {
+        warnings.push(error);
+    }
+    warnings
 }
 
 fn options(conn: &ConnParams, database: &str) -> PgConnectOptions {
@@ -120,7 +366,25 @@ async fn create_scratch(pool: &PgPool, name: &str) -> Result<(), String> {
                 "No se pudo crear la base temporal «{name}» \
                  (se requiere permiso CREATEDB y que no exista ya): {e}"
             )
-        })
+        })?;
+    let created_at = Utc::now().timestamp();
+    if let Err(error) = sqlx::query(&format!(
+        "COMMENT ON DATABASE \"{name}\" IS 'cashflow_temp_created_at={created_at}'"
+    ))
+    .execute(pool)
+    .await
+    {
+        return match drop_scratch(pool, &name).await {
+            Ok(()) => Err(format!(
+                "No se pudo marcar la base temporal «{name}» para su limpieza segura: {error}"
+            )),
+            Err(cleanup_error) => Err(format!(
+                "No se pudo marcar la base temporal «{name}» ({error}) ni eliminarla \
+                 ({cleanup_error})"
+            )),
+        };
+    }
+    Ok(())
 }
 
 async fn drop_scratch(pool: &PgPool, name: &str) -> Result<(), String> {
@@ -179,14 +443,16 @@ async fn prepare(src: PathBuf, password: Option<String>) -> Result<Prepared, Str
     let password = password
         .filter(|value| !value.is_empty())
         .ok_or_else(|| "Este backup está cifrado: escribe la contraseña".to_string())?;
-    let temp = std::env::temp_dir().join(format!(
+    let temp_dir = temp::ensure_directory().await?;
+    temp::remove_stale(&temp_dir, &["cashflow_restore_"]).await?;
+    let temp_path = temp_dir.join(format!(
         "cashflow_restore_{}.plain.tmp",
         Uuid::new_v4().simple()
     ));
-    let guard = TempFile(Some(temp.clone()));
-    crypto::decrypt_file(src, temp.clone(), password).await?;
+    let guard = TempFile(Some(temp_path.clone()));
+    crypto::decrypt_file(src, temp_path.clone(), password).await?;
     Ok(Prepared {
-        path: temp,
+        path: temp_path,
         encrypted: true,
         _temp: guard,
     })
@@ -292,6 +558,7 @@ async fn inspect_inner(
     path: &Path,
     password: Option<&str>,
 ) -> Result<BackupInspection, String> {
+    temp::cleanup_stale().await?;
     let metadata = tokio::fs::metadata(path)
         .await
         .map_err(|e| format!("No se pudo abrir el archivo: {e}"))?;
@@ -323,15 +590,20 @@ async fn inspect_inner(
     let tools = pg_tools::locate(settings.pg_bin_dir.as_deref(), info.major()).await?;
     let conn = ConnParams::from_env()?;
     let live = safe_live_ident(&conn.database)?;
+    let mut admin = open_admin(&conn).await?;
+    for warning in cleanup_stale_databases(&mut admin, &live).await? {
+        tracing::warn!(%warning, "Aviso de limpieza de bases temporales");
+    }
+    admin
+        .close()
+        .await
+        .map_err(|error| format!("No se pudo cerrar la conexión administrativa: {error}"))?;
     let prepared = prepare(path.to_path_buf(), password.map(str::to_string)).await?;
     let listing = pg_tools::list(&tools, &prepared.path, LIST_TIMEOUT).await?;
     let header = pg_tools::parse_header(&listing);
     check_server_major(&header, info.major())?;
 
-    let scratch = format!(
-        "{live}_verify_{}",
-        &Uuid::new_v4().simple().to_string()[..8]
-    );
+    let scratch = temporary_database_name(&live, "verify", Utc::now().timestamp())?;
     create_scratch(pool, &scratch).await?;
 
     let inspected = async {
@@ -776,6 +1048,7 @@ async fn restore_inner(
     password: Option<String>,
     actor: Option<String>,
 ) -> Result<RestoreOutcome, String> {
+    temp::cleanup_stale().await?;
     let settings = service::get_settings(&pool)
         .await
         .map_err(|e| e.to_string())?;
@@ -785,6 +1058,14 @@ async fn restore_inner(
     let tools = pg_tools::locate(settings.pg_bin_dir.as_deref(), info.major()).await?;
     let conn = ConnParams::from_env()?;
     let live = safe_live_ident(&conn.database)?;
+    let mut admin = open_admin(&conn).await?;
+    for warning in cleanup_stale_databases(&mut admin, &live).await? {
+        tracing::warn!(%warning, "Aviso de limpieza de bases temporales");
+    }
+    admin
+        .close()
+        .await
+        .map_err(|error| format!("No se pudo cerrar la conexión administrativa: {error}"))?;
     let source_name = path
         .file_name()
         .map(|name| name.to_string_lossy().into_owned())
@@ -795,7 +1076,7 @@ async fn restore_inner(
     let header = pg_tools::parse_header(&listing);
     check_server_major(&header, info.major())?;
 
-    let fresh = format!("{live}_restoring");
+    let fresh = temporary_database_name(&live, "restoring", Utc::now().timestamp())?;
     create_scratch(&pool, &fresh).await?;
     let swapped = match build_and_swap(
         pool.clone(),
@@ -885,5 +1166,178 @@ mod tests {
         assert!(safe_ident("pos\"; DROP").is_err());
         assert!(safe_ident("").is_err());
         assert!(safe_live_ident(&"x".repeat(MAX_LIVE_NAME_LEN + 1)).is_err());
+    }
+
+    #[test]
+    fn temporary_database_names_encode_age_and_have_unique_suffixes() {
+        let created_at = Utc::now().timestamp() - STALE_DATABASE_AFTER_SECS - 1;
+        let first = temporary_database_name("pos_db", "restoring", created_at).unwrap();
+        let second = temporary_database_name("pos_db", "restoring", created_at).unwrap();
+
+        assert_ne!(first, second);
+        assert_eq!(
+            temporary_database_created_at("pos_db", &first),
+            Some(created_at)
+        );
+        assert_eq!(
+            temporary_database_created_at("pos_db", "pos_db_restoring"),
+            None
+        );
+        assert_eq!(
+            temporary_database_created_at("pos_db", "pos_db_verify_not-a-timestamp_12345678"),
+            None
+        );
+    }
+
+    #[test]
+    fn pre_restore_candidate_requires_the_expected_timestamp_and_id() {
+        assert!(pre_restore_candidate(
+            "pos_db",
+            "pos_db_pre_restore_20261015_100000_1234abcd"
+        ));
+        assert!(!pre_restore_candidate(
+            "pos_db",
+            "pos_db_pre_restore_20261015_100000_not-an-id"
+        ));
+    }
+
+    #[sqlx::test(migrations = "./migrations")]
+    async fn stale_scratch_databases_are_removed_but_recent_ones_are_preserved(pool: PgPool) {
+        let live = "cashflow_restore_test";
+        let now = Utc::now().timestamp();
+        let stale = temporary_database_name(live, "restoring", now - STALE_DATABASE_AFTER_SECS - 1)
+            .unwrap();
+        let recent = temporary_database_name(live, "verify", now).unwrap();
+        let legacy_stale = format!("{live}_restoring");
+        let legacy_unmarked = format!("{live}_verify_abcdef01");
+        create_scratch(&pool, &stale).await.unwrap();
+        create_scratch(&pool, &recent).await.unwrap();
+        create_scratch(&pool, &legacy_stale).await.unwrap();
+        create_scratch(&pool, &legacy_unmarked).await.unwrap();
+        sqlx::query(&format!(
+            "COMMENT ON DATABASE \"{stale}\" IS 'cashflow_temp_created_at={}'",
+            now - STALE_DATABASE_AFTER_SECS - 1
+        ))
+        .execute(&pool)
+        .await
+        .unwrap();
+        sqlx::query(&format!(
+            "COMMENT ON DATABASE \"{legacy_stale}\" IS \
+             'cashflow_temp_created_at={}'",
+            now - STALE_DATABASE_AFTER_SECS - 1
+        ))
+        .execute(&pool)
+        .await
+        .unwrap();
+        sqlx::query(&format!(
+            "COMMENT ON DATABASE \"{legacy_unmarked}\" IS NULL"
+        ))
+        .execute(&pool)
+        .await
+        .unwrap();
+
+        let conn = ConnParams::from_env().unwrap();
+        let mut admin = open_admin(&conn).await.unwrap();
+        let cleanup_warnings = cleanup_stale_databases(&mut admin, live).await.unwrap();
+        let stale_exists: bool =
+            sqlx::query_scalar("SELECT EXISTS(SELECT 1 FROM pg_database WHERE datname = $1)")
+                .bind(&stale)
+                .fetch_one(&mut admin)
+                .await
+                .unwrap();
+        let recent_exists: bool =
+            sqlx::query_scalar("SELECT EXISTS(SELECT 1 FROM pg_database WHERE datname = $1)")
+                .bind(&recent)
+                .fetch_one(&mut admin)
+                .await
+                .unwrap();
+        let legacy_exists: bool =
+            sqlx::query_scalar("SELECT EXISTS(SELECT 1 FROM pg_database WHERE datname = $1)")
+                .bind(&legacy_stale)
+                .fetch_one(&mut admin)
+                .await
+                .unwrap();
+        let legacy_unmarked_exists: bool =
+            sqlx::query_scalar("SELECT EXISTS(SELECT 1 FROM pg_database WHERE datname = $1)")
+                .bind(&legacy_unmarked)
+                .fetch_one(&mut admin)
+                .await
+                .unwrap();
+        admin.close().await.unwrap();
+
+        assert!(!stale_exists);
+        assert!(recent_exists);
+        assert!(!legacy_exists);
+        assert!(legacy_unmarked_exists);
+        assert!(cleanup_warnings
+            .iter()
+            .any(|warning| warning.contains("cashflow_restore_test_verify_abcdef01")));
+        drop_scratch(&pool, &recent).await.unwrap();
+        drop_scratch(&pool, &legacy_unmarked).await.unwrap();
+    }
+
+    #[sqlx::test(migrations = "./migrations")]
+    async fn missing_live_database_is_recovered_from_pre_restore(pool: PgPool) {
+        let live = format!("cfr_{}", &Uuid::new_v4().simple().to_string()[..8]);
+        let old = format!("{live}_pre_restore_20261015_100000_1234abcd");
+        create_scratch(&pool, &old).await.unwrap();
+
+        let conn = ConnParams::from_env().unwrap();
+        let mut admin = open_admin(&conn).await.unwrap();
+        let recovered = recover_missing_live_database(&mut admin, &live)
+            .await
+            .unwrap()
+            .unwrap();
+        let live_exists: bool =
+            sqlx::query_scalar("SELECT EXISTS(SELECT 1 FROM pg_database WHERE datname = $1)")
+                .bind(&live)
+                .fetch_one(&mut admin)
+                .await
+                .unwrap();
+        let old_exists: bool =
+            sqlx::query_scalar("SELECT EXISTS(SELECT 1 FROM pg_database WHERE datname = $1)")
+                .bind(&old)
+                .fetch_one(&mut admin)
+                .await
+                .unwrap();
+        admin.close().await.unwrap();
+
+        assert_eq!(recovered, old);
+        assert!(live_exists);
+        assert!(!old_exists);
+        drop_scratch(&pool, &live).await.unwrap();
+    }
+
+    #[sqlx::test(migrations = "./migrations")]
+    async fn failed_restore_rename_rolls_back_the_live_database(pool: PgPool) {
+        let suffix = &Uuid::new_v4().simple().to_string()[..8];
+        let live = format!("cf_restore_live_{suffix}");
+        let missing_fresh = format!("cf_restore_missing_{suffix}");
+        let old = format!("cf_restore_old_{suffix}");
+        create_scratch(&pool, &live).await.unwrap();
+
+        let conn = ConnParams::from_env().unwrap();
+        let mut admin = open_admin(&conn).await.unwrap();
+        let error = swap_databases(&mut admin, &live, &missing_fresh, &old)
+            .await
+            .unwrap_err();
+        let live_exists: bool =
+            sqlx::query_scalar("SELECT EXISTS(SELECT 1 FROM pg_database WHERE datname = $1)")
+                .bind(&live)
+                .fetch_one(&mut admin)
+                .await
+                .unwrap();
+        let live_allows_connections: bool =
+            sqlx::query_scalar("SELECT datallowconn FROM pg_database WHERE datname = $1")
+                .bind(&live)
+                .fetch_one(&mut admin)
+                .await
+                .unwrap();
+        admin.close().await.unwrap();
+
+        assert!(error.contains("se dejó todo como estaba"));
+        assert!(live_exists);
+        assert!(live_allows_connections);
+        drop_scratch(&pool, &live).await.unwrap();
     }
 }

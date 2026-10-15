@@ -21,6 +21,7 @@ use crate::modules::backup::{
     repository::{self, SuccessData},
     retention,
     secrets::{self, Secret},
+    temp,
 };
 
 const DUMP_TIMEOUT: Duration = Duration::from_secs(30 * 60);
@@ -459,8 +460,9 @@ async fn execute(
             dir.display()
         )
     })?;
-    remove_stale_tmp(dir).await;
-    remove_stale_tmp(&std::env::temp_dir()).await;
+    let temp_dir = temp::ensure_directory().await?;
+    temp::remove_stale(&temp_dir, &["cashflow_backup_"]).await?;
+    temp::remove_stale(dir, &["cashflow_backup_"]).await?;
     ensure_readme(dir).await;
 
     // Si el cifrado está activo y falta la contraseña, el backup FALLA:
@@ -487,11 +489,12 @@ async fn execute(
         format!("cashflow_{stamp}.dump")
     };
     let final_path = dir.join(&file_name);
-    let out_tmp = dir.join(format!("{file_name}.tmp"));
+    let temp_id = uuid::Uuid::new_v4().simple().to_string();
+    let out_tmp = dir.join(format!("cashflow_backup_{temp_id}.dump.tmp"));
     // El dump en claro, cuando se cifra, nunca toca la carpeta de backups
     // (puede estar sincronizada con OneDrive).
     let plain_tmp = if password.is_some() {
-        std::env::temp_dir().join(format!("cashflow_{stamp}.plain.tmp"))
+        temp_dir.join(format!("cashflow_backup_{temp_id}.plain.tmp"))
     } else {
         out_tmp.clone()
     };
@@ -583,19 +586,6 @@ async fn produce(
 
 /// Restos de ejecuciones interrumpidas. Es seguro porque el mutex garantiza
 /// que no hay otro backup escribiendo ahora.
-async fn remove_stale_tmp(dir: &Path) {
-    let Ok(mut entries) = tokio::fs::read_dir(dir).await else {
-        return;
-    };
-    while let Ok(Some(entry)) = entries.next_entry().await {
-        let name = entry.file_name();
-        let Some(name) = name.to_str() else { continue };
-        if name.starts_with("cashflow_") && name.ends_with(".tmp") {
-            let _ = tokio::fs::remove_file(entry.path()).await;
-        }
-    }
-}
-
 async fn ensure_readme(dir: &Path) {
     use tokio::io::AsyncWriteExt;
     let path = dir.join("LEEME.txt");

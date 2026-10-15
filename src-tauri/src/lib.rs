@@ -48,6 +48,28 @@ fn show_fatal_dialog(title: &str, message: &str) {
     }
 }
 
+#[cfg(windows)]
+fn show_startup_warning(title: &str, message: &str) {
+    use std::ptr::null_mut;
+    use winapi::um::winuser::{MessageBoxW, MB_ICONWARNING, MB_OK};
+    let to_wide = |s: &str| -> Vec<u16> { s.encode_utf16().chain(std::iter::once(0)).collect() };
+    let text = to_wide(message);
+    let cap = to_wide(title);
+    unsafe {
+        MessageBoxW(
+            null_mut(),
+            text.as_ptr(),
+            cap.as_ptr(),
+            MB_OK | MB_ICONWARNING,
+        );
+    }
+}
+
+#[cfg(not(windows))]
+fn show_startup_warning(title: &str, message: &str) {
+    eprintln!("{title}: {message}");
+}
+
 #[cfg(not(windows))]
 fn show_fatal_dialog(title: &str, message: &str) {
     eprintln!("{title}: {message}");
@@ -102,6 +124,13 @@ pub fn run() {
         // =====================================================
         .plugin(tauri_plugin_opener::init())
         .plugin(tauri_plugin_dialog::init())
+        .on_window_event(|_, event| {
+            if let tauri::WindowEvent::CloseRequested { api, .. } = event {
+                if modules::backup::service::is_running() {
+                    api.prevent_close();
+                }
+            }
+        })
         // =====================================================
         // Inicialización
         // =====================================================
@@ -121,6 +150,14 @@ pub fn run() {
                 );
                 handle.exit(1);
                 return Ok(());
+            }
+
+            let recovery_warnings =
+                tauri::async_runtime::block_on(modules::backup::restore::recover_startup_state());
+            if !recovery_warnings.is_empty() {
+                let message = recovery_warnings.join("\n\n");
+                tracing::warn!(%message, "Se detectaron avisos durante la recuperación inicial");
+                show_startup_warning("Aviso de recuperación - CashFlow POS", &message);
             }
 
             let pool = match tauri::async_runtime::block_on(init_db()) {

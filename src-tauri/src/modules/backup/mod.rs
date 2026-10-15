@@ -15,3 +15,4 @@ pub mod scheduler;
 pub mod secrets;
 pub mod service;
 pub mod status;
+pub mod temp;
