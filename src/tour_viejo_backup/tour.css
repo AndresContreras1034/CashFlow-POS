@@ -1,0 +1,104 @@
+/* Popover siempre claro: así se lee bien en cualquier tema de la app */
+.driver-popover.cashflow-tour {
+  background: #ffffff;
+  color: #1f2937;
+  border-radius: 12px;
+  padding: 18px 20px;
+  max-width: 360px;
+  box-shadow: 0 12px 32px rgba(0, 0, 0, 0.3);
+}
+
+.driver-popover.cashflow-tour .driver-popover-title {
+  font-size: 1.05rem;
+  font-weight: 700;
+  color: #111827;
+}
+
+.driver-popover.cashflow-tour .driver-popover-description {
+  font-size: 0.92rem;
+  line-height: 1.5;
+  margin-top: 6px;
+  color: #374151;
+}
+
+.driver-popover.cashflow-tour .driver-popover-progress-text {
+  font-size: 0.75rem;
+  color: #6b7280;
+}
+
+.driver-popover.cashflow-tour .driver-popover-footer button {
+  border-radius: 8px;
+  padding: 6px 14px;
+  font-size: 0.85rem;
+  text-shadow: none;
+}
+
+.driver-popover.cashflow-tour .driver-popover-next-btn {
+  background: #2563eb;
+  color: #ffffff;
+  border: 1px solid #2563eb;
+}
+
+.driver-popover.cashflow-tour .driver-popover-prev-btn {
+  background: #f3f4f6;
+  color: #1f2937;
+  border: 1px solid #d1d5db;
+}
+
+/* Botón flotante "?" */
+.tour-help-btn {
+  position: fixed;
+  right: 18px;
+  bottom: 18px;
+  z-index: 900;
+  width: 40px;
+  height: 40px;
+  border-radius: 50%;
+  border: none;
+  background: #2563eb;
+  color: #ffffff;
+  font-size: 1.1rem;
+  font-weight: 700;
+  cursor: pointer;
+  box-shadow: 0 4px 14px rgba(0, 0, 0, 0.3);
+}
+.tour-help-btn:hover {
+  background: #1d4ed8;
+}
+body[data-tour-active] .tour-help-btn {
+  display: none;
+}
+
+/* Panel en Ajustes */
+.tour-panel {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+.tour-panel__actions {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+.tour-panel__list {
+  display: grid;
+  gap: 8px;
+}
+.tour-panel__item {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 10px 14px;
+  border: 1px solid rgba(128, 128, 128, 0.3);
+  border-radius: 10px;
+}
+.tour-panel__item small {
+  display: block;
+  opacity: 0.7;
+}
+.tour-panel__seen {
+  font-size: 0.75rem;
+  color: #16a34a;
+  margin-left: 8px;
+}
