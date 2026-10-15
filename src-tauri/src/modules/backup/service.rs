@@ -411,12 +411,12 @@ pub(crate) async fn run_backup_inner(
                 "Backup completado"
             );
 
-            match retention::apply(pool, &settings).await {
+            match retention::apply(pool, &settings, &dir).await {
                 Ok(0) => {}
                 Ok(n) => tracing::info!(removed = n, "Rotación de backups aplicada"),
                 Err(e) => tracing::warn!(error = %e, "Falló la rotación de backups"),
             }
-            if let Err(e) = retention::apply_pre(pool).await {
+            if let Err(e) = retention::apply_pre(pool, &dir).await {
                 tracing::warn!(error = %e, "Falló la rotación de backups previos");
             }
             Ok(record)

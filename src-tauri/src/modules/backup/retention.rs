@@ -4,7 +4,7 @@
 
 use std::collections::HashSet;
 use std::hash::Hash;
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 
 use chrono::{DateTime, Datelike, Duration, Local, NaiveDateTime, Utc};
 use sqlx::PgPool;
@@ -91,7 +91,11 @@ pub fn pre_ids_to_delete(entries: &[(i32, DateTime<Utc>)], now: DateTime<Utc>) -
 }
 
 /// Borra el archivo (y su .meta.json) y marca la fila. Devuelve cuántos borró.
-pub async fn apply(pool: &PgPool, settings: &BackupSettings) -> Result<usize, sqlx::Error> {
+pub async fn apply(
+    pool: &PgPool,
+    settings: &BackupSettings,
+    backup_dir: &Path,
+) -> Result<usize, sqlx::Error> {
     let candidates = repository::list_rotatable(pool).await?;
     let entries: Vec<Entry> = candidates
         .iter()
@@ -112,7 +116,7 @@ pub async fn apply(pool: &PgPool, settings: &BackupSettings) -> Result<usize, sq
         let Some(record) = candidates.iter().find(|r| r.id == id) else {
             continue;
         };
-        if delete_files(record.file_name.as_deref(), record.file_path.as_deref()).await {
+        if delete_files(record.file_name.as_deref(), backup_dir).await {
             repository::mark_file_deleted(pool, id).await?;
             removed += 1;
         }
@@ -120,7 +124,7 @@ pub async fn apply(pool: &PgPool, settings: &BackupSettings) -> Result<usize, sq
     Ok(removed)
 }
 
-pub async fn apply_pre(pool: &PgPool) -> Result<usize, sqlx::Error> {
+pub async fn apply_pre(pool: &PgPool, backup_dir: &Path) -> Result<usize, sqlx::Error> {
     let candidates = repository::list_pre_rotatable(pool).await?;
     let entries: Vec<(i32, DateTime<Utc>)> = candidates
         .iter()
@@ -132,7 +136,7 @@ pub async fn apply_pre(pool: &PgPool) -> Result<usize, sqlx::Error> {
         let Some(record) = candidates.iter().find(|candidate| candidate.id == id) else {
             continue;
         };
-        if delete_files(record.file_name.as_deref(), record.file_path.as_deref()).await {
+        if delete_files(record.file_name.as_deref(), backup_dir).await {
             repository::mark_file_deleted(pool, id).await?;
             removed += 1;
         }
@@ -140,17 +144,26 @@ pub async fn apply_pre(pool: &PgPool) -> Result<usize, sqlx::Error> {
     Ok(removed)
 }
 
-async fn delete_files(name: Option<&str>, path: Option<&str>) -> bool {
-    let (Some(name), Some(path)) = (name, path) else {
+fn managed_backup_path(backup_dir: &Path, name: &str) -> Option<PathBuf> {
+    if !(name.starts_with("cashflow_") && (name.ends_with(".dump") || name.ends_with(".dump.enc")))
+        || !name
+            .bytes()
+            .all(|byte| byte.is_ascii_alphanumeric() || matches!(byte, b'_' | b'-' | b'.'))
+        || Path::new(name).file_name().and_then(|value| value.to_str()) != Some(name)
+    {
+        return None;
+    }
+    Some(backup_dir.join(name))
+}
+
+async fn delete_files(name: Option<&str>, backup_dir: &Path) -> bool {
+    let Some(name) = name else {
         return true;
     };
-    // Defensa: solo se borran archivos con el patrón que genera este módulo.
-    if !(name.starts_with("cashflow_") && (name.ends_with(".dump") || name.ends_with(".dump.enc")))
-    {
+    let Some(path) = managed_backup_path(backup_dir, name) else {
         tracing::warn!(file = name, "Rotación: nombre inesperado, no se borra");
         return false;
-    }
-    let path = PathBuf::from(path);
+    };
     match tokio::fs::remove_file(&path).await {
         Ok(()) => {}
         Err(e) if e.kind() == std::io::ErrorKind::NotFound => {}
@@ -246,6 +259,18 @@ mod tests {
             },
         );
         assert!(!doomed.contains(&2));
+    }
+
+    #[test]
+    fn managed_backup_path_uses_only_a_validated_file_name() {
+        let dir = Path::new(r"C:\CashFlow-Backups");
+        assert_eq!(
+            managed_backup_path(dir, "cashflow_2026-10-15_120000.dump"),
+            Some(dir.join("cashflow_2026-10-15_120000.dump")),
+        );
+        assert!(managed_backup_path(dir, r"cashflow_..\outside.dump").is_none());
+        assert!(managed_backup_path(dir, r"..\outside.dump").is_none());
+        assert!(managed_backup_path(dir, "report.txt").is_none());
     }
 
     #[test]
