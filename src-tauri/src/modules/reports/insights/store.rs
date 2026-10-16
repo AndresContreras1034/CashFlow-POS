@@ -45,6 +45,9 @@ pub async fn day_state(
     let last_ok_hash: Option<String> = sqlx::query_scalar(
         "SELECT input_hash FROM ai_advice_daily \
          WHERE local_date = $1 AND scope = $2 AND status = 'ok' \
+           AND content->>'insufficient_data' IS DISTINCT FROM 'true' \
+           AND jsonb_typeof(content->'advice') = 'array' \
+           AND jsonb_array_length(content->'advice') > 0 \
          ORDER BY regen_index DESC LIMIT 1",
     )
     .bind(date)

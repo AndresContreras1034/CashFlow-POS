@@ -7,7 +7,7 @@ import type {
 } from '../../types/purchases';
 import { buildPrintModel, printDocumentTitle, type PrintModel } from '../../utils/purchasePrint';
 import { receiveMessage } from '../../utils/purchaseReceive';
-import type { RestockOverview, SupplierOverview } from '../../types/suppliers';
+import type { RestockOverview } from '../../types/suppliers';
 import {
   addRecommendedToList,
   createPurchaseList,
@@ -18,7 +18,7 @@ import {
   updatePurchaseItem,
   updatePurchaseList,
 } from '../../services/purchases.service';
-import { getRestockOverview, listSuppliers } from '../../services/suppliers.service';
+import { getRestockOverview } from '../../services/suppliers.service';
 import { errorMessage } from '../../utils/audit';
 import { formatDate, formatMoney } from '../../utils/format';
 import { actorField } from '../../utils/preferences';
@@ -26,7 +26,6 @@ import { buildRestockOrderMessage, contactActions } from '../../utils/callPanel'
 import type { ContactAction } from '../../utils/callPanel';
 import {
   addedMessage,
-  buildSupplierOptions,
   defaultListTitle,
   groupBySupplier,
   isEditable,
@@ -37,10 +36,11 @@ import {
   replaceItem,
   statusActions,
   PURCHASE_STATUS_LABELS,
+  MAX_NOTES,
 } from '../../utils/purchaseList';
 import { todayInTimeZone } from '../../utils/debts';
 import { PurchaseItemPicker } from './PurchaseItemPicker';
-import { PurchasePrintJob } from './PurchasePrintJob';
+import { PurchasePdfDialog } from './PurchasePdfDialog';
 import { PurchaseReceiveDialog } from './PurchaseReceiveDialog';
 import { PurchaseLineRow, type ItemPatch } from './PurchaseLineRow';
 import './SuppliersBase.css';
@@ -57,7 +57,7 @@ interface PurchasePanelProps {
   onNotify: (message: string, type?: 'success' | 'error' | 'warning') => void;
 }
 
-interface PurchasePrintJobState {
+interface PurchasePdfJobState {
   id: number;
   model: PrintModel;
   documentTitle: string;
@@ -86,10 +86,6 @@ export const PurchasePanel: React.FC<PurchasePanelProps> = ({
   const [overviewError, setOverviewError] = useState<string | null>(null);
   const [overviewReload, setOverviewReload] = useState(0);
   const [recommendedActionError, setRecommendedActionError] = useState<string | null>(null);
-  const [supplierOptionsSource, setSupplierOptionsSource] = useState<SupplierOverview[] | null>(null);
-  const [suppliersError, setSuppliersError] = useState<string | null>(null);
-  const [suppliersReload, setSuppliersReload] = useState(0);
-  const [supplierTotal, setSupplierTotal] = useState<number | null>(null);
   const [creating, setCreating] = useState(false);
   const [newTitle, setNewTitle] = useState('');
   const [createError, setCreateError] = useState<string | null>(null);
@@ -97,9 +93,12 @@ export const PurchasePanel: React.FC<PurchasePanelProps> = ({
   const [editingTitle, setEditingTitle] = useState(false);
   const [titleDraft, setTitleDraft] = useState('');
   const [headerError, setHeaderError] = useState<string | null>(null);
+  const [orderTextDraft, setOrderTextDraft] = useState('');
+  const [savingOrderText, setSavingOrderText] = useState(false);
+  const [orderTextError, setOrderTextError] = useState<string | null>(null);
   const [pendingStatus, setPendingStatus] = useState<('draft' | 'ordered' | 'cancelled') | null>(null);
   const [statusBusy, setStatusBusy] = useState(false);
-  const [printJob, setPrintJob] = useState<PurchasePrintJobState | null>(null);
+  const [pdfJob, setPdfJob] = useState<PurchasePdfJobState | null>(null);
   const [receiving, setReceiving] = useState(false);
   const [lastCostChanges, setLastCostChanges] = useState<{
     listId: number;
@@ -185,6 +184,11 @@ export const PurchasePanel: React.FC<PurchasePanelProps> = ({
   }, [listId, detailReload]);
 
   useEffect(() => {
+    setOrderTextDraft(detail?.list.notes ?? '');
+    setOrderTextError(null);
+  }, [detail?.list.id, detail?.list.notes]);
+
+  useEffect(() => {
     if (!detail || !isEditable(detail.list.status)) {
       setOverview(null);
       setOverviewError(null);
@@ -207,19 +211,6 @@ export const PurchasePanel: React.FC<PurchasePanelProps> = ({
     };
   }, [detail?.list.id, detail?.list.status, overviewReload]);
 
-  useEffect(() => {
-    setSuppliersError(null);
-    void listSuppliers({ is_active: true, page_size: 100 })
-      .then(response => {
-        setSupplierOptionsSource(response.data);
-        setSupplierTotal(response.total);
-      })
-      .catch(cause => {
-        setSupplierOptionsSource(null);
-        setSuppliersError(errorMessage(cause));
-      });
-  }, [suppliersReload]);
-
   const inList = useMemo(
     () => new Set((detail?.items ?? []).map(item => item.variant_id)),
     [detail?.items],
@@ -231,6 +222,7 @@ export const PurchasePanel: React.FC<PurchasePanelProps> = ({
   const groups = useMemo(() => groupBySupplier(detail?.items ?? []), [detail?.items]);
   const totals = useMemo(() => purchaseTotals(detail?.items ?? []), [detail?.items]);
   const editable = detail ? isEditable(detail.list.status) : false;
+  const textEditable = detail?.list.status === 'draft' || detail?.list.status === 'ordered';
 
   const refreshDetail = useCallback(() => setDetailReload(token => token + 1), []);
 
@@ -283,7 +275,7 @@ export const PurchasePanel: React.FC<PurchasePanelProps> = ({
     try {
       const list = await updatePurchaseList(detail.list.id, {
         title,
-        notes: detail.list.notes,
+        notes: orderTextDraft.trim() === '' ? null : orderTextDraft,
         ...actorField('updated_by'),
       });
       setDetail(current => current ? { ...current, list } : current);
@@ -293,6 +285,32 @@ export const PurchasePanel: React.FC<PurchasePanelProps> = ({
       setHeaderError(errorMessage(cause));
     } finally {
       setSavingTitle(false);
+    }
+  };
+
+  const handleSaveOrderText = async () => {
+    if (!detail || savingOrderText || !textEditable) return;
+    if (orderTextDraft.length > MAX_NOTES) {
+      setOrderTextError(`El texto no puede superar ${MAX_NOTES} caracteres.`);
+      return;
+    }
+    const notes = orderTextDraft.trim() === '' ? null : orderTextDraft;
+    if (notes === detail.list.notes) return;
+    setSavingOrderText(true);
+    setOrderTextError(null);
+    try {
+      const list = await updatePurchaseList(detail.list.id, {
+        title: detail.list.title,
+        notes,
+        ...actorField('updated_by'),
+      });
+      setDetail(current => current ? { ...current, list } : current);
+      reloadSummaries();
+      onNotify('Texto del pedido guardado.');
+    } catch (cause) {
+      setOrderTextError(errorMessage(cause));
+    } finally {
+      setSavingOrderText(false);
     }
   };
 
@@ -374,12 +392,16 @@ export const PurchasePanel: React.FC<PurchasePanelProps> = ({
     setSidebarOpen(true);
   };
 
-  const handlePrint = () => {
+  const handlePreparePdf = () => {
     if (!detail || detail.items.length === 0) return;
     const day = todayInTimeZone(timezone);
-    setPrintJob({
+    setPdfJob({
       id: Date.now(),
-      model: buildPrintModel(detail.list, detail.items, { businessName, day }),
+      model: buildPrintModel(
+        { ...detail.list, notes: orderTextDraft.trim() === '' ? null : orderTextDraft },
+        detail.items,
+        { businessName, day },
+      ),
       documentTitle: printDocumentTitle(detail.list.title, day),
     });
   };
@@ -549,11 +571,9 @@ export const PurchasePanel: React.FC<PurchasePanelProps> = ({
                   type="button"
                   className="suppliers-btn"
                   disabled={detail.items.length === 0}
-                  title={detail.items.length === 0
-                    ? 'La lista está vacía'
-                    : 'Abre el diálogo de impresión: elige “Guardar como PDF”'}
-                  onClick={handlePrint}
-                >Imprimir / Guardar PDF</button>
+                  title={detail.items.length === 0 ? 'La lista está vacía' : 'Edita el texto y guarda el pedido como PDF'}
+                  onClick={handlePreparePdf}
+                >Guardar PDF</button>
                 {statusActions(detail.list.status).map(action => (
                   <button
                     key={action.target}
@@ -581,15 +601,41 @@ export const PurchasePanel: React.FC<PurchasePanelProps> = ({
               )}
             </header>
 
-            <div className="purchase-totals" aria-label="Totales de la lista">
+            <div className="purchase-totals" aria-label="Resumen del pedido">
               <span>{totals.itemCount} {totals.itemCount === 1 ? 'producto' : 'productos'}</span>
-              <span>{totals.supplierCount} {totals.supplierCount === 1 ? 'proveedor' : 'proveedores'}</span>
               <span>{totals.units} {totals.units === 1 ? 'unidad' : 'unidades'}</span>
-              <strong>Costo estimado {formatMoney(totals.estimatedCost)}</strong>
-              {totals.itemsWithoutCost > 0 && (
-                <span>{totals.itemsWithoutCost} sin costo</span>
-              )}
             </div>
+
+            <section className="purchase-free-text" aria-label="Texto libre del pedido">
+              <div className="purchase-free-text-heading">
+                <label htmlFor="purchase-order-notes">Texto libre</label>
+                <span>Escribe saludos, recordatorios o cualquier indicación para el pedido.</span>
+              </div>
+              <textarea
+                id="purchase-order-notes"
+                className="suppliers-input suppliers-textarea purchase-free-text-editor"
+                maxLength={MAX_NOTES}
+                value={orderTextDraft}
+                disabled={!textEditable || savingOrderText}
+                placeholder="Hola, por favor separar estos productos. Recordar comprar…"
+                onChange={event => setOrderTextDraft(event.target.value)}
+              />
+              <div className="purchase-free-text-footer">
+                {orderTextError
+                  ? <span className="purchase-inline-error" role="alert">{orderTextError}</span>
+                  : <span className="purchase-muted">{orderTextDraft.length}/{MAX_NOTES}</span>}
+                {textEditable && (
+                  <button
+                    type="button"
+                    className="suppliers-btn suppliers-btn-primary"
+                    disabled={savingOrderText || orderTextDraft === (detail.list.notes ?? '')}
+                    onClick={() => void handleSaveOrderText()}
+                  >
+                    {savingOrderText ? 'Guardando…' : 'Guardar texto'}
+                  </button>
+                )}
+              </div>
+            </section>
 
             {lastCostChanges?.listId === detail.list.id && lastCostChanges.changes.length > 0 && (
               <details className="purchase-receive-cost-changes">
@@ -608,14 +654,15 @@ export const PurchasePanel: React.FC<PurchasePanelProps> = ({
             {editable && (
               <section className="purchase-recommended" aria-label="Productos recomendados">
                 <div className="purchase-recommended-copy">
-                  <strong>Recomendado</strong>
+                  <strong>Reposición sugerida</strong>
                   {overviewError ? (
                     <span role="alert">No se pudo cargar la reposición: {overviewError}</span>
                   ) : recommended === null ? (
                     <span role="status">Cargando necesidades de reposición…</span>
                   ) : recommended.total > 0 ? (
                     <span>
-                      Hay {recommended.total} {recommended.total === 1 ? 'producto' : 'productos'} por reponer que no están en esta lista ({recommended.urgent} urgentes)
+                      {recommended.total} {recommended.total === 1 ? 'producto recomendado' : 'productos recomendados'}
+                      {recommended.urgent > 0 && ` · ${recommended.urgent} urgentes`}
                     </span>
                   ) : (
                     <span>{overview?.groups.some(group => group.items.length > 0)
@@ -669,23 +716,10 @@ export const PurchasePanel: React.FC<PurchasePanelProps> = ({
                   onClick={() => setPickerOpen(true)}
                 >Agregar productos</button>
               )}
-              {suppliersError && (
-                <span className="purchase-subtle-error" role="alert">
-                  No se pudieron cargar los proveedores: {suppliersError}
-                  <button type="button" className="suppliers-btn" onClick={() => setSuppliersReload(value => value + 1)}>
-                    Reintentar
-                  </button>
-                </span>
-              )}
-              {supplierTotal !== null && supplierTotal > 100 && (
-                <span className="purchase-muted" role="status">
-                  Se muestran los primeros 100 proveedores activos.
-                </span>
-              )}
             </div>
 
             {detail.items.length === 0 ? (
-              <p className="purchase-empty-lines">La lista está vacía. Agrega lo recomendado o busca productos.</p>
+              <p className="purchase-empty-lines">Aún no agregas productos. Puedes escribir cualquier texto arriba y agregar artículos solo si los necesitas.</p>
             ) : (
               <div className="purchase-groups">
                 {groups.map(group => {
@@ -694,6 +728,9 @@ export const PurchasePanel: React.FC<PurchasePanelProps> = ({
                     messageItems(group),
                     businessName,
                   );
+                  const messageWithNotes = [orderTextDraft.trim(), orderMessage]
+                    .filter(Boolean)
+                    .join('\n\n');
                   const actions = group.supplier
                     ? contactActions(group.supplier, orderMessage, businessName)
                     : [];
@@ -706,9 +743,7 @@ export const PurchasePanel: React.FC<PurchasePanelProps> = ({
                       <header className="purchase-group-header">
                         <div>
                           <h3>{group.supplier?.name ?? 'Sin proveedor'}</h3>
-                          <span>
-                            {group.itemCount} {group.itemCount === 1 ? 'producto' : 'productos'} · {group.units} unidades · {formatMoney(group.estimatedCost)}
-                          </span>
+                          <span>{group.itemCount} {group.itemCount === 1 ? 'producto' : 'productos'}</span>
                         </div>
                         <div className="purchase-contact-actions">
                           {actions.map(action => (
@@ -724,40 +759,21 @@ export const PurchasePanel: React.FC<PurchasePanelProps> = ({
                           <button
                             type="button"
                             className="suppliers-btn"
-                            onClick={() => onCopy(orderMessage, group.supplier ? 'Pedido' : 'Lista')}
+                            onClick={() => onCopy(messageWithNotes, group.supplier ? 'Pedido' : 'Lista')}
                           >{group.supplier ? 'Copiar pedido' : 'Copiar lista'}</button>
                         </div>
                       </header>
-                      <div className="purchase-table-wrap">
-                        <table className="suppliers-table purchase-lines-table">
-                          <caption className="purchase-sr-only">
-                            Productos de {group.supplier?.name ?? 'Sin proveedor'}
-                          </caption>
-                          <thead>
-                            <tr>
-                              <th>Producto</th>
-                              <th>Stock</th>
-                              <th>Proveedor</th>
-                              <th className="suppliers-num">Cantidad</th>
-                              <th className="suppliers-num">Costo (inventario)</th>
-                              <th className="suppliers-num">Total</th>
-                              <th>Acciones</th>
-                            </tr>
-                          </thead>
-                          <tbody>
-                            {group.items.map(item => (
-                              <PurchaseLineRow
-                                key={item.item_id}
-                                item={item}
-                                editable={editable}
-                                supplierOptions={buildSupplierOptions(item.supplier, supplierOptionsSource ?? [])}
-                                onSave={handleSaveItem}
-                                onRemove={handleRemoveItem}
-                              />
-                            ))}
-                          </tbody>
-                        </table>
-                      </div>
+                      <ul className="purchase-text-items">
+                        {group.items.map(item => (
+                          <PurchaseLineRow
+                            key={item.item_id}
+                            item={item}
+                            editable={editable}
+                            onSave={handleSaveItem}
+                            onRemove={handleRemoveItem}
+                          />
+                        ))}
+                      </ul>
                     </section>
                   );
                 })}
@@ -794,12 +810,15 @@ export const PurchasePanel: React.FC<PurchasePanelProps> = ({
           }}
         />
       )}
-      {printJob && (
-        <PurchasePrintJob
-          key={printJob.id}
-          model={printJob.model}
-          documentTitle={printJob.documentTitle}
-          onDone={() => setPrintJob(null)}
+      {pdfJob && (
+        <PurchasePdfDialog
+          model={pdfJob.model}
+          documentTitle={pdfJob.documentTitle}
+          onClose={() => setPdfJob(null)}
+          onSaved={() => {
+            setPdfJob(null);
+            onNotify('Pedido guardado como PDF.', 'success');
+          }}
         />
       )}
     </section>

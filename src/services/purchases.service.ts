@@ -62,6 +62,9 @@ export const updatePurchaseItem = (
 export const removePurchaseItem = (itemId: number): Promise<void> =>
   invoke('remove_purchase_item', { itemId });
 
+export const savePurchasePdf = (filePath: string, bytes: number[]): Promise<void> =>
+  invoke('save_purchase_pdf', { filePath, bytes });
+
 export const searchPurchasableVariants = (
   listId: number,
   filter: LinkableFilterDto,

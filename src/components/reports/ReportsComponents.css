@@ -109,27 +109,101 @@
   text-align: center;
 }
 
-.insights-card {
+.ai-advice-card {
   display: grid;
-  gap: 14px;
-  margin-top: 20px;
-  padding: 18px;
-  color: var(--text-primary);
-  background: var(--bg-surface);
+  gap: 12px;
+  margin-top: 18px;
+  padding: 16px;
   border: 1px solid var(--border-subtle);
-  border-radius: 6px;
+  border-left: 3px solid var(--accent);
+  border-radius: 5px;
+  background: var(--bg-surface);
 }
 
-.insights-block {
+.ai-advice-header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+  padding-bottom: 10px;
+  border-bottom: 1px solid var(--border-subtle);
+}
+
+.ai-advice-header h3 {
+  margin: 0;
+  color: var(--text-primary);
+  font-size: 15px;
+}
+
+.ai-advice-header time {
+  color: var(--text-muted);
+  font-size: 11px;
+}
+
+.ai-advice-eyebrow {
+  margin: 0 0 4px;
+  color: var(--text-muted);
+  font-size: 9px;
+  font-weight: 700;
+}
+
+.ai-advice-item {
   display: grid;
-  gap: 8px;
-  padding-top: 12px;
-  border-top: 1px solid var(--border-subtle);
+  gap: 5px;
+  padding: 10px 0;
+  border-bottom: 1px solid var(--border-subtle);
 }
 
-.insights-muted {
+.ai-advice-item h4,
+.ai-advice-item p {
+  margin: 0;
+  font-size: 12px;
+  line-height: 1.5;
+}
+
+.ai-advice-item h4 {
+  color: var(--text-primary);
+}
+
+.ai-advice-item p {
+  color: var(--text-secondary);
+}
+
+.ai-advice-promo {
+  color: var(--accent) !important;
+  font-weight: 650;
+}
+
+.ai-advice-muted,
+.ai-advice-error,
+.ai-advice-empty p {
   margin: 0;
   color: var(--text-muted);
+  font-size: 12px;
+  line-height: 1.5;
+}
+
+.ai-advice-error {
+  color: var(--danger);
+}
+
+.ai-advice-empty {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 8px 12px;
+}
+
+.ai-advice-generate {
+  width: fit-content;
+  min-height: 36px;
+}
+
+.ai-advice-feedback {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px;
 }
 
 .reports-ranking-wide-loading {
@@ -139,4 +213,10 @@
   margin: 0 0 12px;
   color: var(--text-secondary);
   font-size: 13px;
+}
+
+@container app-content (max-width: 760px) {
+  .ai-advice-card {
+    padding: 12px;
+  }
 }

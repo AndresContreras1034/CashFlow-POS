@@ -6,7 +6,7 @@ import type {
   ReportFilter,
   TimeSeriesPoint,
 } from '../../types/reports';
-import type { CommercialContext } from '../../types/insights';
+import type { AiSettings, CommercialContext } from '../../types/insights';
 import { useSettings } from '../../context/AppContext';
 import {
   getAiSettings,
@@ -28,7 +28,7 @@ import { PaymentMethodChart } from './PaymentMethodChart';
 import { SalesHeatmap } from './SalesHeatmap';
 import { ReportCsvButton } from './ReportCsvButton';
 import { buildSummaryCsv } from '../../utils/reportExport';
-import { InsightsCard } from './InsightsCard';
+import { AiAdviceCard } from './AiAdviceCard';
 
 const SalesChart = lazy(() =>
   import('./SalesChart').then(module => ({
@@ -104,16 +104,21 @@ export function DashboardTab({ filter }: DashboardTabProps) {
   const [error, setError] = useState<string | null>(null);
   const [retry, setRetry] = useState(0);
   const [commercialContext, setCommercialContext] = useState<CommercialContext | null>(null);
-  const [aiEnabled, setAiEnabled] = useState(false);
+  const [aiSettings, setAiSettings] = useState<AiSettings | null>(null);
+  const [aiSettingsLoading, setAiSettingsLoading] = useState(true);
+  const [aiSettingsError, setAiSettingsError] = useState(false);
 
   useEffect(() => {
     let active = true;
     getAiSettings()
       .then(value => {
-        if (active) setAiEnabled(value.enabled);
+        if (active) setAiSettings(value);
       })
       .catch(() => {
-        if (active) setAiEnabled(false);
+        if (active) setAiSettingsError(true);
+      })
+      .finally(() => {
+        if (active) setAiSettingsLoading(false);
       });
     return () => {
       active = false;
@@ -299,7 +304,12 @@ export function DashboardTab({ filter }: DashboardTabProps) {
               );
             })}
           </section>
-          <InsightsCard ctx={commercialContext} aiEnabled={aiEnabled} />
+          <AiAdviceCard
+            ctx={commercialContext}
+            aiSettings={aiSettings}
+            aiSettingsLoading={aiSettingsLoading}
+            aiSettingsError={aiSettingsError}
+          />
 
           {(current.items_without_cost > 0 || current.uncosted_tickets > 0) && (
             <aside className="reports-warning" role="status">

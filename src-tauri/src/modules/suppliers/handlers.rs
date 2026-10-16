@@ -1,3 +1,4 @@
+use std::path::Path;
 use tauri::State;
 
 use crate::db::DbPool;
@@ -311,6 +312,30 @@ pub async fn get_purchase_list(
     purchase_lists::get_purchase_list(&pool, id)
         .await
         .map_err(|error: AppError| error.to_string())
+}
+
+#[tauri::command]
+pub async fn save_purchase_pdf(file_path: String, bytes: Vec<u8>) -> Result<(), String> {
+    const MAX_PDF_BYTES: usize = 20 * 1024 * 1024;
+
+    let path = Path::new(&file_path);
+    if !path.is_absolute() {
+        return Err("La ruta del PDF debe ser absoluta".to_string());
+    }
+    if !path
+        .extension()
+        .and_then(|extension| extension.to_str())
+        .is_some_and(|extension| extension.eq_ignore_ascii_case("pdf"))
+    {
+        return Err("El archivo debe tener extensión .pdf".to_string());
+    }
+    if bytes.is_empty() || bytes.len() > MAX_PDF_BYTES {
+        return Err("El PDF está vacío o excede el tamaño permitido".to_string());
+    }
+
+    tokio::fs::write(path, bytes)
+        .await
+        .map_err(|error| format!("No se pudo guardar el PDF en {}: {error}", path.display()))
 }
 
 #[tauri::command]

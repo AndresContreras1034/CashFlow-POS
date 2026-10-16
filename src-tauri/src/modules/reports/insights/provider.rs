@@ -4,6 +4,7 @@ use std::time::Duration;
 #[derive(Debug, Clone, PartialEq)]
 pub struct AiReply {
     pub content: String,
+    pub finish_reason: Option<String>,
     pub prompt_tokens: i32,
     pub completion_tokens: i32,
 }
@@ -37,9 +38,12 @@ pub fn parse_reply(body: &Value) -> Result<AiReply, AiError> {
     let content = body
         .pointer("/choices/0/message/content")
         .and_then(Value::as_str)
-        .filter(|s| !s.trim().is_empty())
-        .ok_or_else(|| AiError::BadBody("sin contenido".into()))?
+        .unwrap_or_default()
         .to_string();
+    let finish_reason = body
+        .pointer("/choices/0/finish_reason")
+        .and_then(Value::as_str)
+        .map(str::to_string);
     let tokens = |p: &str| {
         body.pointer(p)
             .and_then(Value::as_i64)
@@ -48,6 +52,7 @@ pub fn parse_reply(body: &Value) -> Result<AiReply, AiError> {
     };
     Ok(AiReply {
         content,
+        finish_reason,
         prompt_tokens: tokens("/usage/prompt_tokens"),
         completion_tokens: tokens("/usage/completion_tokens"),
     })
@@ -89,7 +94,9 @@ impl AiProvider for DeepSeek {
                 {"role": "user", "content": user}
             ],
             "response_format": {"type": "json_object"},
-            "max_tokens": 1500,
+            "thinking": {"type": "disabled"},
+            "reasoning_effort": "none",
+            "max_tokens": 8192,
             "temperature": 0.2,
             "stream": false
         });
@@ -142,12 +149,19 @@ mod tests {
         });
         let r = parse_reply(&v).unwrap();
         assert_eq!(r.content, "{}");
+        assert_eq!(r.finish_reason, None);
         assert_eq!((r.prompt_tokens, r.completion_tokens), (120, 30));
     }
 
     #[test]
-    fn rejects_empty_content() {
-        let v = json!({"choices": [{"message": {"content": "  "}}]});
-        assert!(parse_reply(&v).is_err());
+    fn empty_content_preserves_usage_and_finish_reason() {
+        let v = json!({
+            "choices": [{"message": {"content": "  "}, "finish_reason": "length"}],
+            "usage": {"prompt_tokens": 64, "completion_tokens": 20}
+        });
+        let r = parse_reply(&v).unwrap();
+        assert_eq!(r.content, "  ");
+        assert_eq!(r.finish_reason.as_deref(), Some("length"));
+        assert_eq!((r.prompt_tokens, r.completion_tokens), (64, 20));
     }
 }

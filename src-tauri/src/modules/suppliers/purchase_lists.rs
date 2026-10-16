@@ -490,7 +490,11 @@ pub async fn update_purchase_list(
     let mut tx = pool.begin().await.map_err(AppError::from)?;
 
     let before = lock_list(&mut tx, id).await?;
-    require_draft(&before)?;
+    if before.status != "draft" && before.status != "ordered" {
+        return Err(AppError::validation(
+            "Solo se puede editar el texto de una lista abierta o pedida",
+        ));
+    }
 
     let after = sqlx::query_as::<_, PurchaseList>(&format!(
         "UPDATE purchase_lists SET title = $2, notes = $3 WHERE id = $1 RETURNING {LIST_COLS}"

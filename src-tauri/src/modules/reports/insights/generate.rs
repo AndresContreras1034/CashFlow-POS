@@ -6,12 +6,14 @@ use chrono::{NaiveDate, Utc};
 use serde_json::{json, Value};
 use sqlx::PgPool;
 
+const AI_PROMPT_VERSION: &str = "advisor-v3";
+
 #[derive(Debug)]
 pub enum GenError {
     Blocked(BlockReason),
     Ai(AiError),
     Db(sqlx::Error),
-    InvalidReply,
+    InvalidReply { finish_reason: Option<String> },
     BadInput(&'static str),
 }
 
@@ -36,7 +38,13 @@ impl std::fmt::Display for GenError {
             }
             GenError::Ai(e) => write!(f, "{e}"),
             GenError::Db(e) => write!(f, "Error de base de datos: {e}"),
-            GenError::InvalidReply => write!(f, "La IA devolvió una respuesta que no se pudo leer"),
+            GenError::InvalidReply { finish_reason: Some(reason) } => write!(
+                f,
+                "La IA devolvió una respuesta que no se pudo leer (finish_reason: {reason})"
+            ),
+            GenError::InvalidReply { finish_reason: None } => {
+                write!(f, "La IA devolvió una respuesta que no se pudo leer")
+            }
             GenError::BadInput(w) => write!(f, "Contexto inválido: falta {w}"),
         }
     }
@@ -57,11 +65,12 @@ pub async fn generate<P: AiProvider>(
         .and_then(Value::as_str)
         .and_then(|s| NaiveDate::parse_from_str(s, "%Y-%m-%d").ok())
         .ok_or(GenError::BadInput("as_of"))?;
-    let hash = ctx
+    let fingerprint = ctx
         .get("fingerprint")
         .and_then(Value::as_str)
         .ok_or(GenError::BadInput("fingerprint"))?
         .to_string();
+    let hash = format!("{AI_PROMPT_VERSION}:{fingerprint}");
     let mut input = ctx.clone();
     if let Some(o) = input.as_object_mut() {
         o.remove("fingerprint");
@@ -84,6 +93,30 @@ pub async fn generate<P: AiProvider>(
         .map_err(GenError::Ai)?;
     let model = provider.model().to_string();
 
+    let finish_reason = reply.finish_reason.clone();
+    let invalid_reply = |reason: &str| {
+        json!({
+            "error": reason,
+            "finish_reason": finish_reason,
+        })
+    };
+    if reply.content.trim().is_empty() {
+        store::insert(
+            pool,
+            date,
+            scope,
+            regen_index,
+            &hash,
+            &invalid_reply("empty_content"),
+            &model,
+            reply.prompt_tokens,
+            reply.completion_tokens,
+            "failed",
+        )
+        .await?;
+        return Err(GenError::InvalidReply { finish_reason });
+    }
+
     let parsed = match prompt::parse_response(&reply.content) {
         Ok(p) => p,
         Err(_) => {
@@ -93,19 +126,21 @@ pub async fn generate<P: AiProvider>(
                 scope,
                 regen_index,
                 &hash,
-                &json!({"error": "invalid_json"}),
+                &invalid_reply("invalid_json"),
                 &model,
                 reply.prompt_tokens,
                 reply.completion_tokens,
                 "failed",
             )
             .await?;
-            return Err(GenError::InvalidReply);
+            return Err(GenError::InvalidReply { finish_reason });
         }
     };
 
     let checked = validate(parsed, &input, min_bps);
-    let content = serde_json::to_value(&checked).map_err(|_| GenError::InvalidReply)?;
+    let content = serde_json::to_value(&checked).map_err(|_| GenError::InvalidReply {
+        finish_reason: reply.finish_reason.clone(),
+    })?;
     let id = store::insert(
         pool,
         date,

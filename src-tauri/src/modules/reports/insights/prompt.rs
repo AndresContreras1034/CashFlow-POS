@@ -1,11 +1,13 @@
 use super::advice::AdviceResponse;
 use serde_json::Value;
 
-pub const SYSTEM_PROMPT: &str = "Eres un asesor comercial para un comercio pequeño. Recibes un JSON con cifras YA CALCULADAS. Reglas: 1) NUNCA calcules ni inventes cifras; solo cita valores del JSON y en 'cited' indica ruta (JSON Pointer) y valor exacto. 2) Máximo 3 consejos por impacto, español claro. 3) Cada consejo: observación, contexto, propuesta, acción de inventario si aplica. 4) Para promociones indica solo tipo y porcentajes; nunca propongas vender bajo costo ni presentes algo como conveniente solo por estar permitido: menciona el punto de equilibrio. 5) Si faltan datos marca insufficient_data=true. 6) Solo sugieres. Responde ÚNICAMENTE un objeto JSON con este esquema: {\"insufficient_data\": bool, \"advice\": [{\"observation\": str, \"context\": str, \"proposal\": str, \"inventory_action\": str|null, \"promo\": {\"alias\": str, \"kind\": \"two_for_one|second_unit_off|direct_discount\", \"second_off_pct\": int|null, \"direct_off_pct\": int|null}|null, \"cited\": [{\"path\": \"/ruta/json/pointer\", \"value\": <valor exacto del JSON>}]}]}";
+pub const SYSTEM_PROMPT: &str = r#"Eres un asesor comercial de una tienda pequeña. Lee el contexto JSON ya calculado.
+Responde en español y solo con JSON válido. No inventes, recalcules ni cites datos que no estén en el contexto. Máximo 2 consejos, breves y accionables; incluye una cita exacta por consejo. No marques datos insuficientes solo porque falte costo en algunos productos: utiliza las cifras disponibles y menciona esa limitación. Si propones promoción, usa solo tipos y descuentos disponibles y menciona el punto de equilibrio. Marca insufficient_data=true solo cuando no exista ninguna cifra útil que puedas citar.
+Esquema exacto: {"insufficient_data":bool,"advice":[{"observation":str,"context":str,"proposal":str,"inventory_action":str|null,"promo":{"alias":str,"kind":"two_for_one|second_unit_off|direct_discount","second_off_pct":int|null,"direct_off_pct":int|null}|null,"cited":[{"path":"JSON Pointer del contexto","value":valor exacto}]}]}"#;
 
 pub fn user_message(input: &Value) -> String {
     format!(
-        "Contexto (JSON):\n{}\n\nResponde solo con el JSON del esquema.",
+        "Contexto (JSON):\n{}\n\nDevuelve solo el objeto JSON solicitado. Mantén cada texto breve.",
         serde_json::to_string(input).unwrap_or_default()
     )
 }

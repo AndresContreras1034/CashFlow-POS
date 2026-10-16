@@ -2374,6 +2374,7 @@ impl pos_lib::modules::reports::insights::provider::AiProvider for MockInsightsP
                 ]
             }"#
             .to_string(),
+            finish_reason: Some("stop".to_string()),
             prompt_tokens: 17,
             completion_tokens: 23,
         })
@@ -2407,6 +2408,22 @@ async fn insights_ai_mock(pool: PgPool) {
         disabled,
         Err(GenError::Blocked(BlockReason::Disabled))
     ));
+
+    let fingerprint = context["fingerprint"].as_str().unwrap();
+    store::insert(
+        &pool,
+        today,
+        "dashboard",
+        0,
+        &format!("advisor-v3:{fingerprint}"),
+        &json!({"insufficient_data": true, "advice": []}),
+        "mock-model",
+        64,
+        20,
+        "ok",
+    )
+    .await
+    .unwrap();
 
     sqlx::query("UPDATE ai_settings SET enabled = TRUE WHERE id = 1")
         .execute(&pool)

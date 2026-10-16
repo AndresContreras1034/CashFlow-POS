@@ -407,6 +407,7 @@ pub fn run() {
             // =================================================
             list_purchase_lists,
             get_purchase_list,
+            save_purchase_pdf,
             create_purchase_list,
             update_purchase_list,
             set_purchase_list_status,
