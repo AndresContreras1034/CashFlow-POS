@@ -5,6 +5,7 @@ use super::{prompt, validate::validate};
 use chrono::{NaiveDate, Utc};
 use serde_json::{json, Value};
 use sqlx::PgPool;
+use std::collections::HashMap;
 
 const AI_PROMPT_VERSION: &str = "advisor-v3";
 
@@ -32,17 +33,20 @@ impl std::fmt::Display for GenError {
             GenError::Blocked(BlockReason::TokenCap) => {
                 write!(f, "Se alcanzó el tope diario de consumo de IA")
             }
-            GenError::Blocked(BlockReason::RegenLimit) => write!(f, "Ya regeneraste 3 veces hoy"),
             GenError::Blocked(BlockReason::SameInput) => {
                 write!(f, "Los datos no han cambiado desde el último consejo")
             }
             GenError::Ai(e) => write!(f, "{e}"),
             GenError::Db(e) => write!(f, "Error de base de datos: {e}"),
-            GenError::InvalidReply { finish_reason: Some(reason) } => write!(
+            GenError::InvalidReply {
+                finish_reason: Some(reason),
+            } => write!(
                 f,
                 "La IA devolvió una respuesta que no se pudo leer (finish_reason: {reason})"
             ),
-            GenError::InvalidReply { finish_reason: None } => {
+            GenError::InvalidReply {
+                finish_reason: None,
+            } => {
                 write!(f, "La IA devolvió una respuesta que no se pudo leer")
             }
             GenError::BadInput(w) => write!(f, "Contexto inválido: falta {w}"),
@@ -56,6 +60,7 @@ pub async fn generate<P: AiProvider>(
     provider: &P,
     scope: &str,
     ctx: &Value,
+    product_names: &HashMap<String, String>,
 ) -> Result<StoredAdvice, GenError> {
     if !policy::valid_scope(scope) {
         return Err(GenError::BadInput("scope"));
@@ -138,9 +143,15 @@ pub async fn generate<P: AiProvider>(
     };
 
     let checked = validate(parsed, &input, min_bps);
-    let content = serde_json::to_value(&checked).map_err(|_| GenError::InvalidReply {
+    let mut content = serde_json::to_value(&checked).map_err(|_| GenError::InvalidReply {
         finish_reason: reply.finish_reason.clone(),
     })?;
+    content
+        .as_object_mut()
+        .ok_or(GenError::InvalidReply {
+            finish_reason: reply.finish_reason.clone(),
+        })?
+        .insert("product_names".to_string(), json!(product_names));
     let id = store::insert(
         pool,
         date,
@@ -159,6 +170,7 @@ pub async fn generate<P: AiProvider>(
         local_date: date,
         scope: scope.to_string(),
         regen_index,
+        input_hash: hash,
         content,
         model,
         generated_at: Utc::now(),

@@ -289,6 +289,13 @@ export function DashboardTab({ filter }: DashboardTabProps) {
               No se pudo calcular la comparación porque su rango queda fuera del límite de 732 días.
             </p>
           )}
+          <AiAdviceCard
+            ctx={commercialContext}
+            aiSettings={aiSettings}
+            aiSettingsLoading={aiSettingsLoading}
+            aiSettingsError={aiSettingsError}
+          />
+
           <section className="reports-kpis" aria-label="Indicadores de ventas">
             {metricValues.map(metric => {
               const tone = deltaTone(metric.amount);
@@ -304,12 +311,6 @@ export function DashboardTab({ filter }: DashboardTabProps) {
               );
             })}
           </section>
-          <AiAdviceCard
-            ctx={commercialContext}
-            aiSettings={aiSettings}
-            aiSettingsLoading={aiSettingsLoading}
-            aiSettingsError={aiSettingsError}
-          />
 
           {(current.items_without_cost > 0 || current.uncosted_tickets > 0) && (
             <aside className="reports-warning" role="status">

@@ -21,6 +21,40 @@ use crate::{
     },
 };
 
+pub struct BuiltContext {
+    pub context: CommercialContext,
+    pub product_names: HashMap<String, String>,
+}
+
+fn variant_display_name(
+    name: String,
+    brand: Option<String>,
+    attributes: Value,
+    sku: Option<String>,
+) -> String {
+    let mut details = Vec::new();
+    if let Some(brand) = brand.filter(|brand| !brand.trim().is_empty()) {
+        details.push(brand);
+    }
+    if let Some(attributes) = attributes.as_object() {
+        details.extend(attributes.iter().map(|(key, value)| {
+            let value = value
+                .as_str()
+                .map(str::to_string)
+                .unwrap_or_else(|| value.to_string());
+            format!("{key}: {value}")
+        }));
+    }
+    if let Some(sku) = sku.filter(|sku| !sku.trim().is_empty()) {
+        details.push(format!("SKU {sku}"));
+    }
+    if details.is_empty() {
+        name
+    } else {
+        format!("{name} ({})", details.join(", "))
+    }
+}
+
 fn alias_for(
     variant_id: i64,
     alias_map: &mut AliasMap,
@@ -43,7 +77,7 @@ fn scenario_value(scenario: &super::promo::Scenario) -> Value {
     })
 }
 
-pub async fn build_context(pool: &PgPool) -> Result<CommercialContext, AppError> {
+pub async fn build_context(pool: &PgPool) -> Result<BuiltContext, AppError> {
     let pace = calendar_service::current_sales_pace(pool, 28).await?;
     let as_of = pace.as_of;
     let events = calendar_service::upcoming_events(pool, 90).await?;
@@ -110,6 +144,26 @@ pub async fn build_context(pool: &PgPool) -> Result<CommercialContext, AppError>
     for row in &stale {
         alias_for(i64::from(row.variant_id), &mut alias_map, &mut aliases);
     }
+    let display_names_by_id = queries::fetch_variant_display_names(pool, &variant_ids)
+        .await
+        .map_err(AppError::from)?
+        .into_iter()
+        .map(|(variant_id, name, brand, attributes, sku)| {
+            (
+                variant_id,
+                variant_display_name(name, brand, attributes, sku),
+            )
+        })
+        .collect::<HashMap<_, _>>();
+    let product_names = alias_map
+        .to_id
+        .iter()
+        .filter_map(|(alias, variant_id)| {
+            display_names_by_id
+                .get(variant_id)
+                .map(|name| (alias.clone(), name.clone()))
+        })
+        .collect();
 
     let days_to_event = events.first().map(|event| event.in_days);
     let coverage: Vec<Value> = stars
@@ -197,22 +251,25 @@ pub async fn build_context(pool: &PgPool) -> Result<CommercialContext, AppError>
         .map(|row| (row.total_value_at_cost, row.total_rows))
         .unwrap_or((0, 0));
 
-    Ok(CommercialContext {
-        as_of: as_of.to_string(),
-        pace: pace_value,
-        calendar: json!(calendar),
-        inventory: json!({
-            "coverage": coverage,
-            "stale": {
-                "total_value_cents": stale_value,
-                "rows": stale_rows,
+    Ok(BuiltContext {
+        context: CommercialContext {
+            as_of: as_of.to_string(),
+            pace: pace_value,
+            calendar: json!(calendar),
+            inventory: json!({
+                "coverage": coverage,
+                "stale": {
+                    "total_value_cents": stale_value,
+                    "rows": stale_rows,
+                },
+            }),
+            promo_candidates: json!(promo_candidates),
+            settings: json!({ "min_margin_bps": DEFAULT_MIN_MARGIN_BPS }),
+            data_sufficiency: Sufficiency {
+                history_days,
+                uncosted_pct_bps,
             },
-        }),
-        promo_candidates: json!(promo_candidates),
-        settings: json!({ "min_margin_bps": DEFAULT_MIN_MARGIN_BPS }),
-        data_sufficiency: Sufficiency {
-            history_days,
-            uncosted_pct_bps,
         },
+        product_names,
     })
 }

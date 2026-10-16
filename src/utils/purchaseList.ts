@@ -77,6 +77,7 @@ export const statusActions = (status: PurchaseListStatus): StatusAction[] => {
 export const isEditable = (status: PurchaseListStatus): boolean => status === 'draft';
 
 export const MAX_QUANTITY = 100_000;
+export const MAX_NOTES = 2_000;
 
 export const parseQuantity = (raw: string): number | null => {
   const text = raw.trim();

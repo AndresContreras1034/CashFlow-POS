@@ -201,11 +201,12 @@ pub async fn get_upcoming_dues(
 
 #[tauri::command]
 pub async fn get_commercial_context(pool: State<'_, DbPool>) -> Result<serde_json::Value, String> {
-    let context = insights_service::build_context(&pool)
+    let built = insights_service::build_context(&pool)
         .await
         .map_err(|error| error.to_string())?;
-    let fingerprint = insights_context::fingerprint(&context).map_err(|error| error.to_string())?;
-    let mut payload = serde_json::to_value(context).map_err(|error| error.to_string())?;
+    let fingerprint =
+        insights_context::fingerprint(&built.context).map_err(|error| error.to_string())?;
+    let mut payload = serde_json::to_value(built.context).map_err(|error| error.to_string())?;
     let object = payload
         .as_object_mut()
         .ok_or_else(|| "El contexto comercial no es un objeto JSON".to_string())?;
@@ -213,6 +214,7 @@ pub async fn get_commercial_context(pool: State<'_, DbPool>) -> Result<serde_jso
         "fingerprint".to_string(),
         serde_json::Value::String(fingerprint),
     );
+    object.insert("product_names".to_string(), json!(built.product_names));
     Ok(payload)
 }
 
@@ -231,11 +233,12 @@ pub async fn generate_ai_advice(
     pool: State<'_, DbPool>,
     scope: String,
 ) -> Result<insights_store::StoredAdvice, String> {
-    let context = insights_service::build_context(&pool)
+    let built = insights_service::build_context(&pool)
         .await
         .map_err(|error| error.to_string())?;
-    let fingerprint = insights_context::fingerprint(&context).map_err(|error| error.to_string())?;
-    let mut input = serde_json::to_value(context).map_err(|error| error.to_string())?;
+    let fingerprint =
+        insights_context::fingerprint(&built.context).map_err(|error| error.to_string())?;
+    let mut input = serde_json::to_value(built.context).map_err(|error| error.to_string())?;
     let input_object = input
         .as_object_mut()
         .ok_or_else(|| "El contexto comercial no es un objeto JSON".to_string())?;
@@ -249,9 +252,10 @@ pub async fn generate_ai_advice(
         return Err("Configura la clave de DeepSeek en Ajustes".to_string());
     }
     let provider = DeepSeek::new(api_key, model.clone()).map_err(|error| error.to_string())?;
-    let advice = insights_generate::generate(&pool, &provider, &scope, &input)
-        .await
-        .map_err(|error| error.to_string())?;
+    let advice =
+        insights_generate::generate(&pool, &provider, &scope, &input, &built.product_names)
+            .await
+            .map_err(|error| error.to_string())?;
     let (prompt_tokens, completion_tokens) = insights_store::token_usage(&pool, advice.id)
         .await
         .map_err(|error| error.to_string())?;

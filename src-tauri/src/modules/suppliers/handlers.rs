@@ -332,6 +332,9 @@ pub async fn save_purchase_pdf(file_path: String, bytes: Vec<u8>) -> Result<(), 
     if bytes.is_empty() || bytes.len() > MAX_PDF_BYTES {
         return Err("El PDF está vacío o excede el tamaño permitido".to_string());
     }
+    if !bytes.starts_with(b"%PDF-") {
+        return Err("El contenido generado no tiene un encabezado PDF válido".to_string());
+    }
 
     tokio::fs::write(path, bytes)
         .await

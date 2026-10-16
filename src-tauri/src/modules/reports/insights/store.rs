@@ -10,6 +10,7 @@ pub struct StoredAdvice {
     pub local_date: NaiveDate,
     pub scope: String,
     pub regen_index: i32,
+    pub input_hash: String,
     pub content: Value,
     pub model: String,
     pub generated_at: DateTime<Utc>,
@@ -95,7 +96,7 @@ pub async fn insert(
 /// Lectura pura (cero llamadas a la API): el último consejo ok del scope, de hoy o anterior.
 pub async fn latest_ok(pool: &PgPool, scope: &str) -> Result<Option<StoredAdvice>, sqlx::Error> {
     let row = sqlx::query(
-        "SELECT id, local_date, scope, regen_index, content, model, generated_at \
+        "SELECT id, local_date, scope, regen_index, input_hash, content, model, generated_at \
          FROM ai_advice_daily WHERE scope = $1 AND status = 'ok' \
          ORDER BY local_date DESC, regen_index DESC LIMIT 1",
     )
@@ -107,6 +108,7 @@ pub async fn latest_ok(pool: &PgPool, scope: &str) -> Result<Option<StoredAdvice
         local_date: r.get("local_date"),
         scope: r.get("scope"),
         regen_index: r.get("regen_index"),
+        input_hash: r.get("input_hash"),
         content: r.get("content"),
         model: r.get("model"),
         generated_at: r.get("generated_at"),

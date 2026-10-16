@@ -117,7 +117,7 @@ export function AiAdvisorSettings() {
       />
 
       <p className="settings-notice">
-        Se envían a DeepSeek cifras agregadas y alias de productos; nunca nombres de clientes, acreedores ni productos.
+        DeepSeek recibe cifras agregadas y alias, no los nombres de productos, clientes ni acreedores. Los alias se resuelven localmente para mostrar los consejos.
       </p>
       {error && <p className="reports-error" role="alert">{error}</p>}
     </section>

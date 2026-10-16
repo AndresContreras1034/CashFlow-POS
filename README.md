@@ -227,6 +227,10 @@ npm.cmd run build
 npm.cmd run test
 ```
 
+Vite is pinned to port `5173` to match Tauri's `devUrl`. Close any existing Vite or
+Tauri development server before starting another one; startup now reports a port
+conflict instead of silently switching to a different port.
+
 Run these commands from `src-tauri`:
 
 ```powershell

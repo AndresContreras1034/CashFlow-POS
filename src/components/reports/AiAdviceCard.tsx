@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import type { AiSettings, CommercialContext, StoredAdvice } from '../../types/insights';
 import {
@@ -6,6 +6,7 @@ import {
   getAiAdvice,
   setAiFeedback,
 } from '../../services/commercialCalendar.service';
+import { resolveProductAliases } from '../../utils/insights';
 
 const KIND_LABEL: Record<string, string> = {
   two_for_one: '2x1',
@@ -32,6 +33,7 @@ export function AiAdviceCard({
   const [generating, setGenerating] = useState(false);
   const [generationError, setGenerationError] = useState<string | null>(null);
   const [feedback, setFeedback] = useState<'useful' | 'not_applicable' | null>(null);
+  const initialGenerationStarted = useRef(false);
 
   useEffect(() => {
     let active = true;
@@ -50,7 +52,7 @@ export function AiAdviceCard({
     };
   }, []);
 
-  const generateAdvice = async () => {
+  const generateAdvice = useCallback(async () => {
     setGenerating(true);
     setGenerationError(null);
     try {
@@ -66,7 +68,47 @@ export function AiAdviceCard({
     } finally {
       setGenerating(false);
     }
-  };
+  }, []);
+
+  const needsProductNameRefresh = Boolean(
+    storedAdvice &&
+    !storedAdvice.content.product_names &&
+    ctx?.fingerprint &&
+    storedAdvice.input_hash !== `advisor-v3:${ctx.fingerprint}` &&
+    storedAdvice.content.advice.some(item =>
+      [
+        item.observation,
+        item.context,
+        item.proposal,
+        item.inventory_action ?? '',
+        item.promo?.alias ?? '',
+      ].some(text => /Producto \d+/.test(text)),
+    ),
+  );
+
+  useEffect(() => {
+    if (
+      adviceLoading ||
+      adviceLoadError ||
+      aiSettingsLoading ||
+      !aiSettings?.enabled ||
+      !aiSettings.has_key ||
+      (storedAdvice && !needsProductNameRefresh) ||
+      initialGenerationStarted.current
+    ) {
+      return;
+    }
+    initialGenerationStarted.current = true;
+    void generateAdvice();
+  }, [
+    adviceLoadError,
+    adviceLoading,
+    aiSettings,
+    aiSettingsLoading,
+    generateAdvice,
+    needsProductNameRefresh,
+    storedAdvice,
+  ]);
 
   const submitFeedback = async (value: 'useful' | 'not_applicable') => {
     if (!storedAdvice) return;
@@ -82,6 +124,11 @@ export function AiAdviceCard({
     ctx?.promo_candidates
       .find(candidate => candidate.alias === alias)
       ?.scenarios.find(scenario => scenario.kind === kind)?.breakeven_x100;
+  const currentContextMatchesAdvice =
+    ctx?.fingerprint !== undefined &&
+    storedAdvice?.input_hash === `advisor-v3:${ctx.fingerprint}`;
+  const productNames = storedAdvice?.content.product_names
+    ?? (currentContextMatchesAdvice ? ctx?.product_names : undefined);
 
   return (
     <section className="ai-advice-card" aria-label="Recomendaciones de IA">
@@ -135,13 +182,13 @@ export function AiAdviceCard({
         const breakEven = item.promo ? breakEvenFor(item.promo.alias, item.promo.kind) : null;
         return (
           <article className="ai-advice-item" key={`${storedAdvice.id}-${index}`}>
-            <h4>{item.observation}</h4>
-            <p>{item.context}</p>
-            <p>{item.proposal}</p>
-            {item.inventory_action && <p>{item.inventory_action}</p>}
+            <h4>{resolveProductAliases(item.observation, productNames)}</h4>
+            <p>{resolveProductAliases(item.context, productNames)}</p>
+            <p>{resolveProductAliases(item.proposal, productNames)}</p>
+            {item.inventory_action && <p>{resolveProductAliases(item.inventory_action, productNames)}</p>}
             {item.promo && (
               <p className="ai-advice-promo">
-                {item.promo.alias} · {KIND_LABEL[item.promo.kind] ?? item.promo.kind}
+                {resolveProductAliases(item.promo.alias, productNames)} · {KIND_LABEL[item.promo.kind] ?? item.promo.kind}
                 {` · punto de equilibrio: ${breakEven == null ? 'no disponible' : `${(breakEven / 100).toFixed(1)}x`}`}
               </p>
             )}

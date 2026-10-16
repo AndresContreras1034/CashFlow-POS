@@ -23,11 +23,13 @@ export interface CommercialContext {
       breakeven_x100: number | null;
     }[];
   }[];
+  product_names?: Record<string, string>;
   data_sufficiency: { history_days: number; uncosted_pct_bps: number };
 }
 
 export interface AiAdvice {
   insufficient_data: boolean;
+  product_names?: Record<string, string>;
   advice: {
     observation: string;
     context: string;
@@ -48,6 +50,7 @@ export interface StoredAdvice {
   local_date: string;
   scope: string;
   regen_index: number;
+  input_hash: string;
   content: AiAdvice;
   model: string;
   generated_at: string;

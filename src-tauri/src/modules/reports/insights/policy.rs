@@ -1,4 +1,3 @@
-pub const MAX_REGEN: i32 = 3;
 pub const SCOPES: [&str; 4] = ["dashboard", "products", "inventory", "payables"];
 
 pub fn valid_scope(scope: &str) -> bool {
@@ -9,7 +8,6 @@ pub fn valid_scope(scope: &str) -> bool {
 pub enum BlockReason {
     Disabled,
     TokenCap,
-    RegenLimit,
     SameInput,
 }
 
@@ -41,7 +39,6 @@ pub fn decide(enabled: bool, cap: i64, state: &DayState, current_hash: &str) -> 
     }
     match state.last_index {
         None => Decision::Generate { regen_index: 0 },
-        Some(i) if i >= MAX_REGEN => Decision::Blocked(BlockReason::RegenLimit),
         Some(i) => Decision::Generate { regen_index: i + 1 },
     }
 }
@@ -99,14 +96,18 @@ mod tests {
     }
 
     #[test]
-    fn regen_limit_is_three() {
+    fn regenerations_are_not_limited_to_three() {
         assert_eq!(
             decide(true, 1000, &st(10, Some(2), Some("old")), "new"),
             Decision::Generate { regen_index: 3 }
         );
         assert_eq!(
             decide(true, 1000, &st(10, Some(3), Some("old")), "new"),
-            Decision::Blocked(BlockReason::RegenLimit)
+            Decision::Generate { regen_index: 4 }
+        );
+        assert_eq!(
+            decide(true, 1000, &st(10, Some(100), Some("old")), "new"),
+            Decision::Generate { regen_index: 101 }
         );
     }
 

@@ -1,6 +1,7 @@
 use std::collections::HashMap;
 
 use chrono::NaiveDate;
+use serde_json::Value;
 use sqlx::PgPool;
 
 use super::super::repository::{ALLOCATED_ITEMS_CTES, COSTED_SALES_CTES};
@@ -120,6 +121,21 @@ pub async fn fetch_stock(
     .await?;
 
     Ok(rows.into_iter().collect())
+}
+
+pub async fn fetch_variant_display_names(
+    pool: &PgPool,
+    variant_ids: &[i64],
+) -> Result<Vec<(i64, String, Option<String>, Value, Option<String>)>, sqlx::Error> {
+    sqlx::query_as(
+        r#"SELECT v.id::BIGINT, p.name, p.brand, v.attributes, v.sku
+           FROM product_variants v
+           JOIN products p ON p.id = v.product_id
+           WHERE v.id::BIGINT = ANY($1)"#,
+    )
+    .bind(variant_ids.to_vec())
+    .fetch_all(pool)
+    .await
 }
 
 pub async fn fetch_combo_items(
