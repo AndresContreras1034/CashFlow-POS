@@ -343,13 +343,13 @@ async fn dashboard_kpis_include_costs_void_counts_and_local_date_comparison(pool
     assert_eq!(
         report.current,
         pos_lib::modules::reports::dto::SalesKpis {
-            tickets: 3,
+            tickets: 2,
             gross_sales: 23_800,
             discount_total: 2_100,
             tax_total: 3_800,
             net_sales: 20_000,
             avg_ticket: 11_900,
-            cogs: 11_000,
+            cogs: 8_000,
             gross_profit: -1_000,
             margin_bps: -1_000,
             units_sold: 4,
@@ -405,9 +405,9 @@ async fn dashboard_kpis_include_costs_void_counts_and_local_date_comparison(pool
     assert_eq!(
         report.tickets_delta,
         pos_lib::modules::reports::dto::Delta {
-            current: 3,
+            current: 2,
             previous: Some(1),
-            change_bps: Some(20_000),
+            change_bps: Some(10_000),
         }
     );
     assert_eq!(
@@ -466,6 +466,117 @@ async fn dashboard_kpis_are_zero_for_empty_range_and_comparison_is_optional(pool
     assert_eq!(without_comparison.tickets_delta.change_bps, None);
     assert_eq!(without_comparison.avg_ticket_delta.previous, None);
     assert_eq!(without_comparison.avg_ticket_delta.change_bps, None);
+}
+
+#[sqlx::test(migrations = "./migrations")]
+async fn customer_share_includes_walk_in_sales_and_average_excludes_courtesies(pool: PgPool) {
+    sqlx::query("UPDATE app_settings SET timezone = 'UTC' WHERE id = 1")
+        .execute(&pool)
+        .await
+        .unwrap();
+    let customer_id: i32 =
+        sqlx::query_scalar("INSERT INTO customers (name) VALUES ('Reports customer') RETURNING id")
+            .fetch_one(&pool)
+            .await
+            .unwrap();
+    let (_, _, variant_id) = seed_inventory_variant(
+        &pool,
+        "customer-share",
+        "Customer share product",
+        1,
+        0,
+        100,
+        300,
+        true,
+        true,
+    )
+    .await;
+
+    let paid_sale = insert_sale(
+        &pool,
+        variant_id,
+        "completed",
+        "2026-10-09T12:00:00Z",
+        30_000,
+        0,
+        0,
+        30_000,
+        None,
+        1,
+        30_000,
+        0,
+        0,
+        30_000,
+        Some(10_000),
+    )
+    .await;
+    let courtesy_sale = insert_sale(
+        &pool,
+        variant_id,
+        "completed",
+        "2026-10-09T13:00:00Z",
+        30_000,
+        0,
+        30_000,
+        0,
+        Some("Apoyo"),
+        1,
+        30_000,
+        0,
+        0,
+        30_000,
+        Some(10_000),
+    )
+    .await;
+    insert_sale(
+        &pool,
+        variant_id,
+        "completed",
+        "2026-10-09T14:00:00Z",
+        70_000,
+        0,
+        0,
+        70_000,
+        None,
+        1,
+        70_000,
+        0,
+        0,
+        70_000,
+        Some(10_000),
+    )
+    .await;
+    sqlx::query("UPDATE sales SET customer_id = $1 WHERE id IN ($2, $3)")
+        .bind(customer_id)
+        .bind(paid_sale)
+        .bind(courtesy_sale)
+        .execute(&pool)
+        .await
+        .unwrap();
+
+    let filter = ReportFilter {
+        date_from: date("2026-10-09"),
+        date_to: date("2026-10-09"),
+        granularity: None,
+        compare_previous: false,
+        category_id: None,
+        limit: Some(10),
+        rank_by: None,
+    };
+    let top = service::get_top_customers(&pool, filter.clone())
+        .await
+        .unwrap();
+    assert_eq!(top.len(), 1);
+    assert_eq!(top[0].sales_count, 1);
+    assert_eq!(top[0].avg_ticket, 30_000);
+    assert_eq!(top[0].share_bps, 3_000);
+
+    let split = service::get_customer_sales_split(&pool, filter)
+        .await
+        .unwrap();
+    assert_eq!(split.len(), 1);
+    assert_eq!(split[0].sales_count, 1);
+    assert_eq!(split[0].share_bps, 3_000);
 }
 
 #[sqlx::test(migrations = "./migrations")]

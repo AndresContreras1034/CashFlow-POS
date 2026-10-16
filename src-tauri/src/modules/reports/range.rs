@@ -51,6 +51,19 @@ pub fn share_bps(part: i64, total: i64) -> i32 {
     ratio_bps(part as i128 * 10_000, total as i128)
 }
 
+pub fn avg_ticket(paid_total: i64, paid_tickets: i64) -> i64 {
+    if paid_tickets <= 0 {
+        return 0;
+    }
+
+    let total = i128::from(paid_total);
+    let tickets = i128::from(paid_tickets);
+    let magnitude = total.abs();
+    let rounded = (magnitude + tickets / 2) / tickets;
+    let signed = if total < 0 { -rounded } else { rounded };
+    signed.clamp(i64::MIN as i128, i64::MAX as i128) as i64
+}
+
 pub fn margin_bps(profit: i64, revenue: i64) -> i32 {
     share_bps(profit, revenue)
 }
@@ -235,6 +248,21 @@ mod tests {
         assert_eq!(margin_bps(10, 0), 0);
         assert_eq!(share_bps(1, 8), 1_250);
         assert_eq!(margin_bps(2, 8), 2_500);
+    }
+
+    #[test]
+    fn customer_share_is_based_on_total_sales_including_walk_ins() {
+        assert_eq!(share_bps(3_000, 10_000), 3_000);
+    }
+
+    #[test]
+    fn average_ticket_uses_paid_tickets_only() {
+        assert_eq!(avg_ticket(30_000, 2), 15_000);
+    }
+
+    #[test]
+    fn average_ticket_with_no_paid_tickets_is_zero() {
+        assert_eq!(avg_ticket(5, 0), 0);
     }
 
     fn point(bucket: &str, tickets: i64) -> TimeSeriesPoint {

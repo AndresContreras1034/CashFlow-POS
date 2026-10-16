@@ -11,6 +11,21 @@ export interface ReportDateRange {
   date_to: string;
 }
 
+export function todayInTimezone(timeZone: string): string | null {
+  try {
+    const parts = new Intl.DateTimeFormat('en-CA', {
+      timeZone,
+      year: 'numeric',
+      month: '2-digit',
+      day: '2-digit',
+    }).formatToParts(new Date());
+    const part = (type: string) => parts.find(value => value.type === type)?.value ?? '';
+    return `${part('year')}-${part('month')}-${part('day')}`;
+  } catch {
+    return null;
+  }
+}
+
 export function validateReportRange(from: string, to: string): string | null {
   if (!from || !to) return 'Selecciona las dos fechas del período.';
 

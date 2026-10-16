@@ -450,7 +450,7 @@ export function InventoryTab({
                   <strong>{formatTurnover(value.turnover_bps)}</strong>
                 </div>
                 <div className="reports-inventory-kpi">
-                  <span>COGS del período</span>
+                  <span>COGS con costo conocido</span>
                   <strong>{money(value.cogs)}</strong>
                 </div>
                 <div className="reports-inventory-kpi">

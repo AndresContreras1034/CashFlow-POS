@@ -248,7 +248,9 @@ pub async fn fetch_sales_kpis(
     let sales = sqlx::query_as!(
         SalesTotals,
         r#"SELECT
-               COUNT(*) FILTER (WHERE status = 'completed')::BIGINT AS "tickets!",
+               COUNT(*) FILTER (
+                   WHERE status = 'completed' AND courtesy_reason IS NULL
+               )::BIGINT AS "tickets!",
                COALESCE(
                    SUM(CASE WHEN courtesy_reason IS NULL THEN total ELSE 0 END)
                        FILTER (WHERE status = 'completed'),
@@ -323,12 +325,8 @@ pub async fn fetch_sales_kpis(
     let net_sales = sales.gross_sales - sales.tax_total;
     let gross_profit =
         items.profit_base_net_sales - items.cogs_costed_non_courtesy - items.courtesy_cost;
-    let paid_tickets = sales.tickets - sales.courtesy_count;
-    let avg_ticket = if paid_tickets == 0 {
-        0
-    } else {
-        divide_to_currency(sales.gross_sales, paid_tickets, currency_decimals).unwrap_or_default()
-    };
+    let avg_ticket =
+        divide_to_currency(sales.gross_sales, sales.tickets, currency_decimals).unwrap_or_default();
 
     Ok(SalesKpis {
         tickets: sales.tickets,
@@ -337,7 +335,7 @@ pub async fn fetch_sales_kpis(
         tax_total: sales.tax_total,
         net_sales,
         avg_ticket,
-        cogs: items.cogs,
+        cogs: items.cogs - items.courtesy_cost,
         gross_profit,
         margin_bps: super::range::margin_bps(gross_profit, items.profit_base_net_sales),
         units_sold: items.units_sold,
@@ -977,7 +975,6 @@ struct TopCustomerRow {
     sales_count: i64,
     gross_sales: i64,
     revenue: i64,
-    avg_ticket: i64,
     gross_total: i64,
 }
 
@@ -992,7 +989,7 @@ pub async fn fetch_top_customers(
             SELECT
                 c.id AS customer_id,
                 c.name AS customer_name,
-                COUNT(s.id)::BIGINT AS sales_count,
+                COUNT(*) FILTER (WHERE s.courtesy_reason IS NULL)::BIGINT AS sales_count,
                 COALESCE(
                     SUM(CASE WHEN s.courtesy_reason IS NULL THEN s.total ELSE 0 END),
                     0
@@ -1007,15 +1004,21 @@ pub async fn fetch_top_customers(
               AND s.created_at >= ($1::DATE::TIMESTAMP AT TIME ZONE $3)
               AND s.created_at < (($2::DATE + 1)::TIMESTAMP AT TIME ZONE $3)
             GROUP BY c.id, c.name
+            HAVING COUNT(*) FILTER (WHERE s.courtesy_reason IS NULL) > 0
+        ),
+        all_sales_total AS (
+            SELECT COALESCE(SUM(s.total), 0)::BIGINT AS total
+            FROM sales s
+            WHERE s.status = 'completed'
+              AND s.courtesy_reason IS NULL
+              AND s.created_at >= ($1::DATE::TIMESTAMP AT TIME ZONE $3)
+              AND s.created_at < (($2::DATE + 1)::TIMESTAMP AT TIME ZONE $3)
         )
         SELECT
             customer_totals.*,
-            CASE
-                WHEN sales_count > 0 THEN ROUND(gross_sales::NUMERIC / sales_count)::BIGINT
-                ELSE 0
-            END AS avg_ticket,
-            COALESCE(SUM(gross_sales) OVER ()::BIGINT, 0)::BIGINT AS gross_total
+            all_sales_total.total AS gross_total
         FROM customer_totals
+        CROSS JOIN all_sales_total
         ORDER BY gross_sales DESC, customer_id ASC
         LIMIT $4"#;
 
@@ -1035,7 +1038,7 @@ pub async fn fetch_top_customers(
             sales_count: row.sales_count,
             gross_sales: row.gross_sales,
             revenue: row.revenue,
-            avg_ticket: row.avg_ticket,
+            avg_ticket: super::range::avg_ticket(row.gross_sales, row.sales_count),
             share_bps: super::range::share_bps(row.gross_sales, row.gross_total),
         })
         .collect())
@@ -1061,7 +1064,7 @@ pub async fn fetch_customer_sales_split(
             SELECT
                 c.id AS customer_id,
                 c.name AS customer_name,
-                COUNT(s.id)::BIGINT AS sales_count,
+                COUNT(*) FILTER (WHERE s.courtesy_reason IS NULL)::BIGINT AS sales_count,
                 COALESCE(
                     SUM(CASE WHEN s.courtesy_reason IS NULL THEN s.total ELSE 0 END),
                     0
@@ -1072,11 +1075,21 @@ pub async fn fetch_customer_sales_split(
               AND s.created_at >= ($1::DATE::TIMESTAMP AT TIME ZONE $3)
               AND s.created_at < (($2::DATE + 1)::TIMESTAMP AT TIME ZONE $3)
             GROUP BY c.id, c.name
+            HAVING COUNT(*) FILTER (WHERE s.courtesy_reason IS NULL) > 0
+        ),
+        all_sales_total AS (
+            SELECT COALESCE(SUM(s.total), 0)::BIGINT AS total
+            FROM sales s
+            WHERE s.status = 'completed'
+              AND s.courtesy_reason IS NULL
+              AND s.created_at >= ($1::DATE::TIMESTAMP AT TIME ZONE $3)
+              AND s.created_at < (($2::DATE + 1)::TIMESTAMP AT TIME ZONE $3)
         )
         SELECT
             customer_totals.*,
-            COALESCE(SUM(amount) OVER ()::BIGINT, 0)::BIGINT AS amount_total
+            all_sales_total.total AS amount_total
         FROM customer_totals
+        CROSS JOIN all_sales_total
         ORDER BY amount DESC, customer_id ASC
         LIMIT $4"#;
 

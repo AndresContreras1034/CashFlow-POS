@@ -47,9 +47,10 @@ export function formatVariantAttributes(attributes: unknown): string {
   }
 
   const stringAttributes = Object.fromEntries(
-    Object.entries(attributes).filter(
-      (entry): entry is [string, string] => typeof entry[1] === 'string',
-    ),
+    Object.entries(attributes)
+      .filter(([, value]) =>
+        value !== null && value !== undefined && String(value).trim() !== '')
+      .map(([key, value]) => [key, String(value)]),
   );
   return formatAttributes(stringAttributes);
 }

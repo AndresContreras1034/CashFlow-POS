@@ -117,6 +117,7 @@ pub async fn fetch_payables_summary(
                END AS share_bps
            FROM debt_overview o
            WHERE o.status IN ('pending', 'partially_paid', 'overdue')
+             AND o.balance > 0
            GROUP BY o.category
            ORDER BY o.category"#,
     )
@@ -127,6 +128,7 @@ pub async fn fetch_payables_summary(
         r#"SELECT o.urgency, COUNT(*)::BIGINT AS count, SUM(o.balance)::BIGINT AS balance_total
            FROM debt_overview o
            WHERE o.status IN ('pending', 'partially_paid', 'overdue')
+             AND o.balance > 0
            GROUP BY o.urgency
            ORDER BY o.urgency"#,
     )

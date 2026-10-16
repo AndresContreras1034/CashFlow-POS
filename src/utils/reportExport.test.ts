@@ -194,6 +194,9 @@ describe('CSV report builders', () => {
       ['Generado', '2026-10-11 12:25:52'],
     ]);
     expect(result.rows).toContainEqual(['Ventas', '1200,00']);
+    expect(result.rows).toContainEqual(['Tickets pagados', 2]);
+    expect(result.rows).toContainEqual(['Costo de ventas', '600,00']);
+    expect(result.rows).toContainEqual(['Costo de cortesías', '0,00']);
   });
 
   it('includes previous-period KPIs when comparison data is available', () => {
@@ -226,7 +229,7 @@ describe('CSV report builders', () => {
     const result = buildInventoryCsv({ valuation, turnover, alerts: [stockAlert] }, range, 2);
     expect(result.filename).toContain('reporte-inventario-');
     expect(result.rows).toContainEqual(['Bebidas', 4, '600,00', '1000,00', 10_000, 0]);
-    expect(result.rows).toContainEqual(['COGS del período', '600,00']);
+    expect(result.rows).toContainEqual(['COGS con costo conocido', '600,00']);
     expect(result.rows).toContainEqual([
       'Café', 'Tamaño: 250g', 'Bebidas', 'Agotado', 0, 2, 3, 0, 3,
     ]);

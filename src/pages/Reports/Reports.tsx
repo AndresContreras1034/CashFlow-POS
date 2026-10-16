@@ -3,6 +3,7 @@ import type { Granularity, ReportFilter } from '../../types/reports';
 import { useSettings } from '../../context/AppContext';
 import {
   getReportRange,
+  todayInTimezone,
   validateReportRange,
   type ReportRangePreset,
 } from '../../utils/reportRanges';
@@ -39,21 +40,6 @@ const PRESETS: Array<{ id: ReportRangePreset; label: string }> = [
   { id: 'previous_month', label: 'Mes anterior' },
 ];
 
-function todayInTimezone(timezone: string): string | null {
-  try {
-    const parts = new Intl.DateTimeFormat('en-CA', {
-      year: 'numeric',
-      month: '2-digit',
-      day: '2-digit',
-      timeZone: timezone,
-    }).formatToParts(new Date());
-    const part = (type: string) => parts.find(value => value.type === type)?.value ?? '';
-    return `${part('year')}-${part('month')}-${part('day')}`;
-  } catch {
-    return null;
-  }
-}
-
 export default function Reports() {
   const { settings } = useSettings();
   const today = todayInTimezone(settings.timezone);
@@ -73,7 +59,9 @@ export default function Reports() {
   const [alertLimit, setAlertLimit] = useState(25);
   const [creditorLimit, setCreditorLimit] = useState(10);
   const [dueLimit, setDueLimit] = useState(25);
-  const rangeError = validateReportRange(filter.date_from, filter.date_to);
+  const rangeError = today === null
+    ? 'La zona horaria configurada no es válida. Corrígela en Ajustes'
+    : validateReportRange(filter.date_from, filter.date_to);
 
   const applyPreset = (nextPreset: ReportRangePreset) => {
     if (!today) return;

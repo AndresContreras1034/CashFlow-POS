@@ -14,7 +14,7 @@ import {
   getSalesSeries,
 } from '../../services/reports.service';
 import { formatMoney } from '../../utils/format';
-import { getPreviousReportRange } from '../../utils/reportRanges';
+import { getPreviousReportRange, todayInTimezone } from '../../utils/reportRanges';
 import { formatBps } from '../../utils/reportFormat';
 import { PaymentMethodChart } from './PaymentMethodChart';
 import { SalesHeatmap } from './SalesHeatmap';
@@ -37,21 +37,6 @@ interface ReportData {
 
 interface DashboardTabProps {
   filter: ReportFilter;
-}
-
-function todayInTimezone(timezone: string): string | null {
-  try {
-    const parts = new Intl.DateTimeFormat('en-CA', {
-      year: 'numeric',
-      month: '2-digit',
-      day: '2-digit',
-      timeZone: timezone,
-    }).formatToParts(new Date());
-    const part = (type: string) => parts.find(value => value.type === type)?.value ?? '';
-    return `${part('year')}-${part('month')}-${part('day')}`;
-  } catch {
-    return null;
-  }
 }
 
 function signedUnits(value: number | null): string {
@@ -116,7 +101,7 @@ export function DashboardTab({ filter }: DashboardTabProps) {
     setError(null);
     setData(null);
     if (!today) {
-      setError('La zona horaria configurada no es válida');
+      setError('La zona horaria configurada no es válida. Corrígela en Ajustes');
       setLoading(false);
       return () => {
         active = false;
@@ -194,7 +179,7 @@ export function DashboardTab({ filter }: DashboardTabProps) {
       amount: marginChange,
     },
     {
-      label: 'Tickets',
+      label: 'Tickets pagados',
       value: new Intl.NumberFormat('es-CO').format(current?.tickets ?? 0),
       delta: formatBps(data?.dashboard.tickets_delta.change_bps ?? null),
       amount: data?.dashboard.tickets_delta.change_bps ?? null,
@@ -276,6 +261,10 @@ export function DashboardTab({ filter }: DashboardTabProps) {
 
           <section className="reports-summary" aria-label="Cortesías y estados">
             <div>
+              <span>Costo de ventas</span>
+              <strong>{money(current.cogs)}</strong>
+            </div>
+            <div>
               <span>Cortesías</span>
               <strong>{current.courtesy_count}</strong>
             </div>
@@ -297,7 +286,7 @@ export function DashboardTab({ filter }: DashboardTabProps) {
             </div>
           </section>
 
-          {current.tickets === 0 && (
+          {current.tickets === 0 && current.courtesy_count === 0 && (
             <div className="reports-empty-state">No hay ventas en el período seleccionado.</div>
           )}
 

@@ -47,7 +47,14 @@ describe('report formatting helpers', () => {
 
   it('formats variant attributes defensively and reuses inventory labels', () => {
     expect(formatVariantAttributes({ volumen: '100ml' })).toBe('Volumen: 100ml');
-    expect(formatVariantAttributes({ talla: 4, color: 'Azul' })).toBe('Color: Azul');
+    expect(formatVariantAttributes({ talla: 4, color: 'Azul' })).toBe('Talla: 4 · Color: Azul');
+    expect(formatVariantAttributes({
+      talla: 4,
+      color: 'Azul',
+      visible: true,
+      empty: '  ',
+      missing: null,
+    })).toBe('Talla: 4 · Color: Azul · Visible: true');
     expect(formatVariantAttributes(null)).toBe('');
     expect(formatVariantAttributes({})).toBe('');
     expect(formatVariantAttributes('100ml')).toBe('');

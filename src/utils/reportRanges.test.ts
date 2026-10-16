@@ -2,10 +2,16 @@ import { describe, expect, it } from 'vitest';
 import {
   getPreviousReportRange,
   getReportRange,
+  todayInTimezone,
   validateReportRange,
 } from './reportRanges';
 
 describe('report date ranges', () => {
+  it('returns a local calendar date for valid zones and null for invalid zones', () => {
+    expect(todayInTimezone('UTC')).toMatch(/^\d{4}-\d{2}-\d{2}$/);
+    expect(todayInTimezone('Invalid/Timezone')).toBeNull();
+  });
+
   it('returns a single local day for the today preset', () => {
     expect(getReportRange('today', '2026-10-10')).toEqual({
       date_from: '2026-10-10',
