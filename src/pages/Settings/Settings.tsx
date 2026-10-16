@@ -18,10 +18,11 @@ import {
 import { APP_THEMES, applyTheme, loadSavedTheme, type AppTheme } from '../../utils/theme';
 import { applyDeveloperMode, readDeveloperMode } from '../../utils/developerMode';
 import { BackupSettingsForm } from '../../components/backup/BackupSettingsForm';
+import { CommercialEventsSettings } from '../../components/settings/CommercialEventsSettings';
 import { TourPanel } from '../../tour';
 import './Settings.css';
 
-type Section = 'business' | 'money' | 'regional' | 'inventory' | 'ticket' | 'appearance' | 'shortcuts' | 'backup' | 'developer' | 'tutorial';
+type Section = 'business' | 'money' | 'regional' | 'inventory' | 'ticket' | 'appearance' | 'shortcuts' | 'calendar' | 'backup' | 'developer' | 'tutorial';
 
 const SECTIONS: { id: Section; label: string }[] = [
   { id: 'business', label: 'Negocio' },
@@ -31,6 +32,7 @@ const SECTIONS: { id: Section; label: string }[] = [
   { id: 'ticket', label: 'Ticket' },
   { id: 'appearance', label: 'Temas' },
   { id: 'shortcuts', label: 'Atajos' },
+  { id: 'calendar', label: 'Calendario comercial' },
   { id: 'backup', label: 'Backup' },
   { id: 'developer', label: 'Desarrollador' },
   { id: 'tutorial', label: 'Tutoriales' },
@@ -958,6 +960,8 @@ export const Settings: React.FC = () => {
         )}
 
         {section === 'backup' && <BackupSettingsForm onToast={addToast} />}
+
+        {section === 'calendar' && <CommercialEventsSettings onToast={addToast} />}
 
         {section === 'tutorial' && <TourPanel />}
 

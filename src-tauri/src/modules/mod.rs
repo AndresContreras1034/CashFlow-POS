@@ -2,6 +2,7 @@ pub mod audit;
 pub mod backup;
 pub mod billing;
 pub mod cash;
+pub mod commercial_calendar;
 pub mod customers;
 pub mod debts;
 pub mod developer;

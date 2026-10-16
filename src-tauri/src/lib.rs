@@ -13,6 +13,7 @@ use modules::audit::router::*;
 use modules::backup::router::*;
 use modules::billing::router::*;
 use modules::cash::router::*;
+use modules::commercial_calendar::router::*;
 use modules::customers::router::*;
 use modules::debts::router::*;
 use modules::developer::router::*;
@@ -291,6 +292,15 @@ pub fn run() {
             // =================================================
             get_settings,
             update_settings,
+            // =================================================
+            // Calendario comercial
+            // =================================================
+            list_commercial_events,
+            create_commercial_event,
+            update_commercial_event,
+            delete_commercial_event,
+            get_upcoming_commercial_events,
+            get_current_sales_pace,
             // =================================================
             // Cash
             // =================================================
