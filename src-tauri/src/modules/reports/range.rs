@@ -4,6 +4,17 @@ use crate::errors::app_error::AppError;
 
 use super::dto::{DateRange, Granularity, ReportFilter, TimeSeriesPoint};
 
+pub const MAX_RANGE_DAYS: i64 = 732;
+const DAILY_LIMIT_DAYS: i64 = 92;
+
+pub fn granularity_for(range_days: i64) -> Granularity {
+    if range_days > DAILY_LIMIT_DAYS {
+        Granularity::Month
+    } else {
+        Granularity::Day
+    }
+}
+
 impl ReportFilter {
     pub fn validate(&self) -> Result<(), AppError> {
         if self.date_from > self.date_to {
@@ -13,8 +24,8 @@ impl ReportFilter {
         }
 
         let inclusive_days = (self.date_to - self.date_from).num_days() + 1;
-        if inclusive_days > 366 {
-            return Err(AppError::validation("El rango no puede superar 366 días"));
+        if inclusive_days > MAX_RANGE_DAYS {
+            return Err(AppError::validation("El rango no puede superar 732 días"));
         }
 
         if self.limit.is_some_and(|limit| !(1..=100).contains(&limit)) {
@@ -30,6 +41,38 @@ pub fn previous_range(range: &DateRange) -> DateRange {
     let to = range.from - Duration::days(1);
     let from = to - Duration::days(days - 1);
     DateRange { from, to }
+}
+
+pub fn previous_year_range(range: &DateRange) -> Option<DateRange> {
+    let shift_year = |date: NaiveDate| {
+        let year = date.year().checked_sub(1)?;
+        date.with_year(year)
+            .or_else(|| NaiveDate::from_ymd_opt(year, date.month(), date.day().saturating_sub(1)))
+    };
+    Some(DateRange {
+        from: shift_year(range.from)?,
+        to: shift_year(range.to)?,
+    })
+}
+
+pub fn month_starts(from: NaiveDate, to: NaiveDate) -> Vec<NaiveDate> {
+    let Some(mut current) = NaiveDate::from_ymd_opt(from.year(), from.month(), 1) else {
+        return Vec::new();
+    };
+    let mut months = Vec::new();
+    while current <= to {
+        months.push(current);
+        let (year, month) = if current.month() == 12 {
+            (current.year().checked_add(1), 1)
+        } else {
+            (Some(current.year()), current.month() + 1)
+        };
+        let Some(next) = year.and_then(|year| NaiveDate::from_ymd_opt(year, month, 1)) else {
+            break;
+        };
+        current = next;
+    }
+    months
 }
 
 pub fn change_bps(current: i64, previous: i64) -> Option<i32> {
@@ -75,7 +118,11 @@ pub fn fill_buckets(
 ) -> Result<Vec<TimeSeriesPoint>, AppError> {
     let points_by_bucket = points
         .into_iter()
-        .map(|point| (point.bucket, point))
+        .map(|mut point| {
+            point.partial =
+                granularity == Granularity::Month && is_partial_month(point.bucket, range);
+            (point.bucket, point)
+        })
         .collect::<std::collections::BTreeMap<_, _>>();
     let mut bucket = bucket_start(range.from, granularity)?;
     let mut filled = Vec::new();
@@ -85,6 +132,7 @@ pub fn fill_buckets(
             Some(point) => point.clone(),
             None => TimeSeriesPoint {
                 bucket,
+                partial: granularity == Granularity::Month && is_partial_month(bucket, range),
                 tickets: 0,
                 gross_sales: 0,
                 gross_profit: 0,
@@ -110,6 +158,28 @@ pub fn fill_buckets(
     }
 
     Ok(filled)
+}
+
+fn is_partial_month(bucket: NaiveDate, range: &DateRange) -> bool {
+    let starts_mid_month = bucket == month_start(range.from) && range.from.day() > 1;
+    let ends_mid_month =
+        bucket == month_start(range.to) && range.to.day() < days_in_month(range.to);
+    starts_mid_month || ends_mid_month
+}
+
+fn month_start(date: NaiveDate) -> NaiveDate {
+    NaiveDate::from_ymd_opt(date.year(), date.month(), 1).unwrap_or(date)
+}
+
+fn days_in_month(date: NaiveDate) -> u32 {
+    let (year, month) = if date.month() == 12 {
+        (date.year().checked_add(1), 1)
+    } else {
+        (Some(date.year()), date.month() + 1)
+    };
+    year.and_then(|year| NaiveDate::from_ymd_opt(year, month, 1))
+        .and_then(|first_next_month| first_next_month.pred_opt())
+        .map_or(31, |date| date.day())
 }
 
 fn bucket_start(date: NaiveDate, granularity: Granularity) -> Result<NaiveDate, AppError> {
@@ -151,6 +221,7 @@ mod tests {
             date_to: date(to),
             granularity: Some(Granularity::Day),
             compare_previous: false,
+            compare_year_over_year: false,
             category_id: None,
             limit: None,
             rank_by: None,
@@ -188,6 +259,49 @@ mod tests {
     }
 
     #[test]
+    fn accepts_exactly_732_days_and_rejects_longer_ranges() {
+        assert!(filter("2024-10-14", "2026-10-15").validate().is_ok());
+        assert!(filter("2024-10-13", "2026-10-15").validate().is_err());
+    }
+
+    #[test]
+    fn selects_daily_or_monthly_granularity_at_92_days() {
+        assert_eq!(granularity_for(92), Granularity::Day);
+        assert_eq!(granularity_for(93), Granularity::Month);
+    }
+
+    #[test]
+    fn month_starts_include_partial_boundary_months_across_years() {
+        assert_eq!(
+            month_starts(date("2025-11-20"), date("2026-02-03")),
+            vec![
+                date("2025-11-01"),
+                date("2025-12-01"),
+                date("2026-01-01"),
+                date("2026-02-01"),
+            ]
+        );
+        assert_eq!(
+            month_starts(date("2026-10-05"), date("2026-10-20")),
+            vec![date("2026-10-01")]
+        );
+    }
+
+    #[test]
+    fn previous_year_range_clamps_leap_day_to_february_28() {
+        assert_eq!(
+            previous_year_range(&DateRange {
+                from: date("2028-02-29"),
+                to: date("2028-03-10"),
+            }),
+            Some(DateRange {
+                from: date("2027-02-28"),
+                to: date("2027-03-10"),
+            })
+        );
+    }
+
+    #[test]
     fn validates_ranges_across_year_boundary() {
         let selected = DateRange {
             from: date("2026-12-20"),
@@ -209,8 +323,8 @@ mod tests {
     }
 
     #[test]
-    fn rejects_ranges_longer_than_366_inclusive_days() {
-        assert!(filter("2025-01-01", "2026-01-02").validate().is_err());
+    fn rejects_ranges_longer_than_732_inclusive_days() {
+        assert!(filter("2024-10-13", "2026-10-15").validate().is_err());
     }
 
     #[test]
@@ -268,10 +382,28 @@ mod tests {
     fn point(bucket: &str, tickets: i64) -> TimeSeriesPoint {
         TimeSeriesPoint {
             bucket: date(bucket),
+            partial: false,
             tickets,
             gross_sales: tickets * 100,
             gross_profit: tickets * 50,
         }
+    }
+
+    #[test]
+    fn monthly_buckets_flag_partial_start_and_end_months() {
+        let range = DateRange {
+            from: date("2025-11-20"),
+            to: date("2026-02-03"),
+        };
+        let filled = fill_buckets(&range, Granularity::Month, Vec::new()).unwrap();
+        assert_eq!(
+            filled.iter().map(|point| point.bucket).collect::<Vec<_>>(),
+            month_starts(range.from, range.to)
+        );
+        assert_eq!(
+            filled.iter().map(|point| point.partial).collect::<Vec<_>>(),
+            vec![true, false, false, true]
+        );
     }
 
     #[test]

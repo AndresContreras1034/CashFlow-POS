@@ -7,6 +7,7 @@ import {
   formatBps,
   formatDaysOfCover,
   formatDaysSinceSale,
+  formatSalesBucketLabel,
   inventoryDaysReasonLabel,
   formatDueDays,
   formatTurnover,
@@ -70,6 +71,12 @@ describe('report formatting helpers', () => {
     expect(formatTurnover(15_000)).toBe('1,50 veces');
     expect(formatTurnover(0)).toBe('0,00 veces');
     expect(formatTurnover(null)).toBe('—');
+  });
+
+  it('labels monthly chart buckets and marks partial months', () => {
+    expect(formatSalesBucketLabel('2026-10-01', true, true)).toBe('oct 2026 (parcial)');
+    expect(formatSalesBucketLabel('2026-10-01', false, true)).toBe('oct 2026');
+    expect(formatSalesBucketLabel('2026-10-15', false, false)).toBe('10-15');
   });
 
   it('formats stock coverage and status labels', () => {

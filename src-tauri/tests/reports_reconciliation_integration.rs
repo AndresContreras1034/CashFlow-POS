@@ -20,6 +20,7 @@ fn filter(from: &str, to: &str) -> ReportFilter {
         date_to: date(to),
         granularity: Some(Granularity::Day),
         compare_previous: false,
+        compare_year_over_year: false,
         category_id: None,
         limit: Some(100),
         rank_by: Some(RankBy::Revenue),
@@ -288,7 +289,7 @@ async fn empty_database_returns_zero_metrics_and_empty_collections(pool: PgPool)
 }
 
 #[sqlx::test(migrations = "./migrations")]
-async fn report_filter_accepts_one_and_366_days_and_rejects_367(pool: PgPool) {
+async fn report_filter_accepts_one_and_732_days_and_rejects_733(pool: PgPool) {
     sqlx::query("UPDATE app_settings SET timezone = 'UTC' WHERE id = 1")
         .execute(&pool)
         .await
@@ -299,13 +300,13 @@ async fn report_filter_accepts_one_and_366_days_and_rejects_367(pool: PgPool) {
         .unwrap();
     assert_eq!(one_day.current.tickets, 0);
 
-    let max_range = report_service::get_dashboard_kpis(&pool, filter("2026-01-01", "2027-01-01"))
+    let max_range = report_service::get_dashboard_kpis(&pool, filter("2026-01-01", "2028-01-02"))
         .await
         .unwrap();
     assert_eq!(max_range.current.tickets, 0);
 
-    let error = report_service::get_dashboard_kpis(&pool, filter("2026-01-01", "2027-01-02"))
+    let error = report_service::get_dashboard_kpis(&pool, filter("2026-01-01", "2028-01-03"))
         .await
         .unwrap_err();
-    assert!(error.to_string().contains("366 días"));
+    assert!(error.to_string().contains("732 días"));
 }

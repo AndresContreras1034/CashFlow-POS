@@ -11,7 +11,10 @@ use crate::{
                 PaymentMethodStat, RankBy, ReportFilter, StaleProduct, StockAlert, TimeSeriesPoint,
                 TopCreditor, TopCustomer, TopProduct, UpcomingDue,
             },
-            range::{change_bps, fill_buckets, previous_range},
+            range::{
+                change_bps, fill_buckets, granularity_for, previous_range, previous_year_range,
+                MAX_RANGE_DAYS,
+            },
             repository,
         },
         settings::{repository as settings_repository, service as settings_service},
@@ -31,14 +34,26 @@ pub async fn get_dashboard_kpis(
         to: filter.date_to,
     };
 
+    let comparison_range = if filter.compare_year_over_year {
+        previous_year_range(&range)
+            .filter(|candidate| (candidate.to - candidate.from).num_days() + 1 <= MAX_RANGE_DAYS)
+    } else {
+        Some(previous_range(&range))
+    };
     let (current, previous_range, previous) = if filter.compare_previous {
-        let previous_range = previous_range(&range);
-        let (current, previous) = tokio::try_join!(
-            repository::fetch_sales_kpis(pool, &range, &timezone, currency_decimals),
-            repository::fetch_sales_kpis(pool, &previous_range, &timezone, currency_decimals)
-        )
-        .map_err(AppError::from)?;
-        (current, Some(previous_range), Some(previous))
+        if let Some(previous_range) = comparison_range {
+            let (current, previous) = tokio::try_join!(
+                repository::fetch_sales_kpis(pool, &range, &timezone, currency_decimals),
+                repository::fetch_sales_kpis(pool, &previous_range, &timezone, currency_decimals)
+            )
+            .map_err(AppError::from)?;
+            (current, Some(previous_range), Some(previous))
+        } else {
+            let current = repository::fetch_sales_kpis(pool, &range, &timezone, currency_decimals)
+                .await
+                .map_err(AppError::from)?;
+            (current, None, None)
+        }
     } else {
         let current = repository::fetch_sales_kpis(pool, &range, &timezone, currency_decimals)
             .await
@@ -83,10 +98,11 @@ pub async fn get_sales_series(
         from: filter.date_from,
         to: filter.date_to,
     };
-    let granularity = match filter.granularity {
-        Some(Granularity::Day) | None => ("day", Granularity::Day),
-        Some(Granularity::Week) => ("week", Granularity::Week),
-        Some(Granularity::Month) => ("month", Granularity::Month),
+    let range_days = (range.to - range.from).num_days() + 1;
+    let granularity = match granularity_for(range_days) {
+        Granularity::Day => ("day", Granularity::Day),
+        Granularity::Week => ("day", Granularity::Day),
+        Granularity::Month => ("month", Granularity::Month),
     };
     let points = repository::fetch_sales_series(pool, &range, &timezone, granularity.0)
         .await

@@ -1,5 +1,5 @@
 import { lazy, Suspense, useState } from 'react';
-import type { Granularity, ReportFilter } from '../../types/reports';
+import type { ReportFilter } from '../../types/reports';
 import { useSettings } from '../../context/AppContext';
 import {
   getReportRange,
@@ -32,12 +32,12 @@ const PayablesTab = lazy(() =>
 );
 
 const PRESETS: Array<{ id: ReportRangePreset; label: string }> = [
-  { id: 'today', label: 'Hoy' },
-  { id: 'yesterday', label: 'Ayer' },
   { id: 'last_7_days', label: 'Últimos 7 días' },
   { id: 'last_30_days', label: 'Últimos 30 días' },
-  { id: 'this_month', label: 'Este mes' },
-  { id: 'previous_month', label: 'Mes anterior' },
+  { id: 'last_90_days', label: 'Últimos 90 días' },
+  { id: 'last_12_months', label: 'Últimos 12 meses' },
+  { id: 'year_to_date', label: 'Año actual' },
+  { id: 'previous_year', label: 'Año anterior' },
 ];
 
 export default function Reports() {
@@ -49,7 +49,8 @@ export default function Reports() {
       ? getReportRange('last_7_days', today)
       : { date_from: '', date_to: '' }),
     granularity: 'day',
-    compare_previous: false,
+    compare_previous: true,
+    compare_year_over_year: false,
   }));
   const [activeTab, setActiveTab] = useState<'summary' | 'products' | 'inventory' | 'payables'>('summary');
   const [categoryId, setCategoryId] = useState<number | null>(null);
@@ -69,12 +70,20 @@ export default function Reports() {
     setFilter(current => ({
       ...current,
       ...getReportRange(nextPreset, today),
+      compare_previous: true,
+      compare_year_over_year: ['last_12_months', 'year_to_date', 'previous_year']
+        .includes(nextPreset),
     }));
   };
 
   const updateDate = (field: 'date_from' | 'date_to', value: string) => {
     setPreset('custom');
-    setFilter(current => ({ ...current, [field]: value }));
+    setFilter(current => ({
+      ...current,
+      [field]: value,
+      compare_previous: true,
+      compare_year_over_year: false,
+    }));
   };
 
   return (
@@ -120,23 +129,9 @@ export default function Reports() {
               onChange={event => updateDate('date_to', event.target.value)}
             />
           </label>
-          <label className="reports-select-field">
-            <span>Agrupar por</span>
-            <select
-              value={filter.granularity ?? 'day'}
-              disabled={!today}
-              onChange={event =>
-                setFilter(current => ({
-                  ...current,
-                  granularity: event.target.value as Granularity,
-                }))
-              }
-            >
-              <option value="day">Día</option>
-              <option value="week">Semana</option>
-              <option value="month">Mes</option>
-            </select>
-          </label>
+          <div className="reports-select-field">
+            <span>Agrupación automática: hasta 92 días por día; rangos mayores por mes</span>
+          </div>
           <label className="reports-compare">
             <input
               type="checkbox"
@@ -149,7 +144,9 @@ export default function Reports() {
                 }))
               }
             />
-            <span>Comparar con período anterior</span>
+            <span>
+              Comparar con {filter.compare_year_over_year ? 'el año anterior' : 'el período anterior'}
+            </span>
           </label>
         </div>
       </section>

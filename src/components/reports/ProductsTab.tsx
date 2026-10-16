@@ -278,11 +278,7 @@ export function ProductsTab({
         <div className="reports-panel-heading">
           <div>
             <h2>Top productos</h2>
-            <p>
-              {categoryId
-                ? 'Participación dentro de la categoría seleccionada'
-                : 'Participación sobre el total del período'}
-            </p>
+            <p>Participación sobre las ventas pagadas totales del período; el denominador no se limita al Top N ni a la categoría seleccionada.</p>
           </div>
         </div>
         <SectionStatus
@@ -350,7 +346,7 @@ export function ProductsTab({
         <div className="reports-panel-heading">
           <div>
             <h2>Ventas por categoría</h2>
-            <p>Ingreso neto · ignora el filtro de categoría</p>
+            <p>Ingreso neto · participación sobre las ventas pagadas totales del período.</p>
           </div>
         </div>
         <SectionStatus

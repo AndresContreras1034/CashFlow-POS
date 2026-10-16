@@ -14,7 +14,10 @@ import {
   getSalesSeries,
 } from '../../services/reports.service';
 import { formatMoney } from '../../utils/format';
-import { getPreviousReportRange, todayInTimezone } from '../../utils/reportRanges';
+import {
+  getComparisonReportRange,
+  todayInTimezone,
+} from '../../utils/reportRanges';
 import { formatBps } from '../../utils/reportFormat';
 import { PaymentMethodChart } from './PaymentMethodChart';
 import { SalesHeatmap } from './SalesHeatmap';
@@ -109,10 +112,10 @@ export function DashboardTab({ filter }: DashboardTabProps) {
     }
 
     const previousRange = filter.compare_previous
-      ? getPreviousReportRange({
+      ? getComparisonReportRange({
           date_from: filter.date_from,
           date_to: filter.date_to,
-        })
+        }, filter.compare_year_over_year ?? false)
       : null;
     const previousFilter = previousRange ? rangeFilter(previousRange, filter) : null;
 
@@ -142,6 +145,7 @@ export function DashboardTab({ filter }: DashboardTabProps) {
     filter.date_to,
     filter.granularity,
     filter.compare_previous,
+    filter.compare_year_over_year,
     settings.timezone,
     today,
     retry,
@@ -150,6 +154,10 @@ export function DashboardTab({ filter }: DashboardTabProps) {
   const current = data?.dashboard.current;
   const previous = data?.dashboard.previous;
   const compared = Boolean(filter.compare_previous && previous);
+  const rangeDays = Math.round(
+    (Date.parse(`${filter.date_to}T00:00:00Z`) - Date.parse(`${filter.date_from}T00:00:00Z`))
+      / 86_400_000,
+  ) + 1;
   const marginChange = previous && current
     ? current.margin_bps - previous.margin_bps
     : null;
@@ -234,6 +242,11 @@ export function DashboardTab({ filter }: DashboardTabProps) {
 
       {!loading && data && current && (
         <>
+          {filter.compare_previous && !data.dashboard.previous && (
+            <p className="reports-warning" role="status">
+              No se pudo calcular la comparación porque su rango queda fuera del límite de 732 días.
+            </p>
+          )}
           <section className="reports-kpis" aria-label="Indicadores de ventas">
             {metricValues.map(metric => {
               const tone = deltaTone(metric.amount);
@@ -305,6 +318,7 @@ export function DashboardTab({ filter }: DashboardTabProps) {
                 data={data.series}
                 previousData={data.previousSeries}
                 comparePrevious={filter.compare_previous ?? false}
+                monthly={rangeDays > 92}
                 currency={settings.currency}
                 decimals={settings.currency_decimals}
               />

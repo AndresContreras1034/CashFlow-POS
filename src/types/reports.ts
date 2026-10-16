@@ -8,6 +8,7 @@ export interface ReportFilter {
   date_to: string;
   granularity?: Granularity | null;
   compare_previous?: boolean;
+  compare_year_over_year?: boolean;
   category_id?: number | null;
   limit?: number | null;
   rank_by?: RankBy | null;
@@ -58,6 +59,7 @@ export interface DashboardKpis {
 
 export interface TimeSeriesPoint {
   bucket: string;
+  partial: boolean;
   tickets: number;
   gross_sales: number;
   gross_profit: number;

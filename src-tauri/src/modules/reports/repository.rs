@@ -166,9 +166,7 @@ struct ProductRankingRow {
     profit: i64,
     costed_revenue: i64,
     uncosted_units: i64,
-    units_total: i64,
-    revenue_total: i64,
-    profit_total: i64,
+    total_sales: i64,
 }
 
 #[derive(sqlx::FromRow)]
@@ -181,7 +179,7 @@ struct CategoryRankingRow {
     profit: i64,
     costed_revenue: i64,
     uncosted_units: i64,
-    revenue_total: i64,
+    total_sales: i64,
 }
 
 #[derive(sqlx::FromRow)]
@@ -389,6 +387,7 @@ pub async fn fetch_sales_series(
         .into_iter()
         .map(|row| TimeSeriesPoint {
             bucket: row.bucket,
+            partial: false,
             tickets: row.tickets,
             gross_sales: row.gross_sales,
             gross_profit: row.gross_profit,
@@ -522,13 +521,14 @@ pub async fn fetch_top_products(
                WHERE ($4::INT IS NULL OR p.category_id = $4)
                GROUP BY p.id, v.id, p.name, v.attributes
            )
-           -- The window totals are computed after category_id filtering, so shares are
-           -- relative to the selected category whenever that filter is present.
-           SELECT product_totals.*,
-               SUM(units) OVER ()::BIGINT AS units_total,
-               SUM(revenue) OVER ()::BIGINT AS revenue_total,
-               SUM(profit) OVER ()::BIGINT AS profit_total
+           , total_sales AS (
+               SELECT COALESCE(SUM(total), 0)::BIGINT AS amount
+               FROM costed_sales
+               WHERE courtesy_reason IS NULL
+           )
+           SELECT product_totals.*, total_sales.amount AS total_sales
            FROM product_totals
+           CROSS JOIN total_sales
            ORDER BY {order_by}
            LIMIT $5"#
     );
@@ -543,26 +543,19 @@ pub async fn fetch_top_products(
 
     Ok(rows
         .into_iter()
-        .map(|row| {
-            let (share, total) = match rank_by {
-                RankBy::Units => (row.units, row.units_total),
-                RankBy::Revenue => (row.revenue, row.revenue_total),
-                RankBy::Profit => (row.profit, row.profit_total),
-            };
-            TopProduct {
-                product_id: row.product_id,
-                variant_id: row.variant_id,
-                product_name: row.product_name,
-                attributes: row.attributes,
-                units: row.units,
-                gross_revenue: row.gross_revenue,
-                revenue: row.revenue,
-                profit: row.profit,
-                margin_bps: (row.costed_revenue != 0)
-                    .then(|| super::range::margin_bps(row.profit, row.costed_revenue)),
-                uncosted_units: row.uncosted_units,
-                share_bps: super::range::share_bps(share, total),
-            }
+        .map(|row| TopProduct {
+            product_id: row.product_id,
+            variant_id: row.variant_id,
+            product_name: row.product_name,
+            attributes: row.attributes,
+            units: row.units,
+            gross_revenue: row.gross_revenue,
+            revenue: row.revenue,
+            profit: row.profit,
+            margin_bps: (row.costed_revenue != 0)
+                .then(|| super::range::margin_bps(row.profit, row.costed_revenue)),
+            uncosted_units: row.uncosted_units,
+            share_bps: super::range::share_bps(row.gross_revenue, row.total_sales),
         })
         .collect())
 }
@@ -599,9 +592,14 @@ pub async fn fetch_sales_by_category(
                JOIN categories c ON c.id = p.category_id
                GROUP BY c.id, c.name
            )
-           SELECT category_totals.*,
-               SUM(revenue) OVER ()::BIGINT AS revenue_total
+           , total_sales AS (
+               SELECT COALESCE(SUM(total), 0)::BIGINT AS amount
+               FROM costed_sales
+               WHERE courtesy_reason IS NULL
+           )
+           SELECT category_totals.*, total_sales.amount AS total_sales
            FROM category_totals
+           CROSS JOIN total_sales
            ORDER BY revenue DESC, category_id ASC"#
     );
     let rows = sqlx::query_as::<_, CategoryRankingRow>(&query)
@@ -623,7 +621,7 @@ pub async fn fetch_sales_by_category(
             margin_bps: (row.costed_revenue != 0)
                 .then(|| super::range::margin_bps(row.profit, row.costed_revenue)),
             uncosted_units: row.uncosted_units,
-            share_bps: super::range::share_bps(row.revenue, row.revenue_total),
+            share_bps: super::range::share_bps(row.gross_revenue, row.total_sales),
         })
         .collect())
 }

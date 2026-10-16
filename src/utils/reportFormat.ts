@@ -69,6 +69,15 @@ export function formatTurnover(bps: number | null): string {
   return `${times} veces`;
 }
 
+export function formatSalesBucketLabel(bucket: string, partial: boolean, monthly: boolean): string {
+  if (!monthly) return bucket.slice(5);
+  const month = new Intl.DateTimeFormat('es-CO', {
+    month: 'short',
+    timeZone: 'UTC',
+  }).format(new Date(`${bucket}T00:00:00Z`)).replace('.', '');
+  return `${month} ${bucket.slice(0, 4)}${partial ? ' (parcial)' : ''}`;
+}
+
 export function formatDaysOfCover(days: number | null): string {
   if (days === null) return 'Sin ventas';
   return `${new Intl.NumberFormat('es-CO').format(days)} ${days === 1 ? 'día' : 'días'}`;

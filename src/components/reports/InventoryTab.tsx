@@ -325,7 +325,7 @@ export function InventoryTab({
         <div className="reports-panel-heading">
           <div>
             <h2>Valor por categoría</h2>
-            <p>Valorización actual a costo</p>
+            <p>Participación sobre el valor total del inventario valorizado a costo.</p>
           </div>
         </div>
         <SectionStatus
@@ -392,7 +392,7 @@ export function InventoryTab({
                         <th>Unidades</th>
                         <th>Valor a costo</th>
                         <th>Valor de venta</th>
-                        <th>Participación</th>
+                        <th>Participación del valor total</th>
                       </tr>
                     </thead>
                     <tbody>

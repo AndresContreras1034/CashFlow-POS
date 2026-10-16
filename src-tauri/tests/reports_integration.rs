@@ -318,6 +318,7 @@ async fn dashboard_kpis_include_costs_void_counts_and_local_date_comparison(pool
             date_to: date("2026-10-09"),
             granularity: None,
             compare_previous: true,
+            compare_year_over_year: false,
             category_id: None,
             limit: None,
             rank_by: None,
@@ -434,6 +435,7 @@ async fn dashboard_kpis_are_zero_for_empty_range_and_comparison_is_optional(pool
         date_to: date("2026-10-09"),
         granularity: None,
         compare_previous: true,
+        compare_year_over_year: false,
         category_id: None,
         limit: None,
         rank_by: None,
@@ -559,6 +561,7 @@ async fn customer_share_includes_walk_in_sales_and_average_excludes_courtesies(p
         date_to: date("2026-10-09"),
         granularity: None,
         compare_previous: false,
+        compare_year_over_year: false,
         category_id: None,
         limit: Some(10),
         rank_by: None,
@@ -593,6 +596,7 @@ async fn dashboard_kpis_reject_invalid_timezone(pool: PgPool) {
             date_to: date("2026-10-09"),
             granularity: None,
             compare_previous: false,
+            compare_year_over_year: false,
             category_id: None,
             limit: None,
             rank_by: None,
@@ -625,6 +629,7 @@ async fn mixed_cost_ticket_is_excluded_from_profit_base(pool: PgPool) {
             date_to: date("2026-10-09"),
             granularity: None,
             compare_previous: false,
+            compare_year_over_year: false,
             category_id: None,
             limit: None,
             rank_by: None,
@@ -757,6 +762,7 @@ async fn sales_breakdowns_use_local_buckets_and_exclude_non_sales(pool: PgPool) 
         date_to: date("2026-10-10"),
         granularity,
         compare_previous: false,
+        compare_year_over_year: false,
         category_id: None,
         limit: None,
         rank_by: None,
@@ -781,29 +787,6 @@ async fn sales_breakdowns_use_local_buckets_and_exclude_non_sales(pool: PgPool) 
     assert_eq!(daily[2].gross_profit, 6_000);
     assert_eq!(daily[3].bucket, date("2026-10-10"));
     assert_eq!(daily[3].tickets, 0);
-
-    let weekly = service::get_sales_series(
-        &pool,
-        filter(Some(pos_lib::modules::reports::dto::Granularity::Week)),
-    )
-    .await
-    .unwrap();
-    assert_eq!(weekly.len(), 1);
-    assert_eq!(weekly[0].bucket, date("2026-10-05"));
-    assert_eq!(weekly[0].tickets, 2);
-    assert_eq!(weekly[0].gross_sales, 15_000);
-    assert_eq!(weekly[0].gross_profit, 10_000);
-
-    let monthly = service::get_sales_series(
-        &pool,
-        filter(Some(pos_lib::modules::reports::dto::Granularity::Month)),
-    )
-    .await
-    .unwrap();
-    assert_eq!(monthly.len(), 1);
-    assert_eq!(monthly[0].bucket, date("2026-10-01"));
-    assert_eq!(monthly[0].tickets, 2);
-    assert_eq!(monthly[0].gross_sales, 15_000);
 
     let payments = service::get_sales_by_payment_method(&pool, filter(None))
         .await
@@ -840,6 +823,81 @@ async fn sales_breakdowns_use_local_buckets_and_exclude_non_sales(pool: PgPool) 
     assert!(heatmap.iter().any(|cell| {
         cell.weekday == 2 && cell.hour == 10 && cell.tickets == 1 && cell.gross_sales == 5_000
     }));
+}
+
+#[sqlx::test(migrations = "./migrations")]
+async fn long_sales_ranges_use_monthly_buckets_and_same_period_last_year(pool: PgPool) {
+    sqlx::query("UPDATE app_settings SET timezone = 'UTC' WHERE id = 1")
+        .execute(&pool)
+        .await
+        .unwrap();
+    let variant_id = seed_variant(&pool).await;
+    for (created_at, amount) in [
+        ("2024-11-20T12:00:00Z", 5_000),
+        ("2025-02-03T12:00:00Z", 10_000),
+        ("2025-11-20T12:00:00Z", 10_000),
+        ("2026-02-03T12:00:00Z", 20_000),
+    ] {
+        insert_sale(
+            &pool,
+            variant_id,
+            "completed",
+            created_at,
+            amount,
+            0,
+            0,
+            amount,
+            None,
+            1,
+            amount,
+            0,
+            0,
+            amount,
+            Some(amount / 2),
+        )
+        .await;
+    }
+    let filter = ReportFilter {
+        date_from: date("2025-10-20"),
+        date_to: date("2026-02-03"),
+        granularity: Some(pos_lib::modules::reports::dto::Granularity::Day),
+        compare_previous: true,
+        compare_year_over_year: true,
+        category_id: None,
+        limit: None,
+        rank_by: None,
+    };
+
+    let series = service::get_sales_series(&pool, filter.clone())
+        .await
+        .unwrap();
+    assert_eq!(
+        series.iter().map(|point| point.bucket).collect::<Vec<_>>(),
+        vec![
+            date("2025-10-01"),
+            date("2025-11-01"),
+            date("2025-12-01"),
+            date("2026-01-01"),
+            date("2026-02-01"),
+        ]
+    );
+    assert_eq!(
+        series.iter().map(|point| point.partial).collect::<Vec<_>>(),
+        vec![true, false, false, false, true]
+    );
+    assert_eq!(series[1].gross_sales, 10_000);
+    assert_eq!(series[4].gross_sales, 20_000);
+
+    let dashboard = service::get_dashboard_kpis(&pool, filter).await.unwrap();
+    assert_eq!(
+        dashboard.previous_range,
+        Some(DateRange {
+            from: date("2024-10-20"),
+            to: date("2025-02-03"),
+        })
+    );
+    assert_eq!(dashboard.current.gross_sales, 30_000);
+    assert_eq!(dashboard.previous.unwrap().gross_sales, 15_000);
 }
 
 #[sqlx::test(migrations = "./migrations")]
@@ -1054,6 +1112,7 @@ async fn product_rankings_reconcile_allocations_costing_and_stale_stock(pool: Pg
         date_to: date("2026-10-09"),
         granularity: None,
         compare_previous: false,
+        compare_year_over_year: false,
         category_id: None,
         limit: Some(100),
         rank_by: Some(RankBy::Revenue),
@@ -1190,7 +1249,7 @@ async fn product_rankings_reconcile_allocations_costing_and_stale_stock(pool: Pg
 }
 
 #[sqlx::test(migrations = "./migrations")]
-async fn top_products_category_filter_limits_rows_and_scopes_shares(pool: PgPool) {
+async fn top_products_category_filter_keeps_share_based_on_all_period_sales(pool: PgPool) {
     use pos_lib::modules::reports::dto::RankBy;
 
     sqlx::query(
@@ -1244,6 +1303,7 @@ async fn top_products_category_filter_limits_rows_and_scopes_shares(pool: PgPool
             date_to: date("2026-10-09"),
             granularity: None,
             compare_previous: false,
+            compare_year_over_year: false,
             category_id: Some(first_category),
             limit: Some(100),
             rank_by: Some(RankBy::Revenue),
@@ -1254,13 +1314,7 @@ async fn top_products_category_filter_limits_rows_and_scopes_shares(pool: PgPool
 
     assert_eq!(filtered.len(), 1);
     assert_eq!(filtered[0].variant_id, first_variant);
-    assert_eq!(
-        filtered
-            .iter()
-            .map(|product| product.share_bps)
-            .sum::<i32>(),
-        10_000
-    );
+    assert_eq!(filtered[0].share_bps, 4_000);
 }
 
 #[sqlx::test(migrations = "./migrations")]
@@ -1300,6 +1354,7 @@ async fn stale_product_totals_include_all_rows_without_being_limited_to_the_disp
             date_to: date,
             granularity: None,
             compare_previous: false,
+            compare_year_over_year: false,
             category_id: None,
             limit: Some(10),
             rank_by: None,
@@ -1399,6 +1454,7 @@ async fn inventory_valuation_is_a_current_active_stock_snapshot(pool: PgPool) {
         date_to: date("2026-01-01"),
         granularity: None,
         compare_previous: false,
+        compare_year_over_year: false,
         category_id: None,
         limit: Some(1),
         rank_by: None,
@@ -1560,6 +1616,7 @@ async fn inventory_turnover_uses_local_dates_and_excludes_uncosted_and_courtesy(
         date_to: date(to),
         granularity: None,
         compare_previous: false,
+        compare_year_over_year: false,
         category_id: Some(category_id),
         limit: None,
         rank_by: None,
@@ -1748,6 +1805,7 @@ async fn stock_alerts_order_status_cover_and_reorder_by_selected_range(pool: PgP
         date_to: date("2026-10-09"),
         granularity: None,
         compare_previous: false,
+        compare_year_over_year: false,
         category_id: None,
         limit: Some(25),
         rank_by: None,
@@ -1874,6 +1932,7 @@ async fn inventory_turnover_counts_historical_cogs_after_product_deactivation(po
             date_to: date("2026-10-09"),
             granularity: None,
             compare_previous: false,
+            compare_year_over_year: false,
             category_id: Some(category_id),
             limit: None,
             rank_by: None,

@@ -37,6 +37,8 @@ pub struct ReportFilter {
     pub granularity: Option<Granularity>,
     #[serde(default)]
     pub compare_previous: bool,
+    #[serde(default)]
+    pub compare_year_over_year: bool,
     pub category_id: Option<i32>,
     pub limit: Option<i64>,
     #[serde(default = "default_rank_by")]
@@ -93,6 +95,7 @@ pub struct DashboardKpis {
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct TimeSeriesPoint {
     pub bucket: NaiveDate,
+    pub partial: bool,
     pub tickets: i64,
     pub gross_sales: i64,
     pub gross_profit: i64,

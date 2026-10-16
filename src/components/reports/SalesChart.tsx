@@ -10,12 +10,14 @@ import {
 } from 'recharts';
 import type { TimeSeriesPoint } from '../../types/reports';
 import { formatMoney } from '../../utils/format';
+import { formatSalesBucketLabel } from '../../utils/reportFormat';
 import './SalesChart.css';
 
 interface SalesChartProps {
   data: TimeSeriesPoint[];
   previousData: TimeSeriesPoint[];
   comparePrevious: boolean;
+  monthly: boolean;
   currency: string;
   decimals: number;
 }
@@ -31,6 +33,7 @@ export function SalesChart({
   data,
   previousData,
   comparePrevious,
+  monthly,
   currency,
   decimals,
 }: SalesChartProps) {
@@ -40,6 +43,7 @@ export function SalesChart({
 
   const chartData = data.map((point, index) => ({
     bucket: point.bucket,
+    label: formatSalesBucketLabel(point.bucket, point.partial, monthly),
     gross_sales: point.gross_sales,
     gross_profit: point.gross_profit,
     previous_sales: comparePrevious ? previousData[index]?.gross_sales ?? null : null,
@@ -52,8 +56,7 @@ export function SalesChart({
         <LineChart data={chartData} margin={{ top: 8, right: 14, bottom: 2, left: 4 }}>
           <CartesianGrid stroke="var(--border-subtle)" strokeDasharray="3 3" />
           <XAxis
-            dataKey="bucket"
-            tickFormatter={value => String(value).slice(5)}
+            dataKey="label"
             tickLine={false}
             axisLine={{ stroke: 'var(--border)' }}
             minTickGap={24}

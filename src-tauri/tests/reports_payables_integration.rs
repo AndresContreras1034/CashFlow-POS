@@ -83,6 +83,7 @@ fn report_filter(from: NaiveDate, to: NaiveDate) -> ReportFilter {
         date_to: to,
         granularity: None,
         compare_previous: false,
+        compare_year_over_year: false,
         category_id: None,
         limit: None,
         rank_by: None,
