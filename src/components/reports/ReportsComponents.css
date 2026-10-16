@@ -108,3 +108,35 @@
   font-size: 13px;
   text-align: center;
 }
+
+.insights-card {
+  display: grid;
+  gap: 14px;
+  margin-top: 20px;
+  padding: 18px;
+  color: var(--text-primary);
+  background: var(--bg-surface);
+  border: 1px solid var(--border-subtle);
+  border-radius: 6px;
+}
+
+.insights-block {
+  display: grid;
+  gap: 8px;
+  padding-top: 12px;
+  border-top: 1px solid var(--border-subtle);
+}
+
+.insights-muted {
+  margin: 0;
+  color: var(--text-muted);
+}
+
+.reports-ranking-wide-loading {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin: 0 0 12px;
+  color: var(--text-secondary);
+  font-size: 13px;
+}

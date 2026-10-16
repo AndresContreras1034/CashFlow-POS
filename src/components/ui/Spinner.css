@@ -1,0 +1,22 @@
+.ui-spinner {
+	display: inline-block;
+	flex: 0 0 auto;
+	width: 16px;
+	height: 16px;
+	border: 2px solid var(--border-subtle);
+	border-top-color: var(--accent);
+	border-radius: 50%;
+	animation: ui-spinner-rotate 700ms linear infinite;
+}
+
+@keyframes ui-spinner-rotate {
+	to {
+		transform: rotate(360deg);
+	}
+}
+
+@media (prefers-reduced-motion: reduce) {
+	.ui-spinner {
+		animation-duration: 1500ms;
+	}
+}

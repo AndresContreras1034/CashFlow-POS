@@ -6,7 +6,12 @@ import type {
   ReportFilter,
   TimeSeriesPoint,
 } from '../../types/reports';
+import type { CommercialContext } from '../../types/insights';
 import { useSettings } from '../../context/AppContext';
+import {
+  getAiSettings,
+  getCommercialContext,
+} from '../../services/commercialCalendar.service';
 import {
   getDashboardKpis,
   getSalesByPaymentMethod,
@@ -23,6 +28,7 @@ import { PaymentMethodChart } from './PaymentMethodChart';
 import { SalesHeatmap } from './SalesHeatmap';
 import { ReportCsvButton } from './ReportCsvButton';
 import { buildSummaryCsv } from '../../utils/reportExport';
+import { InsightsCard } from './InsightsCard';
 
 const SalesChart = lazy(() =>
   import('./SalesChart').then(module => ({
@@ -97,6 +103,37 @@ export function DashboardTab({ filter }: DashboardTabProps) {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [retry, setRetry] = useState(0);
+  const [commercialContext, setCommercialContext] = useState<CommercialContext | null>(null);
+  const [aiEnabled, setAiEnabled] = useState(false);
+
+  useEffect(() => {
+    let active = true;
+    getAiSettings()
+      .then(value => {
+        if (active) setAiEnabled(value.enabled);
+      })
+      .catch(() => {
+        if (active) setAiEnabled(false);
+      });
+    return () => {
+      active = false;
+    };
+  }, []);
+
+  useEffect(() => {
+    let active = true;
+    getCommercialContext()
+      .then(context => {
+        if (active) setCommercialContext(context);
+      })
+      .catch(() => {
+        if (active) setCommercialContext(null);
+      });
+
+    return () => {
+      active = false;
+    };
+  }, []);
 
   useEffect(() => {
     let active = true;
@@ -262,6 +299,7 @@ export function DashboardTab({ filter }: DashboardTabProps) {
               );
             })}
           </section>
+          <InsightsCard ctx={commercialContext} aiEnabled={aiEnabled} />
 
           {(current.items_without_cost > 0 || current.uncosted_tickets > 0) && (
             <aside className="reports-warning" role="status">

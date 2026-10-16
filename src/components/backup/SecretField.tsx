@@ -4,13 +4,22 @@ interface Props {
   id: string;
   label: string;
   isSet: boolean;
+  canRemove?: boolean;
   hint?: React.ReactNode;
   placeholder?: string;
   /** Devuelve true si se guardó bien (entonces se limpia el campo). */
   onSave: (value: string | null) => Promise<boolean>;
 }
 
-export const SecretField: React.FC<Props> = ({ id, label, isSet, hint, placeholder, onSave }) => {
+export const SecretField: React.FC<Props> = ({
+  id,
+  label,
+  isSet,
+  canRemove = true,
+  hint,
+  placeholder,
+  onSave,
+}) => {
   const [value, setValue] = useState('');
   const [busy, setBusy] = useState(false);
 
@@ -55,7 +64,7 @@ export const SecretField: React.FC<Props> = ({ id, label, isSet, hint, placehold
         >
           Guardar
         </button>
-        {isSet && (
+        {isSet && canRemove && (
           <button
             type="button"
             className="btn btn-ghost"

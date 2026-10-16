@@ -27,6 +27,7 @@ import { formatMoney } from '../../utils/format';
 import { formatBps, formatDaysSinceSale, formatVariantAttributes } from '../../utils/reportFormat';
 import { buildProductsCsv } from '../../utils/reportExport';
 import { ReportCsvButton } from './ReportCsvButton';
+import { Spinner } from '../ui/Spinner';
 import './ProductsTab.css';
 
 interface ProductsTabProps {
@@ -140,6 +141,10 @@ export function ProductsTab({
   const [staleProducts, setStaleProducts] = useState<SectionState<StaleProduct>>(
     initialSection<StaleProduct>(),
   );
+  const selectedRangeDays =
+    (Date.parse(`${filter.date_to}T00:00:00Z`) - Date.parse(`${filter.date_from}T00:00:00Z`))
+      / 86_400_000 + 1;
+  const showWideRangeLoading = selectedRangeDays > 180 && topProducts.loading;
 
   useEffect(() => {
     let active = true;
@@ -281,6 +286,12 @@ export function ProductsTab({
             <p>Participación sobre las ventas pagadas totales del período; el denominador no se limita al Top N ni a la categoría seleccionada.</p>
           </div>
         </div>
+        {showWideRangeLoading && (
+          <div className="reports-ranking-wide-loading" role="status">
+            <Spinner />
+            <span>Calculando ranking de un rango amplio…</span>
+          </div>
+        )}
         <SectionStatus
           state={topProducts}
           retry={retrySections}
