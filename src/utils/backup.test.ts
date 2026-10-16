@@ -1,5 +1,13 @@
 import { describe, expect, it } from 'vitest';
-import { formatAgo, formatDuration, formatSize, hasDay, toggleDay } from './backup';
+import {
+  formatAgo,
+  formatDuration,
+  formatSize,
+  hasDay,
+  isOneDrivePath,
+  needsBackupEncryptionSetup,
+  toggleDay,
+} from './backup';
 
 describe('backup utils', () => {
   it('formats byte sizes correctly', () => {
@@ -36,5 +44,17 @@ describe('backup utils', () => {
     const toggledMondayOff = toggleDay(toggledTuesday, 0);
     expect(hasDay(toggledMondayOff, 0)).toBe(false);
     expect(hasDay(toggledMondayOff, 1)).toBe(true);
+  });
+
+  it('requires encryption setup when automatic backups are unencrypted or lack a password', () => {
+    expect(needsBackupEncryptionSetup(true, false, false)).toBe(true);
+    expect(needsBackupEncryptionSetup(true, true, false)).toBe(true);
+    expect(needsBackupEncryptionSetup(true, true, true)).toBe(false);
+    expect(needsBackupEncryptionSetup(false, false, false)).toBe(false);
+  });
+
+  it('recognizes OneDrive destinations case-insensitively', () => {
+    expect(isOneDrivePath('C:\\Users\\Ana\\OneDrive - Empresa\\Backups')).toBe(true);
+    expect(isOneDrivePath('D:\\Backups')).toBe(false);
   });
 });

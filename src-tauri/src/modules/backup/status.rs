@@ -8,7 +8,7 @@ use serde::Serialize;
 use sqlx::PgPool;
 
 use crate::errors::app_error::AppError;
-use crate::modules::backup::{repository, service};
+use crate::modules::backup::{repository, secrets, service};
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
 #[serde(rename_all = "snake_case")]
@@ -23,6 +23,8 @@ pub enum AlertLevel {
 pub struct BackupStatus {
     pub level: AlertLevel,
     pub auto_enabled: bool,
+    pub encrypt_enabled: bool,
+    pub encryption_password_set: bool,
     pub running: bool,
     pub last_success_at: Option<DateTime<Utc>>,
     pub hours_since_success: Option<i64>,
@@ -86,6 +88,8 @@ pub async fn get(pool: &PgPool) -> Result<BackupStatus, AppError> {
     let summary = repository::history_summary(pool)
         .await
         .map_err(AppError::from)?;
+    let encryption_password_set =
+        secrets::exists(secrets::Secret::EncryptionPassword).map_err(AppError::Internal)?;
 
     let hours = summary
         .last_success
@@ -110,6 +114,8 @@ pub async fn get(pool: &PgPool) -> Result<BackupStatus, AppError> {
             settings.critical_after_days,
         ),
         auto_enabled: settings.auto_enabled,
+        encrypt_enabled: settings.encrypt_enabled,
+        encryption_password_set,
         running: service::is_running(),
         last_success_at: summary.last_success,
         hours_since_success: hours,

@@ -8,3 +8,5 @@
   - Pruebas: `restore::tests::stale_scratch_databases_are_removed_but_recent_ones_are_preserved`, `restore::tests::missing_live_database_is_recovered_from_pre_restore` y `restore::tests::failed_restore_rename_rolls_back_the_live_database`.
 - **B07-008:** Los temporales de backup/restauración usan `%LOCALAPPDATA%\CashFlow\tmp` en Windows, prefijos distintos y limpieza de archivos con más de una hora al iniciar y antes de cada operación.
   - Pruebas: `backup::temp::tests::stale_cleanup_requires_age_and_a_known_prefix` y `backup::temp::tests::cleanup_preserves_recent_and_unrelated_temporaries`.
+- **B07-001:** El cifrado queda habilitado por migración; el banner persistente guía la configuración si el backup automático no está cifrado o falta la contraseña. Desactivarlo requiere confirmación y se advierte si el destino parece ser OneDrive.
+  - Pruebas: `backup_encryption_default::backup_encryption_is_enabled_by_default_for_existing_and_new_rows` y utilidades `needsBackupEncryptionSetup` / `isOneDrivePath`.

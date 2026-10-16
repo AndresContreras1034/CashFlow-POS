@@ -17,6 +17,11 @@
   border-bottom: 1px solid #d64541;
 }
 
+.backup-banner--security {
+  background: rgba(230, 126, 34, 0.15);
+  border-bottom: 1px solid #e67e22;
+}
+
 .backup-banner-detail {
   opacity: 0.85;
 }

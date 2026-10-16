@@ -48,6 +48,8 @@ export type BackupAlertLevel = 'ok' | 'notice' | 'warning' | 'critical';
 export interface BackupStatus {
   level: BackupAlertLevel;
   auto_enabled: boolean;
+  encrypt_enabled: boolean;
+  encryption_password_set: boolean;
   running: boolean;
   last_success_at: string | null;
   hours_since_success: number | null;

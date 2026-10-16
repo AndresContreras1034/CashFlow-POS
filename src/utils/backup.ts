@@ -40,3 +40,15 @@ export function formatAgo(hours: number | null): string {
   const days = Math.floor(hours / 24);
   return `hace ${days} ${days === 1 ? 'día' : 'días'}`;
 }
+
+export function needsBackupEncryptionSetup(
+  autoEnabled: boolean,
+  encryptionEnabled: boolean,
+  passwordSet: boolean,
+): boolean {
+  return autoEnabled && (!encryptionEnabled || !passwordSet);
+}
+
+export function isOneDrivePath(path: string): boolean {
+  return path.toLowerCase().includes('onedrive');
+}

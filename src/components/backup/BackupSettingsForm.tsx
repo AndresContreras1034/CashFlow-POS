@@ -23,6 +23,7 @@ import {
   errorText,
   formatSize,
   hasDay,
+  isOneDrivePath,
   toggleDay,
 } from '../../utils/backup';
 import { notifyBackupChanged } from '../../hooks/useBackupStatus';
@@ -212,6 +213,15 @@ export const BackupSettingsForm: React.FC<Props> = ({ onToast }) => {
       );
       return;
     }
+    if (
+      saved.encrypt_enabled &&
+      !form.encrypt_enabled &&
+      !window.confirm(
+        '¿Desactivar el cifrado? Los próximos backups se guardarán sin cifrar y podrían quedar expuestos si se copia o sincroniza la carpeta.',
+      )
+    ) {
+      return;
+    }
     setSaving(true);
     try {
       const updated = await updateBackupSettings({
@@ -386,6 +396,12 @@ export const BackupSettingsForm: React.FC<Props> = ({ onToast }) => {
             Déjala vacía para usar la carpeta por defecto. Para protegerte de un fallo del disco,
             usa una unidad distinta (otro disco, USB o una carpeta de red).
           </span>
+          {isOneDrivePath(form.local_dir.trim() || env?.effective_dir || '') && (
+            <div className="settings-notice" role="alert">
+              Esta carpeta parece estar sincronizada con OneDrive. El cifrado protege el contenido
+              del backup; evita desactivarlo mientras uses este destino.
+            </div>
+          )}
         </div>
 
         <div className="form-field">
@@ -474,6 +490,12 @@ export const BackupSettingsForm: React.FC<Props> = ({ onToast }) => {
 
       <section className="settings-section">
         <h2 className="settings-section-title">Cifrado</h2>
+        {form.auto_enabled && form.encrypt_enabled && !secrets.encryption_password_set && (
+          <div className="settings-notice" role="alert">
+            Configuración inicial: guarda una contraseña de cifrado para habilitar los backups
+            automáticos. Sin ella, los backups no se crearán.
+          </div>
+        )}
         <div className="settings-switch-list">
           <label className="settings-switch">
             <span>Cifrar los backups (AES-256)</span>
