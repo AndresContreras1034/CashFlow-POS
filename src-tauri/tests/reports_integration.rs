@@ -901,6 +901,126 @@ async fn long_sales_ranges_use_monthly_buckets_and_same_period_last_year(pool: P
 }
 
 #[sqlx::test(migrations = "./migrations")]
+async fn single_item_fast_path_matches_original_allocations_for_randomized_sales(pool: PgPool) {
+    let differences: i64 = sqlx::query_scalar(
+        r#"
+        WITH generated_sales AS (
+            SELECT
+                sale_number,
+                (sale_number % 6 + 1)::INT AS item_count,
+                CASE WHEN sale_number % 5 = 0 THEN 1000 ELSE 0 END AS discount_bps,
+                CASE sale_number % 3
+                    WHEN 0 THEN 1900
+                    WHEN 1 THEN 500
+                    ELSE 0
+                END AS tax_bps,
+                sale_number % 11 = 0 AS is_courtesy
+            FROM generate_series(1, 1200) AS sales(sale_number)
+        ),
+        generated_items AS (
+            SELECT
+                s.*,
+                item_number,
+                CASE WHEN (sale_number + item_number) % 7 = 0
+                    THEN NULL ELSE 500 END AS unit_cost,
+                (
+                    (sale_number * 7919 + item_number * 104729) % 50000 + 1
+                )::BIGINT AS original_subtotal
+            FROM generated_sales s
+            CROSS JOIN LATERAL generate_series(1, s.item_count) AS items(item_number)
+        ),
+        discounted_items AS (
+            SELECT
+                *,
+                (original_subtotal
+                    - original_subtotal * discount_bps / 10000)::BIGINT AS item_subtotal
+            FROM generated_items
+        ),
+        sales_totals AS (
+            SELECT
+                sale_number,
+                item_count,
+                is_courtesy,
+                SUM(item_subtotal)::BIGINT AS sale_subtotal,
+                (SUM(item_subtotal) * MAX(tax_bps) / 10000)::BIGINT AS sale_tax,
+                (
+                    SUM(item_subtotal)
+                    + SUM(item_subtotal) * MAX(tax_bps) / 10000
+                )::BIGINT AS sale_total
+            FROM discounted_items
+            GROUP BY sale_number, item_count, is_courtesy
+        ),
+        gross_allocations AS (
+            SELECT
+                i.*,
+                t.sale_subtotal,
+                t.sale_tax,
+                t.sale_total,
+                SUM(i.item_subtotal) OVER (
+                    PARTITION BY i.sale_number ORDER BY i.item_number
+                ) AS cumulative_subtotal
+            FROM discounted_items i
+            JOIN sales_totals t USING (sale_number)
+        ),
+        original_gross AS (
+            SELECT
+                *,
+                ROUND(cumulative_subtotal * sale_total / sale_subtotal)
+                    - ROUND((cumulative_subtotal - item_subtotal)
+                        * sale_total / sale_subtotal) AS gross_alloc
+            FROM gross_allocations
+        ),
+        original_allocations AS (
+            SELECT
+                *,
+                ROUND(
+                    SUM(gross_alloc) OVER (
+                        PARTITION BY sale_number ORDER BY item_number
+                    ) * sale_tax / sale_total
+                ) - ROUND(
+                    (SUM(gross_alloc) OVER (
+                        PARTITION BY sale_number ORDER BY item_number
+                    ) - gross_alloc) * sale_tax / sale_total
+                ) AS tax_alloc
+            FROM original_gross
+            WHERE NOT is_courtesy
+        ),
+        optimized_allocations AS (
+            SELECT
+                i.sale_number,
+                i.item_number,
+                t.sale_total::NUMERIC AS gross_alloc,
+                t.sale_tax::NUMERIC AS tax_alloc
+            FROM discounted_items i
+            JOIN sales_totals t USING (sale_number)
+            WHERE NOT t.is_courtesy
+              AND t.item_count = 1
+
+            UNION ALL
+
+            SELECT sale_number, item_number, gross_alloc, tax_alloc
+            FROM original_allocations
+            WHERE item_count > 1
+        )
+        SELECT COUNT(*)::BIGINT
+        FROM original_allocations original
+        FULL JOIN optimized_allocations optimized
+            USING (sale_number, item_number)
+        WHERE original.gross_alloc IS DISTINCT FROM optimized.gross_alloc
+           OR original.tax_alloc IS DISTINCT FROM optimized.tax_alloc
+        "#,
+    )
+    .fetch_one(&pool)
+    .await
+    .unwrap();
+
+    assert_eq!(
+        differences, 0,
+        "every item allocation must remain identical"
+    );
+}
+
+#[sqlx::test(migrations = "./migrations")]
 async fn product_rankings_reconcile_allocations_costing_and_stale_stock(pool: PgPool) {
     use pos_lib::modules::reports::dto::RankBy;
 

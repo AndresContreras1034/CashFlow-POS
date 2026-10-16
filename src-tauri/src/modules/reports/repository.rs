@@ -18,7 +18,8 @@ const COSTED_SALES_CTES: &str = r#"
                 0
             )::BIGINT AS known_cogs,
             COALESCE(SUM(si.quantity::BIGINT), 0)::BIGINT AS units_sold,
-            COUNT(*) FILTER (WHERE si.unit_cost IS NULL)::BIGINT AS items_without_cost
+            COUNT(*) FILTER (WHERE si.unit_cost IS NULL)::BIGINT AS items_without_cost,
+            COUNT(*)::BIGINT AS item_count
         FROM sale_items si
         JOIN filtered_sales s ON s.id = si.sale_id
         GROUP BY si.sale_id
@@ -33,14 +34,30 @@ const COSTED_SALES_CTES: &str = r#"
             (items.sale_id IS NOT NULL AND items.fully_costed) AS fully_costed,
             COALESCE(items.known_cogs, 0)::BIGINT AS known_cogs,
             COALESCE(items.units_sold, 0)::BIGINT AS units_sold,
-            COALESCE(items.items_without_cost, 0)::BIGINT AS items_without_cost
+            COALESCE(items.items_without_cost, 0)::BIGINT AS items_without_cost,
+            COALESCE(items.item_count, 0)::BIGINT AS item_count
         FROM filtered_sales s
         LEFT JOIN item_totals_by_sale items ON items.sale_id = s.id
     )
 "#;
 
 const ALLOCATED_ITEMS_CTES: &str = r#",
-    item_base AS (
+    single_item_allocations AS (
+        SELECT
+            si.id AS item_id,
+            si.sale_id,
+            si.variant_id,
+            si.quantity::BIGINT AS quantity,
+            si.unit_cost,
+            s.fully_costed,
+            s.total::NUMERIC AS gross_alloc,
+            s.tax::NUMERIC AS tax_alloc
+        FROM sale_items si
+        JOIN costed_sales s ON s.id = si.sale_id
+        WHERE s.courtesy_reason IS NULL
+          AND s.item_count = 1
+    ),
+    multi_item_base AS (
         SELECT
             si.id AS item_id,
             si.sale_id,
@@ -51,6 +68,7 @@ const ALLOCATED_ITEMS_CTES: &str = r#",
             s.total::NUMERIC AS sale_total,
             s.tax::NUMERIC AS sale_tax,
             s.fully_costed,
+            s.item_count,
             SUM(si.subtotal::NUMERIC) OVER (
                 PARTITION BY si.sale_id ORDER BY si.id
                 ROWS BETWEEN UNBOUNDED PRECEDING AND CURRENT ROW
@@ -59,20 +77,27 @@ const ALLOCATED_ITEMS_CTES: &str = r#",
         FROM sale_items si
         JOIN costed_sales s ON s.id = si.sale_id
         WHERE s.courtesy_reason IS NULL
+          AND s.item_count > 1
     ),
-    gross_allocated_items AS (
+    multi_item_gross_allocations AS (
         SELECT
-            item_base.*,
+            multi_item_base.*,
             CASE
                 WHEN sale_subtotal = 0 THEN 0::NUMERIC
                 ELSE ROUND(cumulative_subtotal * sale_total / sale_subtotal)
                      - ROUND((cumulative_subtotal - item_subtotal) * sale_total / sale_subtotal)
             END AS gross_alloc
-        FROM item_base
+        FROM multi_item_base
     ),
-    allocated_items AS (
+    multi_item_allocations AS (
         SELECT
-            gross_allocated_items.*,
+            item_id,
+            sale_id,
+            variant_id,
+            quantity,
+            unit_cost,
+            fully_costed,
+            gross_alloc,
             CASE
                 WHEN sale_total = 0 THEN 0::NUMERIC
                 ELSE ROUND(
@@ -89,7 +114,12 @@ const ALLOCATED_ITEMS_CTES: &str = r#",
                     ) * sale_tax / sale_total
                 )
             END AS tax_alloc
-        FROM gross_allocated_items
+        FROM multi_item_gross_allocations
+    ),
+    allocated_items AS (
+        SELECT * FROM single_item_allocations
+        UNION ALL
+        SELECT * FROM multi_item_allocations
     )
 "#;
 
@@ -1109,4 +1139,87 @@ pub async fn fetch_customer_sales_split(
             share_bps: super::range::share_bps(row.amount, row.amount_total),
         })
         .collect())
+}
+
+#[cfg(test)]
+mod allocation_tests {
+    fn rounded_ratio(numerator: i128, denominator: i128) -> i128 {
+        (numerator + denominator / 2) / denominator
+    }
+
+    fn original_allocations(
+        subtotals: &[i128],
+        sale_total: i128,
+        sale_tax: i128,
+    ) -> Vec<(i128, i128)> {
+        let sale_subtotal: i128 = subtotals.iter().sum();
+        let mut cumulative_subtotal = 0;
+        let mut cumulative_gross = 0;
+        let mut previous_gross = 0;
+        let mut previous_tax = 0;
+
+        subtotals
+            .iter()
+            .map(|subtotal| {
+                cumulative_subtotal += subtotal;
+                let current_gross = rounded_ratio(cumulative_subtotal * sale_total, sale_subtotal);
+                let gross_alloc = current_gross - previous_gross;
+                cumulative_gross += gross_alloc;
+                let current_tax = rounded_ratio(cumulative_gross * sale_tax, sale_total);
+                let tax_alloc = current_tax - previous_tax;
+                previous_gross = current_gross;
+                previous_tax = current_tax;
+                (gross_alloc, tax_alloc)
+            })
+            .collect()
+    }
+
+    #[test]
+    fn single_item_fast_path_matches_original_allocations_for_randomized_sales() {
+        let mut state = 0x8f31_47a2_u64;
+        let mut next = || {
+            state ^= state << 13;
+            state ^= state >> 7;
+            state ^= state << 17;
+            state
+        };
+
+        let mut saw_courtesy = false;
+        let mut saw_discount = false;
+        let mut saw_uncosted_item = false;
+        for _ in 0..2_000 {
+            let item_count = (next() % 6 + 1) as usize;
+            let discount_bps = if next() % 5 == 0 { 1_000 } else { 0 };
+            let tax_bps = [0_i128, 500, 1_900][(next() % 3) as usize];
+            let courtesy = next() % 11 == 0;
+            saw_courtesy |= courtesy;
+            saw_discount |= discount_bps > 0;
+
+            let subtotals: Vec<i128> = (0..item_count)
+                .map(|_| {
+                    let pre_discount = i128::from(next() % 50_000 + 1);
+                    pre_discount - pre_discount * discount_bps / 10_000
+                })
+                .collect();
+            saw_uncosted_item |= (0..item_count).any(|_| next() % 7 == 0);
+            let sale_subtotal: i128 = subtotals.iter().sum();
+            let sale_tax = sale_subtotal * tax_bps / 10_000;
+            let sale_total = sale_subtotal + sale_tax;
+
+            let old = original_allocations(&subtotals, sale_total, sale_tax);
+            let optimized = if courtesy {
+                Vec::new()
+            } else if item_count == 1 {
+                vec![(sale_total, sale_tax)]
+            } else {
+                old.clone()
+            };
+            let expected = if courtesy { Vec::new() } else { old };
+            assert_eq!(optimized, expected);
+        }
+
+        assert!(saw_courtesy);
+        assert!(saw_discount);
+        assert!(saw_uncosted_item);
+    }
 }
