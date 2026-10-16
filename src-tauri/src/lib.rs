@@ -344,6 +344,12 @@ pub fn run() {
             get_upcoming_dues,
             get_top_customers,
             get_customer_sales_split,
+            get_commercial_context,
+            get_ai_advice,
+            generate_ai_advice,
+            get_ai_settings,
+            update_ai_settings,
+            set_ai_feedback,
             save_report_csv,
             // =================================================
             // Audit

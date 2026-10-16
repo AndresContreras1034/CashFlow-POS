@@ -59,9 +59,11 @@ rust_decimal = {
 }
 rsa = { version = "0.9", features = ["sha2"] }
 sha2 = { version = "0.10", features = ["oid"] }
+hex = "0.4"
+reqwest = { version = "0.12", features = ["json"] }
 
 # ==========================================
-# Configuración
+# ConfiguraciÃƒÂ³n
 # ==========================================
 
 dotenvy = "0.15"
@@ -80,17 +82,17 @@ tracing-subscriber = {
 }
 
 # ==========================================
-# Excel / Importación masiva
+# Excel / ImportaciÃƒÂ³n masiva
 # ==========================================
 
 calamine = "0.26"
 
 # ==========================================
-# Logo / imágenes para ESC/POS
+# Logo / imÃƒÂ¡genes para ESC/POS
 # ==========================================
 #
-# Se utiliza únicamente para leer el JPG del
-# logo y convertirlo a bitmap monocromático.
+# Se utiliza ÃƒÂºnicamente para leer el JPG del
+# logo y convertirlo a bitmap monocromÃƒÂ¡tico.
 #
 
 image = {
@@ -110,7 +112,7 @@ keyring = { version = "3", features = ["windows-native"] }
 lettre = { version = "0.11", features = ["tokio1", "tokio1-native-tls"] }
 
 # ==========================================
-# Impresión térmica ESC/POS
+# ImpresiÃƒÂ³n tÃƒÂ©rmica ESC/POS
 # Windows Spooler
 # ==========================================
 

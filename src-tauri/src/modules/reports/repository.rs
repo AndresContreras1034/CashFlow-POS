@@ -1,6 +1,6 @@
 use sqlx::PgPool;
 
-const COSTED_SALES_CTES: &str = r#"
+pub(super) const COSTED_SALES_CTES: &str = r#"
     WITH filtered_sales AS (
         SELECT s.*
         FROM sales s
@@ -41,7 +41,7 @@ const COSTED_SALES_CTES: &str = r#"
     )
 "#;
 
-const ALLOCATED_ITEMS_CTES: &str = r#",
+pub(super) const ALLOCATED_ITEMS_CTES: &str = r#",
     single_item_allocations AS (
         SELECT
             si.id AS item_id,

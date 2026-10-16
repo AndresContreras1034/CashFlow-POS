@@ -2086,3 +2086,345 @@ fn zero_kpis() -> pos_lib::modules::reports::dto::SalesKpis {
         courtesy_value: 0,
     }
 }
+
+#[sqlx::test(migrations = "./migrations")]
+async fn insights_short_history(pool: PgPool) {
+    use pos_lib::modules::reports::insights::{
+        cover::{days_cover, Cover},
+        queries::fetch_history_days,
+    };
+
+    sqlx::query("UPDATE app_settings SET timezone = 'America/Bogota' WHERE id = 1")
+        .execute(&pool)
+        .await
+        .unwrap();
+
+    let variant_id = seed_variant(&pool).await;
+    let today = date("2026-10-15");
+    let sale_date = today - chrono::Duration::days(10);
+    let created_at = format!("{sale_date}T15:00:00Z");
+    insert_sale(
+        &pool,
+        variant_id,
+        "completed",
+        &created_at,
+        1_000,
+        0,
+        0,
+        1_000,
+        None,
+        1,
+        1_000,
+        0,
+        0,
+        1_000,
+        Some(500),
+    )
+    .await;
+
+    let history_days = fetch_history_days(&pool, today).await.unwrap();
+    assert_eq!(history_days, 10);
+    assert_eq!(days_cover(10, 1, 28, history_days), Cover::Insufficient);
+}
+
+#[sqlx::test(migrations = "./migrations")]
+async fn insights_long_history_excludes_courtesy_from_stars_and_units(pool: PgPool) {
+    use pos_lib::modules::reports::insights::{
+        cover::{days_cover, Cover},
+        queries::{fetch_history_days, fetch_star_variants, fetch_stock, fetch_units_28d},
+    };
+
+    sqlx::query("UPDATE app_settings SET timezone = 'America/Bogota' WHERE id = 1")
+        .execute(&pool)
+        .await
+        .unwrap();
+
+    let target_variant = seed_variant(&pool).await;
+    let courtesy_variant = seed_variant(&pool).await;
+    sqlx::query("UPDATE product_variants SET stock = 20 WHERE id = $1")
+        .bind(target_variant)
+        .execute(&pool)
+        .await
+        .unwrap();
+
+    let today = date("2026-10-15");
+    let historical_date = today - chrono::Duration::days(60);
+    let recent_date = today - chrono::Duration::days(10);
+    let historical_created_at = format!("{historical_date}T15:00:00Z");
+    let recent_created_at = format!("{recent_date}T15:00:00Z");
+
+    insert_sale(
+        &pool,
+        target_variant,
+        "completed",
+        &historical_created_at,
+        2_000,
+        0,
+        0,
+        2_000,
+        None,
+        2,
+        1_000,
+        0,
+        0,
+        2_000,
+        Some(500),
+    )
+    .await;
+    insert_sale(
+        &pool,
+        target_variant,
+        "completed",
+        &recent_created_at,
+        10_000,
+        0,
+        0,
+        10_000,
+        None,
+        10,
+        1_000,
+        0,
+        0,
+        10_000,
+        Some(500),
+    )
+    .await;
+    insert_sale(
+        &pool,
+        courtesy_variant,
+        "completed",
+        &recent_created_at,
+        100_000,
+        0,
+        100_000,
+        0,
+        Some("Cortesía"),
+        100,
+        1_000,
+        0,
+        0,
+        100_000,
+        Some(500),
+    )
+    .await;
+
+    let stars = fetch_star_variants(&pool, today - chrono::Duration::days(89), today)
+        .await
+        .unwrap();
+    assert_eq!(stars, vec![(i64::from(target_variant), 12_000)]);
+
+    let target_id = i64::from(target_variant);
+    let courtesy_id = i64::from(courtesy_variant);
+    let units = fetch_units_28d(
+        &pool,
+        today - chrono::Duration::days(27),
+        today,
+        &[target_id, courtesy_id],
+    )
+    .await
+    .unwrap();
+    assert_eq!(units.get(&target_id), Some(&10));
+    assert!(!units.contains_key(&courtesy_id));
+
+    let stock = fetch_stock(&pool, &[target_id]).await.unwrap();
+    let history_days = fetch_history_days(&pool, today).await.unwrap();
+    assert_eq!(history_days, 60);
+    assert_eq!(
+        days_cover(stock[&target_id], units[&target_id], 28, history_days),
+        Cover::Days(56)
+    );
+}
+
+#[sqlx::test(migrations = "./migrations")]
+async fn insights_privacy_no_names(pool: PgPool) {
+    use chrono::NaiveDate;
+    use pos_lib::modules::reports::insights::service::build_context;
+
+    sqlx::query("UPDATE app_settings SET timezone = 'UTC' WHERE id = 1")
+        .execute(&pool)
+        .await
+        .unwrap();
+
+    let today: NaiveDate = sqlx::query_scalar(
+        "SELECT (NOW() AT TIME ZONE timezone)::DATE FROM app_settings WHERE id = 1",
+    )
+    .fetch_one(&pool)
+    .await
+    .unwrap();
+
+    let email = "juan.perez@example.test";
+    let phone = "+57-300-555-0101";
+    let customer_id: i32 = sqlx::query_scalar(
+        "INSERT INTO customers (name, email, phone) VALUES ($1, $2, $3) RETURNING id",
+    )
+    .bind("Juan Perez")
+    .bind(email)
+    .bind(phone)
+    .fetch_one(&pool)
+    .await
+    .unwrap();
+
+    sqlx::query(
+        r#"INSERT INTO debts
+               (creditor_name, category, nature, concept, original_amount, issued_on, idempotency_key)
+           VALUES ('Distribuidora Quintero', 'other_obligations', 'operating',
+                   'Privacy test debt', 10000, $1, $2)"#,
+    )
+    .bind(today)
+    .bind(uuid::Uuid::new_v4())
+    .execute(&pool)
+    .await
+    .unwrap();
+
+    let suffix = uuid::Uuid::new_v4().simple().to_string();
+    let category_id: i32 =
+        sqlx::query_scalar("INSERT INTO categories (name) VALUES ($1) RETURNING id")
+            .bind(format!("insights-privacy-{suffix}"))
+            .fetch_one(&pool)
+            .await
+            .unwrap();
+    let product_id: i32 =
+        sqlx::query_scalar("INSERT INTO products (category_id, name) VALUES ($1, $2) RETURNING id")
+            .bind(category_id)
+            .bind("Perfume Secreto XYZ")
+            .fetch_one(&pool)
+            .await
+            .unwrap();
+    let variant_id: i32 = sqlx::query_scalar(
+        r#"INSERT INTO product_variants
+               (product_id, attributes, price, cost, stock, stock_min, is_active)
+           VALUES ($1, '{}'::jsonb, 1000, 500, 10, 0, TRUE)
+           RETURNING id"#,
+    )
+    .bind(product_id)
+    .fetch_one(&pool)
+    .await
+    .unwrap();
+
+    for days_ago in (0..60).rev() {
+        let sale_date = today - chrono::Duration::days(days_ago);
+        let created_at = format!("{sale_date}T15:00:00Z");
+        let sale_id = insert_sale(
+            &pool,
+            variant_id,
+            "completed",
+            &created_at,
+            1_000,
+            0,
+            0,
+            1_000,
+            None,
+            1,
+            1_000,
+            0,
+            0,
+            1_000,
+            Some(500),
+        )
+        .await;
+        if days_ago == 10 {
+            sqlx::query("UPDATE sales SET customer_id = $1 WHERE id = $2")
+                .bind(customer_id)
+                .bind(sale_id)
+                .execute(&pool)
+                .await
+                .unwrap();
+        }
+    }
+
+    let context = build_context(&pool).await.unwrap();
+    let serialized = serde_json::to_string(&context).unwrap();
+    for forbidden in ["Juan", "Perez", "Quintero", "Secreto", email, phone] {
+        assert!(!serialized.contains(forbidden), "filtró: {forbidden}");
+    }
+    assert!(serialized.contains("Producto 1"));
+}
+
+struct MockInsightsProvider;
+
+impl pos_lib::modules::reports::insights::provider::AiProvider for MockInsightsProvider {
+    fn model(&self) -> &str {
+        "mock-model"
+    }
+
+    async fn complete(
+        &self,
+        _system: &str,
+        _user: &str,
+    ) -> Result<
+        pos_lib::modules::reports::insights::provider::AiReply,
+        pos_lib::modules::reports::insights::provider::AiError,
+    > {
+        Ok(pos_lib::modules::reports::insights::provider::AiReply {
+            content: r#"{
+                "insufficient_data": false,
+                "advice": [
+                    {
+                        "observation": "Cita correcta",
+                        "context": "El rango es de siete días",
+                        "proposal": "Revisar el ritmo",
+                        "cited": [{"path": "/pace/days", "value": 7}]
+                    },
+                    {
+                        "observation": "Cifra inventada",
+                        "context": "No coincide con el contexto",
+                        "proposal": "Ignorar esta sugerencia",
+                        "cited": [{"path": "/pace/days", "value": 99}]
+                    }
+                ]
+            }"#
+            .to_string(),
+            prompt_tokens: 17,
+            completion_tokens: 23,
+        })
+    }
+}
+
+#[sqlx::test(migrations = "./migrations")]
+async fn insights_ai_mock(pool: PgPool) {
+    use pos_lib::modules::reports::insights::{
+        generate::{generate, GenError},
+        policy::BlockReason,
+        store,
+    };
+    use serde_json::json;
+
+    let today = date("2026-10-15");
+    let context = json!({
+        "as_of": today.to_string(),
+        "fingerprint": "stable-test-fingerprint",
+        "pace": {"days": 7, "vs_baseline_bps": 1200},
+        "settings": {"min_margin_bps": 1500},
+        "promo_candidates": []
+    });
+    sqlx::query("UPDATE ai_settings SET enabled = FALSE, daily_token_cap = 100000 WHERE id = 1")
+        .execute(&pool)
+        .await
+        .unwrap();
+
+    let disabled = generate(&pool, &MockInsightsProvider, "dashboard", &context).await;
+    assert!(matches!(
+        disabled,
+        Err(GenError::Blocked(BlockReason::Disabled))
+    ));
+
+    sqlx::query("UPDATE ai_settings SET enabled = TRUE WHERE id = 1")
+        .execute(&pool)
+        .await
+        .unwrap();
+    let generated = generate(&pool, &MockInsightsProvider, "dashboard", &context)
+        .await
+        .unwrap();
+    let advice = generated.content["advice"].as_array().unwrap();
+    assert_eq!(advice.len(), 1);
+    assert_eq!(advice[0]["observation"], "Cita correcta");
+
+    let repeated = generate(&pool, &MockInsightsProvider, "dashboard", &context).await;
+    assert!(matches!(
+        repeated,
+        Err(GenError::Blocked(BlockReason::SameInput))
+    ));
+
+    let latest = store::latest_ok(&pool, "dashboard").await.unwrap().unwrap();
+    assert_eq!(latest.id, generated.id);
+}

@@ -33,7 +33,7 @@ pub const MAX_ITEMS_PER_LIST: i64 = 500;
 const AUDIT_IDS_LIMIT: usize = 100;
 
 #[derive(Debug, Clone, Serialize, Deserialize, sqlx::FromRow)]
-pub(crate) struct PurchaseList {
+pub struct PurchaseList {
     pub(crate) id: i32,
     pub(crate) title: String,
     pub(crate) notes: Option<String>,

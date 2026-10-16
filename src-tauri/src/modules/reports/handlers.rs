@@ -1,19 +1,43 @@
+use chrono::NaiveDate;
+use serde::Serialize;
+use serde_json::json;
 use std::path::{Path, PathBuf};
 use tauri::State;
+use uuid::Uuid;
 
 use crate::{
     db::DbPool,
     errors::app_error::AppError,
-    modules::reports::{
-        dto::{
-            AgingBucket, CategorySales, CustomerSalesSplit, DashboardKpis, HeatmapCell,
-            InventoryTurnover, InventoryValuation, PayablesSummary, PaymentMethodStat,
-            ReportFilter, StaleProduct, StockAlert, TimeSeriesPoint, TopCreditor, TopCustomer,
-            TopProduct, UpcomingDue,
+    modules::{
+        audit::{
+            dto::NewAuditEvent,
+            models::{AuditCategory, AuditModule, AuditOutcome},
+            repository as audit_repo,
         },
-        service,
+        reports::{
+            dto::{
+                AgingBucket, CategorySales, CustomerSalesSplit, DashboardKpis, HeatmapCell,
+                InventoryTurnover, InventoryValuation, PayablesSummary, PaymentMethodStat,
+                ReportFilter, StaleProduct, StockAlert, TimeSeriesPoint, TopCreditor, TopCustomer,
+                TopProduct, UpcomingDue,
+            },
+            insights::{
+                ai_secret, context as insights_context, generate as insights_generate,
+                provider::DeepSeek, service as insights_service, store as insights_store,
+            },
+            service,
+        },
     },
 };
+
+#[derive(Debug, Serialize)]
+pub struct AiSettingsView {
+    pub enabled: bool,
+    pub model: String,
+    pub daily_token_cap: i32,
+    pub has_key: bool,
+    pub tokens_today: i64,
+}
 
 #[tauri::command]
 pub async fn get_dashboard_kpis(
@@ -173,6 +197,185 @@ pub async fn get_upcoming_dues(
     service::get_upcoming_dues(&pool, filter)
         .await
         .map_err(|error: AppError| error.to_string())
+}
+
+#[tauri::command]
+pub async fn get_commercial_context(pool: State<'_, DbPool>) -> Result<serde_json::Value, String> {
+    let context = insights_service::build_context(&pool)
+        .await
+        .map_err(|error| error.to_string())?;
+    let fingerprint = insights_context::fingerprint(&context).map_err(|error| error.to_string())?;
+    let mut payload = serde_json::to_value(context).map_err(|error| error.to_string())?;
+    let object = payload
+        .as_object_mut()
+        .ok_or_else(|| "El contexto comercial no es un objeto JSON".to_string())?;
+    object.insert(
+        "fingerprint".to_string(),
+        serde_json::Value::String(fingerprint),
+    );
+    Ok(payload)
+}
+
+#[tauri::command]
+pub async fn get_ai_advice(
+    pool: State<'_, DbPool>,
+    scope: String,
+) -> Result<Option<insights_store::StoredAdvice>, String> {
+    insights_store::latest_ok(&pool, &scope)
+        .await
+        .map_err(|error| error.to_string())
+}
+
+#[tauri::command]
+pub async fn generate_ai_advice(
+    pool: State<'_, DbPool>,
+    scope: String,
+) -> Result<insights_store::StoredAdvice, String> {
+    let context = insights_service::build_context(&pool)
+        .await
+        .map_err(|error| error.to_string())?;
+    let fingerprint = insights_context::fingerprint(&context).map_err(|error| error.to_string())?;
+    let mut input = serde_json::to_value(context).map_err(|error| error.to_string())?;
+    let input_object = input
+        .as_object_mut()
+        .ok_or_else(|| "El contexto comercial no es un objeto JSON".to_string())?;
+    input_object.insert("fingerprint".to_string(), json!(fingerprint));
+
+    let (enabled, model, _) = insights_store::load_settings(&pool)
+        .await
+        .map_err(|error| error.to_string())?;
+    let api_key = ai_secret::get_key()?.unwrap_or_default();
+    if enabled && api_key.trim().is_empty() {
+        return Err("Configura la clave de DeepSeek en Ajustes".to_string());
+    }
+    let provider = DeepSeek::new(api_key, model.clone()).map_err(|error| error.to_string())?;
+    let advice = insights_generate::generate(&pool, &provider, &scope, &input)
+        .await
+        .map_err(|error| error.to_string())?;
+    let (prompt_tokens, completion_tokens) = insights_store::token_usage(&pool, advice.id)
+        .await
+        .map_err(|error| error.to_string())?;
+
+    let mut tx = pool.begin().await.map_err(|error| error.to_string())?;
+    audit_repo::insert_event(
+        &mut tx,
+        NewAuditEvent {
+            correlation_id: Some(Uuid::new_v4()),
+            category: AuditCategory::Business,
+            module: AuditModule::System,
+            action: "ai_advice_generate".to_string(),
+            outcome: AuditOutcome::Success,
+            actor: None,
+            entity_type: Some("ai_advice_daily".to_string()),
+            entity_id: Some(advice.id.to_string()),
+            summary: format!(
+                "Consejo IA generado: modelo {model}; prompt_tokens={prompt_tokens}; completion_tokens={completion_tokens}"
+            ),
+            changes: None,
+            metadata: Some(json!({
+                "scope": scope,
+                "model": model,
+                "prompt_tokens": prompt_tokens,
+                "completion_tokens": completion_tokens,
+            })),
+            error_message: None,
+        },
+    )
+    .await
+    .map_err(|error| error.to_string())?;
+    tx.commit().await.map_err(|error| error.to_string())?;
+
+    Ok(advice)
+}
+
+#[tauri::command]
+pub async fn get_ai_settings(pool: State<'_, DbPool>) -> Result<AiSettingsView, String> {
+    let (enabled, model, daily_token_cap) = insights_store::load_settings(&pool)
+        .await
+        .map_err(|error| error.to_string())?;
+    let today: NaiveDate = sqlx::query_scalar(
+        "SELECT (NOW() AT TIME ZONE timezone)::DATE FROM app_settings WHERE id = 1",
+    )
+    .fetch_one(&*pool)
+    .await
+    .map_err(|error| error.to_string())?;
+    let state = insights_store::day_state(&pool, today, "dashboard")
+        .await
+        .map_err(|error| error.to_string())?;
+
+    Ok(AiSettingsView {
+        enabled,
+        model,
+        daily_token_cap,
+        has_key: ai_secret::has_key()?,
+        tokens_today: state.tokens_today,
+    })
+}
+
+#[tauri::command]
+pub async fn update_ai_settings(
+    pool: State<'_, DbPool>,
+    enabled: bool,
+    daily_token_cap: i32,
+    api_key: Option<String>,
+) -> Result<AiSettingsView, String> {
+    if !(1_000..=1_000_000).contains(&daily_token_cap) {
+        return Err("El tope diario debe estar entre 1.000 y 1.000.000 tokens".to_string());
+    }
+    let api_key_updated = if let Some(key) = api_key.filter(|key| !key.trim().is_empty()) {
+        ai_secret::set_key(key.trim())?;
+        true
+    } else {
+        false
+    };
+
+    let mut tx = pool.begin().await.map_err(|error| error.to_string())?;
+    sqlx::query("UPDATE ai_settings SET enabled = $1, daily_token_cap = $2 WHERE id = 1")
+        .bind(enabled)
+        .bind(daily_token_cap)
+        .execute(&mut *tx)
+        .await
+        .map_err(|error| error.to_string())?;
+    audit_repo::insert_event(
+        &mut tx,
+        NewAuditEvent {
+            correlation_id: Some(Uuid::new_v4()),
+            category: AuditCategory::Business,
+            module: AuditModule::Settings,
+            action: "ai_settings_update".to_string(),
+            outcome: AuditOutcome::Success,
+            actor: None,
+            entity_type: Some("ai_settings".to_string()),
+            entity_id: Some("1".to_string()),
+            summary: "Ajustes del asesor de IA actualizados".to_string(),
+            changes: Some(json!({
+                "enabled": enabled,
+                "daily_token_cap": daily_token_cap,
+                "api_key_updated": api_key_updated,
+            })),
+            metadata: None,
+            error_message: None,
+        },
+    )
+    .await
+    .map_err(|error| error.to_string())?;
+    tx.commit().await.map_err(|error| error.to_string())?;
+
+    get_ai_settings(pool).await
+}
+
+#[tauri::command]
+pub async fn set_ai_feedback(
+    pool: State<'_, DbPool>,
+    id: i64,
+    feedback: String,
+) -> Result<(), String> {
+    if feedback != "useful" && feedback != "not_applicable" {
+        return Err("Feedback inválido".to_string());
+    }
+    insights_store::set_feedback(&pool, id, &feedback)
+        .await
+        .map_err(|error| error.to_string())
 }
 
 #[tauri::command]

@@ -1,6 +1,8 @@
 pub use super::handlers::{
+    generate_ai_advice, get_ai_advice, get_ai_settings, get_commercial_context,
     get_customer_sales_split, get_dashboard_kpis, get_inventory_turnover, get_inventory_valuation,
     get_payables_aging, get_payables_summary, get_sales_by_category, get_sales_by_payment_method,
     get_sales_heatmap, get_sales_series, get_stale_products, get_stock_alerts, get_top_creditors,
-    get_top_customers, get_top_products, get_upcoming_dues, save_report_csv,
+    get_top_customers, get_top_products, get_upcoming_dues, save_report_csv, set_ai_feedback,
+    update_ai_settings,
 };
