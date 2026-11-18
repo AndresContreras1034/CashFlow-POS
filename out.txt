@@ -1,0 +1,40 @@
+   Compiling pos v0.1.0 (C:\Users\toonk\Downloads\CashFlow-POS\CashFlow-POS\src-tauri)
+    Finished `test` profile [unoptimized] target(s) in 12.89s
+     Running unittests src\lib.rs (target\debug\deps\pos_lib-23902fac59b94774.exe)
+
+running 31 tests
+test modules::reports::insights::cover::tests::half_rate ... ok
+test modules::reports::insights::cover::tests::no_sales ... ok
+test modules::reports::insights::cover::tests::short_history ... ok
+test modules::reports::insights::combos::tests::rejects_when_margin_too_low ... ok
+test modules::reports::insights::combos::tests::max_three_sorted_by_value_and_counts_uncosted ... ok
+test modules::reports::insights::cover::tests::normal ... ok
+test modules::reports::insights::cover::tests::risk_flags ... ok
+test modules::reports::insights::context::tests::aliases_are_sequential_and_mapped ... ok
+test modules::reports::insights::context::tests::json_has_no_real_names ... ok
+test modules::reports::insights::context::tests::different_input_different_hash ... ok
+test modules::reports::insights::policy::tests::changed_hash_regenerates_with_next_index ... ok
+test modules::reports::insights::context::tests::same_input_same_hash ... ok
+test modules::reports::insights::policy::tests::disabled_blocks ... ok
+test modules::reports::insights::policy::tests::failed_first_attempt_counts_as_regen ... ok
+test modules::reports::insights::policy::tests::first_generation_is_index_zero ... ok
+test modules::reports::insights::policy::tests::regen_limit_is_three ... ok
+test modules::reports::insights::policy::tests::same_hash_is_blocked ... ok
+test modules::reports::insights::policy::tests::token_cap_blocks ... ok
+test modules::reports::insights::promo::tests::bundle_respects_margin ... ok
+test modules::reports::insights::promo::tests::never_below_cost ... ok
+test modules::reports::insights::promo::tests::perfume_6000_15000 ... ok
+test modules::reports::insights::promo::tests::second_half_off_beats_normal ... ok
+test modules::reports::insights::prompt::tests::parses_plain_json ... ok
+test modules::reports::insights::prompt::tests::parses_fenced_json_and_rejects_garbage ... ok
+test modules::reports::insights::provider::tests::parses_content_and_usage ... ok
+test modules::reports::insights::provider::tests::rejects_empty_content ... ok
+test modules::reports::insights::validate::tests::drops_advice_with_wrong_or_missing_citation ... ok
+test modules::reports::insights::validate::tests::drops_promo_below_cost_or_margin ... ok
+test modules::reports::insights::validate::tests::insufficient_data_returns_no_advice ... ok
+test modules::reports::insights::validate::tests::keeps_advice_with_matching_citation ... ok
+test modules::reports::insights::validate::tests::keeps_allowed_promo_and_caps_at_three ... ok
+
+test result: ok. 31 passed; 0 failed; 0 ignored; 0 measured; 237 filtered out; finished in 0.00s
+
+EXIT:0 
