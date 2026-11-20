@@ -1,5 +1,6 @@
 {
   "name": "pos",
+  "description": "Windows desktop POS built with React, TypeScript, Tauri, Rust, and PostgreSQL",
   "private": true,
   "version": "0.1.0",
   "type": "module",

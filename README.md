@@ -1,5 +1,10 @@
 # CashFlow POS
 
+[![Platform](https://img.shields.io/badge/platform-Windows-0078D4?style=for-the-badge&logo=windows&logoColor=white)](#)
+[![Frontend](https://img.shields.io/badge/frontend-React%20%2B%20TypeScript-3178C6?style=for-the-badge&logo=react&logoColor=white)](#technology-stack)
+[![Backend](https://img.shields.io/badge/backend-Rust%20%2B%20Tauri-24C8DB?style=for-the-badge&logo=rust&logoColor=white)](#technology-stack)
+[![Database](https://img.shields.io/badge/database-PostgreSQL-4169E1?style=for-the-badge&logo=postgresql&logoColor=white)](#technology-stack)
+
 CashFlow POS is a Windows desktop point-of-sale and business-management application for
 small retail operations. It combines a React and TypeScript frontend with a Rust/Tauri
 backend and PostgreSQL persistence.
